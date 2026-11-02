@@ -10,8 +10,12 @@ BACKUP_DIR="$HOME/orca-profile-backups"
 TARGET="$HOME/Applications/Orca-XOS.AppImage"
 DESKTOP="$HOME/.local/share/applications/orca-xos.desktop"
 
-if pgrep -f '(\.mount_[Oo]rca|Orca(-XOS)?\.AppImage|orca-ide)' >/dev/null; then
-  echo "Orca is still running. Quit it completely (File > Quit), then run this again." >&2
+# The app itself runs as <AppImage mount>/orca-ide with no `-e` script; `-e` processes are
+# short-lived CLI/version helpers (sometimes orphaned) and do not hold the profile.
+running="$(pgrep -af '(\.mount_[^/ ]*/orca-ide|Orca-XOS\.AppImage|Orca\.AppImage)' | grep -v -- ' -e ' || true)"
+if [[ -n "$running" ]]; then
+  echo "Orca is still running. Quit it completely (File > Quit), then run this again:" >&2
+  echo "$running" >&2
   exit 1
 fi
 
