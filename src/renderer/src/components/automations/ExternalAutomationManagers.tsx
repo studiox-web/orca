@@ -267,10 +267,7 @@ export function ExternalAutomationManagers({
                     'auto.components.automations.ExternalAutomationManagers.3d58d5b67d',
                     'No'
                   )}{' '}
-                  {translate(
-                    'auto.components.automations.ExternalAutomationManagers.5524365227',
-                    'OpenClaw'
-                  )}{' '}
+                  {getExternalProviderLabel(manager)}{' '}
                   {translate(
                     'auto.components.automations.ExternalAutomationManagers.6da3bfba4b',
                     'automations found.'

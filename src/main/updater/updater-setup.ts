@@ -22,6 +22,7 @@ import { UpdaterDownloadInstall } from './updater-download-install'
 import { configureMacShipItScheduling } from './macos-shipit-scheduling'
 import { handleElectronUpdaterProxyLogin } from './electron-updater-proxy-session'
 import type { PreQuitCleanupFailureMode, UpdateInstallMode } from './updater-state'
+import { releaseUpdatesEnabled } from './updater-fork-guard'
 
 export type UpdaterSetupOptions = {
   getMainWindow?: () => BrowserWindow | null
@@ -137,7 +138,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       this.sendErrorStatus(`The server update did not complete: ${serveHandoffFailure}`, true)
     }
 
-    if (!app.isPackaged) {
+    if (!releaseUpdatesEnabled()) {
       return
     }
 

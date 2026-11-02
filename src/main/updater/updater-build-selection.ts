@@ -15,6 +15,7 @@ import { ReleaseBuildListCache, type ReleaseBuildListOptions } from '../updater-
 import { UpdaterMenuChecks } from './updater-menu-checks'
 import { updaterCodedMessage } from '../../shared/updater-failure-copy'
 import { updaterErrorMessage } from './updater-coded-error'
+import { releaseUpdatesEnabled } from './updater-fork-guard'
 
 export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
   private readonly releaseBuildCache = new ReleaseBuildListCache((channel) =>
@@ -89,7 +90,7 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
 
   /** Pin any published channel/tag, including deliberate downgrades. */
   protected async checkForPinnedBuild(channel: ReleaseChannel, tag: string): Promise<void> {
-    if (!app.isPackaged) {
+    if (!releaseUpdatesEnabled()) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
     }
