@@ -12,5 +12,6 @@ export const xosGoalsApi: XosGoalsApi = {
   mutateArea: (mutation) => ipcRenderer.invoke('xos:goals:mutateArea', mutation),
   getAudit: (args) => ipcRenderer.invoke('xos:goals:getAudit', args),
   getItems: (args) => ipcRenderer.invoke('xos:items:list', args),
-  getItem: (args) => ipcRenderer.invoke('xos:items:get', args)
+  getItem: (args) => ipcRenderer.invoke('xos:items:get', args),
+  listModels: (args) => ipcRenderer.invoke('xos:models:list', args)
 }

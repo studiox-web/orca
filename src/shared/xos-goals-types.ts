@@ -1,6 +1,7 @@
 // XOS fork: goal board data shared by main and renderer. Shapes follow the Cascade/DJVibe
 // Command Centre (`types/command-centre.ts`) so the ported card UI needs few changes.
 import type { XosGoalQueues, XosItemsApi } from './xos-items-types'
+import type { XosRuntimeApi } from './xos-runtime-types'
 
 export type XosGoalRun = {
   goal: string
@@ -218,15 +219,16 @@ export type XosActionResult =
 
 export type XosGoalFileKind = 'goal' | 'status' | 'log'
 
-export type XosGoalsApi = XosItemsApi & {
-  getBoard: () => Promise<XosGoalBoard>
-  mutateCron: (mutation: XosCronMutation) => Promise<XosActionResult>
-  runNow: (request: XosRunNowRequest) => Promise<XosActionResult>
-  /** Returns a data: URL for a card image under the project's ops-cards folder, or null. */
-  cardArt: (args: { projectKey: string; relativePath: string }) => Promise<string | null>
-  openFile: (args: { path: string }) => Promise<XosActionResult>
-  mutateGoal: (mutation: XosGoalMutation) => Promise<XosActionResult>
-  mutateArea: (mutation: XosAreaMutation) => Promise<XosActionResult>
-  /** Newest first. */
-  getAudit: (args: { limit: number }) => Promise<XosAuditEvent[]>
-}
+export type XosGoalsApi = XosItemsApi &
+  XosRuntimeApi & {
+    getBoard: () => Promise<XosGoalBoard>
+    mutateCron: (mutation: XosCronMutation) => Promise<XosActionResult>
+    runNow: (request: XosRunNowRequest) => Promise<XosActionResult>
+    /** Returns a data: URL for a card image under the project's ops-cards folder, or null. */
+    cardArt: (args: { projectKey: string; relativePath: string }) => Promise<string | null>
+    openFile: (args: { path: string }) => Promise<XosActionResult>
+    mutateGoal: (mutation: XosGoalMutation) => Promise<XosActionResult>
+    mutateArea: (mutation: XosAreaMutation) => Promise<XosActionResult>
+    /** Newest first. */
+    getAudit: (args: { limit: number }) => Promise<XosAuditEvent[]>
+  }
