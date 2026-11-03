@@ -10,6 +10,13 @@ BACKUP_DIR="$HOME/orca-profile-backups"
 TARGET="$HOME/Applications/Orca-XOS.AppImage"
 DESKTOP="$HOME/.local/share/applications/orca-xos.desktop"
 
+# The headless service holds the profile while the desktop is closed; stop it so the
+# backup is consistent and it restarts on the new build.
+if systemctl --user is-active --quiet orca-xos-serve.service 2>/dev/null; then
+  echo "Stopping the orca-xos-serve service for the switch..."
+  systemctl --user stop orca-xos-serve.service
+fi
+
 # The app itself runs as <AppImage mount>/orca-ide with no `-e` script; `-e` processes are
 # short-lived CLI/version helpers (sometimes orphaned) and do not hold the profile.
 running="$(pgrep -af '(\.mount_[^/ ]*/orca-ide|Orca-XOS\.AppImage|Orca\.AppImage)' | grep -v -- ' -e ' || true)"
@@ -49,5 +56,12 @@ MimeType=x-scheme-handler/orca;
 DESK
 update-desktop-database "$(dirname "$DESKTOP")" >/dev/null 2>&1 || true
 
+LAUNCHER="$HOME/.local/share/orca-xos/orca-xos-desktop.sh"
 echo "Launching $TARGET (built from $(git -C "$REPO" rev-parse --short HEAD) on $(git -C "$REPO" branch --show-current))"
-setsid nohup "$TARGET" >/dev/null 2>&1 < /dev/null &
+if [[ -x "$LAUNCHER" ]]; then
+  # The service is installed (xos/orcad/install.sh): the launcher restarts it once the app holds the profile.
+  sed -i "s|^Exec=.*|Exec=$LAUNCHER %U|" "$DESKTOP"
+  "$LAUNCHER"
+else
+  setsid nohup "$TARGET" >/dev/null 2>&1 < /dev/null &
+fi
