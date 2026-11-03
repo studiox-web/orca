@@ -31,7 +31,57 @@ export type XosAutomationRunConfig = {
   lockWaitMinutes: number
   /** RT15: stop a terminal run that is still going after this many minutes. */
   timeoutMinutes: number | null
+  /** RT8: after a finished run, commit the changes under these paths (and optionally push). */
+  autoCommit: XosAutoCommitConfig | null
+  /** Plan §3.3: pick the model at dispatch from a tier, by remaining quota. */
+  auto: XosAutoModeConfig | null
 }
+
+export type XosAutoCommitConfig = {
+  /** Repo-relative paths or git pathspecs (the legacy goal's owned paths). */
+  paths: string[]
+  /** Null: "chore(automation): <name>". */
+  message: string | null
+  /** Push to the branch's upstream after committing. */
+  push: boolean
+}
+
+export type XosModelTier = 'high' | 'standard' | 'light'
+
+export type XosAutoModeConfig = {
+  tier: XosModelTier
+  /** Allowed agents, in preference order (breaks ties). */
+  providers: string[]
+  /** Never use the last N% of a weekly window (kept for interactive work). */
+  reservePercent: number
+  /** Applied when the picked model supports it; otherwise the agent's default. */
+  effort: string | null
+}
+
+/** One model as Auto mode sees it: its tier (default or edited) and its provider's quota. */
+export type XosTierModel = {
+  agent: string
+  model: string
+  label: string
+  tier: XosModelTier | null
+  /** True when the tier comes from the editable map rather than the name. */
+  edited: boolean
+}
+
+export type XosAutoCandidate = {
+  choice: XosModelChoice
+  /** Short quota note, e.g. "weekly 40% used, resets in 2d". */
+  quota: string
+  available: boolean
+}
+
+export type XosAutoPreview = {
+  candidates: XosAutoCandidate[]
+  /** Why Auto would pick the first candidate now. */
+  reason: string
+}
+
+export type XosLegacyCommitPolicy = { goal: string; paths: string[] }
 
 export type XosRunLimitKind = 'usage-limit' | 'overloaded' | 'auth' | 'missing-binary'
 
@@ -55,6 +105,18 @@ export type XosRunAttempt = {
     detail: string | null
     at: string
   } | null
+  /** RT8: what the post-run commit did. */
+  commit: XosRunCommit | null
+}
+
+export type XosRunCommit = {
+  status: 'committed' | 'nothing' | 'skipped' | 'failed'
+  sha: string | null
+  files: number
+  /** Null when not asked to push or the branch has no upstream. */
+  pushed: boolean | null
+  detail: string | null
+  at: string
 }
 
 export type XosRuntimeApi = {
@@ -66,4 +128,11 @@ export type XosRuntimeApi = {
   }) => Promise<{ ok: true } | { ok: false; error: string }>
   /** Newest first. */
   getRunAttempts: (args: { automationId: string; limit: number }) => Promise<XosRunAttempt[]>
+  /** Commit policies parsed from the project's legacy commit-automation-changes.sh. */
+  getLegacyCommitPolicies: (args: { repoPath: string }) => Promise<XosLegacyCommitPolicy[]>
+  /** Catalog models of the given agents with their tier. */
+  getTierModels: (args: { agents: string[] }) => Promise<XosTierModel[]>
+  setModelTier: (args: { agent: string; model: string; tier: XosModelTier | null }) => Promise<void>
+  /** What Auto would pick right now for this config. */
+  previewAuto: (args: { auto: XosAutoModeConfig }) => Promise<XosAutoPreview>
 }

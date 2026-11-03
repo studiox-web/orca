@@ -15,23 +15,37 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import type {
+  XosAutoCommitConfig,
+  XosAutoModeConfig,
   XosAutomationRunConfig,
   XosModelChoice,
-  XosRunAttempt
+  XosModelTier,
+  XosRunAttempt,
+  XosRunCommit
 } from '../../shared/xos-runtime-types'
 import { xosHome } from './xos-crontab'
 
 const MAX_FALLBACKS = 5
 const LEDGER_TAIL_BYTES = 1024 * 1024
 
-type ConfigFile = { version: 1; automations: Record<string, XosAutomationRunConfig> }
+type ConfigFile = {
+  version: 1
+  automations: Record<string, XosAutomationRunConfig>
+  /** Auto mode tier map edits, keyed "agent:model"; null = explicitly unassigned. */
+  tiers?: Record<string, XosModelTier | null>
+}
+
+const TIERS: readonly XosModelTier[] = ['high', 'standard', 'light']
+const MAX_COMMIT_PATHS = 60
 
 export const EMPTY_RUN_CONFIG: XosAutomationRunConfig = {
   fallbacks: [],
   fallbackOnManualRuns: false,
   lockLane: null,
   lockWaitMinutes: 0,
-  timeoutMinutes: null
+  timeoutMinutes: null,
+  autoCommit: null,
+  auto: null
 }
 
 const LANE = /^[a-z0-9][a-z0-9-]{0,40}$/
@@ -52,7 +66,54 @@ export function cleanRunConfig(
     fallbackOnManualRuns: value?.fallbackOnManualRuns === true,
     lockLane: LANE.test(lane) ? lane : null,
     lockWaitMinutes: minutes(value?.lockWaitMinutes, 240),
-    timeoutMinutes: timeout > 0 ? timeout : null
+    timeoutMinutes: timeout > 0 ? timeout : null,
+    autoCommit: cleanAutoCommit(value?.autoCommit),
+    auto: cleanAuto(value?.auto)
+  }
+}
+
+/** Repo-relative, inside the repo: no absolute paths and no `..` segments. */
+export function cleanCommitPath(raw: string): string | null {
+  const path = raw.trim().replace(/^\.\//, '').replace(/\/+$/, '')
+  if (!path || path.length > 300 || path.startsWith('/') || path.startsWith(':')) {
+    return null
+  }
+  return path.split('/').some((part) => part === '..') ? null : path
+}
+
+function cleanAutoCommit(value: unknown): XosAutoCommitConfig | null {
+  const row = value as Partial<XosAutoCommitConfig> | null | undefined
+  if (!row || !Array.isArray(row.paths)) {
+    return null
+  }
+  const paths = Array.from(
+    new Set(
+      row.paths
+        .map((path) => (typeof path === 'string' ? cleanCommitPath(path) : null))
+        .filter((path): path is string => path !== null)
+    )
+  ).slice(0, MAX_COMMIT_PATHS)
+  if (paths.length === 0) {
+    return null
+  }
+  const message =
+    typeof row.message === 'string' && row.message.trim() ? row.message.trim().slice(0, 200) : null
+  return { paths, message, push: row.push === true }
+}
+
+function cleanAuto(value: unknown): XosAutoModeConfig | null {
+  const row = value as Partial<XosAutoModeConfig> | null | undefined
+  if (!row || !TIERS.includes(row.tier as XosModelTier)) {
+    return null
+  }
+  const providers = Array.isArray(row.providers)
+    ? Array.from(new Set(row.providers.filter((agent) => typeof agent === 'string' && agent)))
+    : []
+  return {
+    tier: row.tier as XosModelTier,
+    providers: providers.length > 0 ? providers.slice(0, 8) : ['claude', 'codex'],
+    reservePercent: Math.min(50, Math.max(0, Math.round(Number(row.reservePercent) || 0))),
+    effort: typeof row.effort === 'string' && row.effort.trim() ? row.effort.trim() : null
   }
 }
 
@@ -61,7 +122,9 @@ function isEmpty(config: XosAutomationRunConfig): boolean {
     config.fallbacks.length === 0 &&
     !config.fallbackOnManualRuns &&
     config.lockLane === null &&
-    config.timeoutMinutes === null
+    config.timeoutMinutes === null &&
+    config.autoCommit === null &&
+    config.auto === null
   )
 }
 
@@ -76,10 +139,33 @@ function ledgerPath(): string {
 function readConfigFile(): ConfigFile {
   try {
     const parsed = JSON.parse(readFileSync(configPath(), 'utf8')) as Partial<ConfigFile>
-    return { version: 1, automations: parsed.automations ?? {} }
+    return { version: 1, automations: parsed.automations ?? {}, tiers: parsed.tiers ?? {} }
   } catch {
-    return { version: 1, automations: {} }
+    return { version: 1, automations: {}, tiers: {} }
   }
+}
+
+function writeConfigFile(file: ConfigFile): void {
+  mkdirSync(xosHome(), { recursive: true })
+  const tmp = `${configPath()}.tmp`
+  writeFileSync(tmp, `${JSON.stringify(file, null, 2)}\n`)
+  renameSync(tmp, configPath())
+}
+
+/** Tier map edits (plan §3.3). Missing key = use the default inferred from the model name. */
+export function readTierEdits(): Record<string, XosModelTier | null> {
+  return readConfigFile().tiers ?? {}
+}
+
+export function writeTierEdit(key: string, tier: XosModelTier | null | undefined): void {
+  const file = readConfigFile()
+  const tiers = { ...file.tiers }
+  if (tier === undefined) {
+    delete tiers[key]
+  } else {
+    tiers[key] = tier !== null && TIERS.includes(tier) ? tier : null
+  }
+  writeConfigFile({ ...file, tiers })
 }
 
 function cleanChoice(value: unknown): XosModelChoice | null {
@@ -107,15 +193,13 @@ export function writeRunConfig(
   } else {
     file.automations[automationId] = clean
   }
-  mkdirSync(xosHome(), { recursive: true })
-  const tmp = `${configPath()}.tmp`
-  writeFileSync(tmp, `${JSON.stringify(file, null, 2)}\n`)
-  renameSync(tmp, configPath())
+  writeConfigFile(file)
 }
 
 type LedgerEvent =
-  | ({ type: 'attempt' } & Omit<XosRunAttempt, 'outcome'>)
+  | ({ type: 'attempt' } & Omit<XosRunAttempt, 'outcome' | 'commit'>)
   | ({ type: 'outcome'; runId: string } & NonNullable<XosRunAttempt['outcome']>)
+  | ({ type: 'commit'; runId: string } & XosRunCommit)
 
 export function appendLedger(event: LedgerEvent): void {
   try {
@@ -157,17 +241,25 @@ function readLedgerTail(): LedgerEvent[] {
 export function readRunAttempts(automationId: string, limit: number): XosRunAttempt[] {
   const attempts = new Map<string, XosRunAttempt>()
   const outcomes = new Map<string, XosRunAttempt['outcome']>()
+  const commits = new Map<string, XosRunCommit>()
   for (const event of readLedgerTail()) {
     if (event.type === 'attempt' && event.automationId === automationId) {
       const { type: _type, ...attempt } = event
-      attempts.set(event.runId, { ...attempt, outcome: null })
+      attempts.set(event.runId, { ...attempt, outcome: null, commit: null })
     } else if (event.type === 'outcome') {
       const { type: _type, runId, ...outcome } = event
       outcomes.set(runId, outcome)
+    } else if (event.type === 'commit') {
+      const { type: _type, runId, ...commit } = event
+      commits.set(runId, commit)
     }
   }
-  return [...attempts.values()]
-    .map((attempt) => ({ ...attempt, outcome: outcomes.get(attempt.runId) ?? null }))
+  return Array.from(attempts.values())
+    .map((attempt) => ({
+      ...attempt,
+      outcome: outcomes.get(attempt.runId) ?? null,
+      commit: commits.get(attempt.runId) ?? null
+    }))
     .toReversed()
     .slice(0, Math.max(1, Math.min(limit, 200)))
 }

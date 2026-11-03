@@ -9,7 +9,10 @@ import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { XosModelChoice } from '../../shared/xos-runtime-types'
 import { readXosModelArgs, writeXosModelArgs } from '../../shared/xos-model-args'
+import type { XosAutomationRunConfig } from '../../shared/xos-runtime-types'
+import { xosPreviewAuto } from './xos-auto-mode'
 import { classifyRunScreen, describeLimit, type XosRunLimitVerdict } from './xos-limit-classifier'
+import { assessQuota } from './xos-quota'
 import { appendLedger, readRunConfig } from './xos-runtime-store'
 
 /** A queued retry must be picked up by the run it starts, not by a much later manual run. */
@@ -21,6 +24,8 @@ type Chain = {
   rootTrigger: AutomationRun['trigger']
   attempt: number
   choice: XosModelChoice
+  /** The chain this root run walks: Auto's ranking, or the primary plus the fallbacks. */
+  options: XosModelChoice[]
 }
 
 type Pending = Chain & { parentRunId: string; reason: string; expiresAt: number }
@@ -64,32 +69,86 @@ function withChoice(automation: Automation, choice: XosModelChoice): Automation 
   return { ...automation, agentId: agent, extraAgentArgs: args || undefined }
 }
 
-export function xosLaunchAutomation(automation: Automation, run: AutomationRun): Automation {
-  try {
-    let launched = automation
-    let chain: Chain = {
-      rootRunId: run.id,
-      rootTrigger: rootTrigger(automation.id, run),
-      attempt: 0,
-      choice: primaryChoice(automation)
+function sameChoice(a: XosModelChoice, b: XosModelChoice): boolean {
+  return a.agent === b.agent && a.model === b.model && a.effort === b.effort
+}
+
+function fallsBack(trigger: AutomationRun['trigger'], config: XosAutomationRunConfig): boolean {
+  return trigger !== 'manual' || config.fallbackOnManualRuns
+}
+
+/** The chain for a new root run and where to start in it, with the reason when not at the top. */
+async function planRoot(
+  automation: Automation,
+  trigger: AutomationRun['trigger'],
+  config: XosAutomationRunConfig
+): Promise<{ options: XosModelChoice[]; start: number; reason: string | null }> {
+  const primary = primaryChoice(automation)
+  if (config.auto && automation.surface !== 'chat') {
+    const preview = await xosPreviewAuto(config.auto)
+    const picks = preview.candidates.filter((entry) => entry.available).map((entry) => entry.choice)
+    if (picks.length === 0) {
+      return {
+        options: [primary, ...config.fallbacks],
+        start: 0,
+        reason: `Auto found nothing (${preview.reason}); ran the automation's own model`
+      }
     }
+    const extra = config.fallbacks.filter(
+      (choice) => !picks.some((pick) => sameChoice(pick, choice))
+    )
+    return { options: [...picks, ...extra], start: 0, reason: preview.reason }
+  }
+  const options = [primary, ...config.fallbacks]
+  if (config.fallbacks.length === 0 || !fallsBack(trigger, config)) {
+    return { options, start: 0, reason: null }
+  }
+  // Plan §3.4 "before launch": a model whose quota is known to be used up is skipped.
+  const notes: string[] = []
+  for (let index = 0; index < options.length; index += 1) {
+    const quota = assessQuota(options[index].agent, options[index].model, 0)
+    if (!quota.exhausted) {
+      return {
+        options,
+        start: index,
+        reason: index > 0 ? `skipped before launch: ${notes.join('; ')}` : null
+      }
+    }
+    notes.push(quota.note)
+  }
+  return { options, start: 0, reason: null }
+}
+
+export async function xosLaunchAutomation(
+  automation: Automation,
+  run: AutomationRun
+): Promise<Automation> {
+  try {
+    const trigger = rootTrigger(automation.id, run)
+    let chain: Chain
     let parentRunId: string | null = null
-    let reason: string | null = null
+    let reason: string | null
     const queued = pending.get(automation.id)
     if (queued && run.trigger === 'manual' && queued.expiresAt > Date.now()) {
       pending.delete(automation.id)
-      const next = withChoice(automation, queued.choice)
-      if (next) {
-        launched = next
-        chain = {
-          rootRunId: queued.rootRunId,
-          rootTrigger: queued.rootTrigger,
-          attempt: queued.attempt,
-          choice: queued.choice
-        }
-        parentRunId = queued.parentRunId
-        reason = queued.reason
+      const { parentRunId: parent, reason: why, expiresAt: _expires, ...rest } = queued
+      chain = rest
+      parentRunId = parent
+      reason = why
+    } else {
+      const plan = await planRoot(automation, trigger, readRunConfig(automation.id))
+      chain = {
+        rootRunId: run.id,
+        rootTrigger: trigger,
+        attempt: plan.start,
+        choice: plan.options[plan.start],
+        options: plan.options
       }
+      reason = plan.reason
+    }
+    const launched = withChoice(automation, chain.choice)
+    if (!launched) {
+      chain = { ...chain, choice: primaryChoice(automation) }
     }
     chains.set(run.id, chain)
     appendLedger({
@@ -105,14 +164,14 @@ export function xosLaunchAutomation(automation: Automation, run: AutomationRun):
       effort: chain.choice.effort,
       reason
     })
-    return launched
+    return launched ?? automation
   } catch (error) {
     console.warn('[xos] fallback launch overlay failed; launching as stored', error)
     return automation
   }
 }
 
-function notify(body: string): void {
+export function notify(body: string): void {
   try {
     if (Notification.isSupported()) {
       new Notification({ title: 'Orca automation', body }).show()
@@ -168,23 +227,24 @@ export function xosObserveFinishedRun(
     if (!verdict || !automation) {
       return
     }
+    const config = readRunConfig(automation.id)
     const current = chain ?? {
       rootRunId: run.id,
       rootTrigger: run.trigger,
       attempt: 0,
-      choice: primaryChoice(automation)
+      choice: primaryChoice(automation),
+      options: [primaryChoice(automation), ...config.fallbacks]
     }
-    const config = readRunConfig(automation.id)
     const what = `${automation.name}: ${describeLimit(verdict)} on ${choiceLabel(current.choice)}`
-    if (current.rootTrigger === 'manual' && !config.fallbackOnManualRuns) {
+    if (!fallsBack(current.rootTrigger, config)) {
       notify(`${what}. Manual runs don't fall back unless you turn it on in the automation.`)
       return
     }
-    const options = [primaryChoice(automation), ...config.fallbacks]
+    const options = current.options
     const index = nextChoice(options, current.attempt, current.choice, verdict)
     if (index === -1) {
       notify(
-        config.fallbacks.length === 0
+        options.length <= 1
           ? `${what}. Add fallback models to this automation to retry on another model.`
           : `${what}. Every fallback has been tried.`
       )
@@ -195,6 +255,7 @@ export function xosObserveFinishedRun(
       rootTrigger: current.rootTrigger,
       attempt: index,
       choice: options[index],
+      options,
       parentRunId: run.id,
       reason: describeLimit(verdict),
       expiresAt: Date.now() + PENDING_TTL_MS

@@ -1,6 +1,6 @@
 // XOS fork: an automation's model chain on its detail page (plan §3.2 "Fallbacks", RT5/RT6): the
 // primary model from its arguments, the ordered fallbacks tried when a run hits a usage limit, and
-// the recent runs with the model each one used and how it ended.
+// Auto mode, lane/timeout limits, auto-commit, and the recent runs (GD2).
 import React, { useCallback, useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -23,26 +23,14 @@ import type {
   XosRunAttempt
 } from '../../../../shared/xos-runtime-types'
 import type { AutomationDraft } from '../automations/AutomationEditorDialog'
+import { XosAutoCommitSection } from './XosAutoCommitSection'
+import { XosAutoModeSection } from './XosAutoModeSection'
 import { XosAutomationModelField } from './XosAutomationModelField'
 import { XosAutomationRunLimits } from './XosAutomationRunLimits'
-import { relativeTime } from './xos-format'
+import { XosRunHistory, choiceLabel as label } from './XosRunHistory'
 import './xos-ops-cards.css'
 
 const AGENTS = (Object.keys(TUI_AGENT_DISPLAY_NAMES) as TuiAgent[]).filter(xosModelArgsSupported)
-
-function label(choice: XosModelChoice): string {
-  const agent = TUI_AGENT_DISPLAY_NAMES[choice.agent as TuiAgent] ?? choice.agent
-  return [agent, choice.model ?? 'default model', choice.effort].filter(Boolean).join(' · ')
-}
-
-const OUTCOME: Record<string, { text: string; tone: string }> = {
-  ok: { text: 'finished', tone: 'xos-tone-success' },
-  failed: { text: 'failed', tone: 'xos-tone-danger' },
-  'usage-limit': { text: 'usage limit', tone: 'xos-tone-warning' },
-  overloaded: { text: 'overloaded', tone: 'xos-tone-warning' },
-  auth: { text: 'not signed in', tone: 'xos-tone-danger' },
-  'missing-binary': { text: 'agent missing', tone: 'xos-tone-danger' }
-}
 
 function AddFallback({ onAdd }: { onAdd: (choice: XosModelChoice) => void }): React.JSX.Element {
   const [draft, setDraft] = useState({ agentId: 'codex', extraAgentArgs: '' } as AutomationDraft)
@@ -80,25 +68,6 @@ function AddFallback({ onAdd }: { onAdd: (choice: XosModelChoice) => void }): Re
         Add fallback
       </Button>
     </div>
-  )
-}
-
-function AttemptRow({ attempt }: { attempt: XosRunAttempt }): React.JSX.Element {
-  const outcome = attempt.outcome ? OUTCOME[attempt.outcome.kind] : null
-  return (
-    <li className="flex items-center gap-2 text-xs">
-      <span className="w-16 shrink-0 text-muted-foreground">{relativeTime(attempt.at)}</span>
-      <span className="min-w-0 flex-1 truncate" title={attempt.reason ?? undefined}>
-        {attempt.attempt > 0 ? `↳ fallback ${attempt.attempt}: ` : ''}
-        {label(attempt)}
-      </span>
-      <span
-        className={`shrink-0 rounded-full border px-1.5 ${outcome?.tone ?? 'xos-tone-neutral'}`}
-        title={attempt.outcome?.detail ?? undefined}
-      >
-        {outcome?.text ?? 'running'}
-      </span>
-    </li>
   )
 }
 
@@ -179,7 +148,9 @@ export function XosAutomationFallbacks({
         <li className="flex items-center gap-2">
           <span className="w-5 text-xs text-muted-foreground">1.</span>
           <span className="min-w-0 flex-1 truncate font-medium">
-            {label({ agent: automation.agentId, model, effort })}
+            {config.auto
+              ? `Auto · ${config.auto.tier} tier`
+              : label({ agent: automation.agentId, model, effort })}
           </span>
           <span className="text-xs text-muted-foreground">primary</span>
         </li>
@@ -240,14 +211,16 @@ export function XosAutomationFallbacks({
         When a run stops on a usage limit, overload, sign-in problem or missing agent, Orca starts
         it again on the next model. Other failures never fall back.
       </p>
-      <XosAutomationRunLimits config={config} onSave={(next) => void save(next)} />
-      {attempts.length > 0 && (
-        <ul className="space-y-1 border-t pt-2">
-          {attempts.map((attempt) => (
-            <AttemptRow key={attempt.runId} attempt={attempt} />
-          ))}
-        </ul>
+      {automation.surface !== 'chat' && (
+        <XosAutoModeSection config={config} onSave={(next) => void save(next)} />
       )}
+      <XosAutomationRunLimits config={config} onSave={(next) => void save(next)} />
+      <XosAutoCommitSection
+        automation={automation}
+        config={config}
+        onSave={(next) => void save(next)}
+      />
+      <XosRunHistory attempts={attempts} />
     </section>
   )
 }

@@ -16,5 +16,9 @@ export const xosGoalsApi: XosGoalsApi = {
   listModels: (args) => ipcRenderer.invoke('xos:models:list', args),
   getRunConfig: (args) => ipcRenderer.invoke('xos:runtime:getRunConfig', args),
   setRunConfig: (args) => ipcRenderer.invoke('xos:runtime:setRunConfig', args),
-  getRunAttempts: (args) => ipcRenderer.invoke('xos:runtime:getRunAttempts', args)
+  getRunAttempts: (args) => ipcRenderer.invoke('xos:runtime:getRunAttempts', args),
+  getLegacyCommitPolicies: (args) => ipcRenderer.invoke('xos:runtime:legacyCommitPolicies', args),
+  getTierModels: (args) => ipcRenderer.invoke('xos:runtime:tierModels', args),
+  setModelTier: (args) => ipcRenderer.invoke('xos:runtime:setModelTier', args),
+  previewAuto: (args) => ipcRenderer.invoke('xos:runtime:previewAuto', args)
 }

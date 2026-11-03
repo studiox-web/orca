@@ -42,6 +42,12 @@ function run(
   return value
 }
 
+const target = (): { repoRoot: string; cwd: string; local: boolean } => ({
+  repoRoot: repo,
+  cwd: repo,
+  local: true
+})
+
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 300))
 
 beforeEach(() => {
@@ -64,18 +70,18 @@ describe('lane locks', () => {
     writeRunConfig('b', { lockLane: 'content' })
     writeRunConfig('c', { lockLane: 'content', lockWaitMinutes: 10 })
 
-    const first = await gate.xosBeforeLaunch(automation('a'), run('a1', 'a'), repo)
+    const first = await gate.xosBeforeLaunch(automation('a'), run('a1', 'a'), target())
     expect('automation' in first).toBe(true)
-    const skipped = await gate.xosBeforeLaunch(automation('b'), run('b1', 'b'), repo)
+    const skipped = await gate.xosBeforeLaunch(automation('b'), run('b1', 'b'), target())
     expect(skipped).toEqual({ refusal: 'Lane "content" is busy with another run; skipped.' })
-    const queued = await gate.xosBeforeLaunch(automation('c'), run('c1', 'c'), repo)
+    const queued = await gate.xosBeforeLaunch(automation('c'), run('c1', 'c'), target())
     expect('refusal' in queued && queued.refusal).toMatch(/Queued/)
 
     gate.xosAfterRunFinished(run('a1', 'a', 'completed'))
     await flush()
     expect(host.runNow).toHaveBeenCalledWith('c')
     expect(
-      'automation' in (await gate.xosBeforeLaunch(automation('b'), run('b2', 'b'), repo))
+      'automation' in (await gate.xosBeforeLaunch(automation('b'), run('b2', 'b'), target()))
     ).toBe(true)
     gate.xosReleaseRun('b2')
   })
@@ -90,14 +96,14 @@ describe('lane locks', () => {
     })
     await flush()
     try {
-      const result = await gate.xosBeforeLaunch(automation('a'), run('a2', 'a'), repo)
+      const result = await gate.xosBeforeLaunch(automation('a'), run('a2', 'a'), target())
       expect('refusal' in result).toBe(true)
     } finally {
       // flock's child inherits the lock, so end the whole group (as a finished cron job would).
       process.kill(-legacy.pid!, 'SIGKILL')
     }
     await flush()
-    const result = await gate.xosBeforeLaunch(automation('a'), run('a3', 'a'), repo)
+    const result = await gate.xosBeforeLaunch(automation('a'), run('a3', 'a'), target())
     expect('automation' in result).toBe(true)
     gate.xosReleaseRun('a3')
   })
@@ -108,7 +114,7 @@ describe('run timeout', () => {
     vi.useFakeTimers()
     try {
       writeRunConfig('t', { timeoutMinutes: 1 })
-      await gate.xosBeforeLaunch(automation('t'), run('t1', 't', 'dispatched'), repo)
+      await gate.xosBeforeLaunch(automation('t'), run('t1', 't', 'dispatched'), target())
       await vi.advanceTimersByTimeAsync(60_000)
       expect(host.markDispatchResult).toHaveBeenCalledWith({
         runId: 't1',

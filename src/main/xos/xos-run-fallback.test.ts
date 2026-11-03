@@ -50,11 +50,11 @@ describe('fallback chain', () => {
       fallbackOnManualRuns: false
     })
     const runNow = vi.fn(async () => undefined)
-    expect(xosLaunchAutomation(automation, run('r1', 'scheduled'))).toBe(automation)
+    expect(await xosLaunchAutomation(automation, run('r1', 'scheduled'))).toEqual(automation)
     xosObserveFinishedRun({ automation, runNow }, run('r1', 'scheduled', LIMIT))
     expect(runNow).toHaveBeenCalledWith('auto-1')
 
-    const retried = xosLaunchAutomation(automation, run('r2', 'manual'))
+    const retried = await xosLaunchAutomation(automation, run('r2', 'manual'))
     expect(retried.agentId).toBe('codex')
     expect(retried.extraAgentArgs).toBe('-m gpt-5.5 -c model_reasoning_effort=high')
 
@@ -70,13 +70,13 @@ describe('fallback chain', () => {
     expect(attempts[0].reason).toMatch(/^usage limit/)
   })
 
-  it('does not fall back for a manual run unless opted in, nor twice for one completion', () => {
+  it('does not fall back for a manual run unless opted in, nor twice for one completion', async () => {
     writeRunConfig(automation.id, {
       fallbacks: [{ agent: 'codex', model: null, effort: null }],
       fallbackOnManualRuns: false
     })
     const runNow = vi.fn(async () => undefined)
-    xosLaunchAutomation(automation, run('m1', 'manual'))
+    await xosLaunchAutomation(automation, run('m1', 'manual'))
     xosObserveFinishedRun({ automation, runNow }, run('m1', 'manual', LIMIT))
     expect(runNow).not.toHaveBeenCalled()
 
@@ -84,18 +84,18 @@ describe('fallback chain', () => {
       fallbacks: [{ agent: 'codex', model: null, effort: null }],
       fallbackOnManualRuns: true
     })
-    xosLaunchAutomation(automation, run('m2', 'manual'))
+    await xosLaunchAutomation(automation, run('m2', 'manual'))
     xosObserveFinishedRun({ automation, runNow }, run('m2', 'manual', LIMIT))
     xosObserveFinishedRun({ automation, runNow }, run('m2', 'manual', LIMIT))
     expect(runNow).toHaveBeenCalledTimes(1)
   })
 
-  it('never falls back on an ordinary failure and stops at the end of the chain', () => {
+  it('never falls back on an ordinary failure and stops at the end of the chain', async () => {
     writeRunConfig(automation.id, { fallbacks: [], fallbackOnManualRuns: false })
     const runNow = vi.fn(async () => undefined)
-    xosLaunchAutomation(automation, run('s1', 'scheduled'))
+    await xosLaunchAutomation(automation, run('s1', 'scheduled'))
     xosObserveFinishedRun({ automation, runNow }, run('s1', 'scheduled', 'Error: tests failed (3)'))
-    xosLaunchAutomation(automation, run('s2', 'scheduled'))
+    await xosLaunchAutomation(automation, run('s2', 'scheduled'))
     xosObserveFinishedRun({ automation, runNow }, run('s2', 'scheduled', LIMIT))
     expect(runNow).not.toHaveBeenCalled()
   })

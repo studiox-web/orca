@@ -35,16 +35,22 @@ export function automationLockFile(repoRoot: string, automationId: string): stri
   return join(lockDir(repoRoot), `orca-automation-${automationId.replace(/[^\w-]/g, '_')}.lock`)
 }
 
+/** RT8: the legacy global commit lock (one git commit at a time per repo). */
+export function commitLockFile(repoRoot: string): string {
+  return join(lockDir(repoRoot), 'git-commit.lock')
+}
+
 export type HeldLock = { file: string; release: () => void }
 
-/** Takes the lock without waiting; null when someone else holds it. */
-export function tryLock(file: string): Promise<HeldLock | null> {
+/** Takes the lock, waiting up to `waitSeconds` (0 = not at all); null when someone else holds it. */
+export function tryLock(file: string, waitSeconds = 0): Promise<HeldLock | null> {
   mkdirSync(dirname(file), { recursive: true })
   const watch = `echo locked; while kill -0 ${process.pid} 2>/dev/null; do sleep 5; done`
+  const mode = waitSeconds > 0 ? ['-w', String(waitSeconds)] : ['-n']
   return new Promise((resolve, reject) => {
     let child: ChildProcess
     try {
-      child = spawn('flock', ['-n', '-E', String(BUSY_EXIT), file, 'sh', '-c', watch], {
+      child = spawn('flock', [...mode, '-E', String(BUSY_EXIT), file, 'sh', '-c', watch], {
         detached: true,
         stdio: ['ignore', 'pipe', 'ignore']
       })
@@ -71,10 +77,13 @@ export function tryLock(file: string): Promise<HeldLock | null> {
         settle()
       }
     }
-    timer = setTimeout(() => {
-      release()
-      finish(() => reject(new Error(`Timed out locking ${file}`)))
-    }, ACQUIRE_TIMEOUT_MS)
+    timer = setTimeout(
+      () => {
+        release()
+        finish(() => reject(new Error(`Timed out locking ${file}`)))
+      },
+      ACQUIRE_TIMEOUT_MS + waitSeconds * 1000
+    )
     child.stdout?.on('data', (chunk: Buffer) => {
       if (chunk.toString().includes('locked')) {
         child.unref()
