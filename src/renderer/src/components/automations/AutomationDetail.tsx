@@ -24,6 +24,7 @@ import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
 import { automationRunErrorText } from './automation-run-error-copy'
+import { XosAutomationFallbacks } from '../xos-goals/XosAutomationFallbacks'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -375,6 +376,9 @@ export function AutomationDetail({
           value={usageCoverage}
         />
       </div>
+
+      {/* XOS fork: model chain and per-run model history (stage A2). */}
+      <XosAutomationFallbacks automation={automation} />
 
       <AutomationPromptDisclosure
         key={`${automation.id}:${automation.prompt}`}

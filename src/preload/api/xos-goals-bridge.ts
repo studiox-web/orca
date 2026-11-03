@@ -13,5 +13,8 @@ export const xosGoalsApi: XosGoalsApi = {
   getAudit: (args) => ipcRenderer.invoke('xos:goals:getAudit', args),
   getItems: (args) => ipcRenderer.invoke('xos:items:list', args),
   getItem: (args) => ipcRenderer.invoke('xos:items:get', args),
-  listModels: (args) => ipcRenderer.invoke('xos:models:list', args)
+  listModels: (args) => ipcRenderer.invoke('xos:models:list', args),
+  getRunConfig: (args) => ipcRenderer.invoke('xos:runtime:getRunConfig', args),
+  setRunConfig: (args) => ipcRenderer.invoke('xos:runtime:setRunConfig', args),
+  getRunAttempts: (args) => ipcRenderer.invoke('xos:runtime:getRunAttempts', args)
 }

@@ -1,0 +1,116 @@
+// XOS fork: RT4 limit classification for terminal-surface automation runs. Orca's terminal runs
+// are interactive agents that go idle rather than exit, so there is no exit code: the verdict comes
+// from the last lines on screen only (a goal whose own work mentions "429" must not fall back).
+// Only usage limits, overload, auth failures and a missing agent binary qualify; a real task
+// failure never falls back (plan §3.4).
+
+import type { XosRunLimitKind } from '../../shared/xos-runtime-types'
+
+export type { XosRunLimitKind }
+
+export type XosRunLimitVerdict = {
+  kind: XosRunLimitKind
+  /** The screen line that matched, trimmed, for the run record and notifications. */
+  evidence: string
+  /** "resets 3pm", "try again in 3 days"… when the banner says. */
+  resetHint: string | null
+}
+
+/** How many non-empty lines from the bottom of the screen are inspected. */
+export const LIMIT_TAIL_LINES = 25
+
+const RULES: { kind: XosRunLimitKind; pattern: RegExp }[] = [
+  // Claude: "You've hit your limit · resets 3pm"; Codex: "You've hit your usage limit. Try again…"
+  { kind: 'usage-limit', pattern: /\byou(?:'|’)?ve hit your (?:\w+ )?limit\b/i },
+  {
+    kind: 'usage-limit',
+    pattern:
+      /\b(?:usage|session|weekly|monthly|5-hour|five-hour|opus) limit (?:reached|exceeded)\b/i
+  },
+  { kind: 'usage-limit', pattern: /\bclaude (?:ai )?usage limit reached\b/i },
+  {
+    kind: 'usage-limit',
+    pattern: /\b(?:spend|spending) (?:cap|limit) (?:reached|hit|exceeded)\b/i
+  },
+  { kind: 'usage-limit', pattern: /\bhit your (?:monthly|weekly|usage|spend)\b.{0,20}\blimit\b/i },
+  {
+    kind: 'usage-limit',
+    pattern: /\bout of (?:credits|extra usage)\b|\bcredit balance is too low\b/i
+  },
+  {
+    kind: 'usage-limit',
+    pattern: /\bexceeded retry limit, last status: 429\b|\b429 too many requests\b/i
+  },
+  {
+    kind: 'usage-limit',
+    pattern: /\bquota exceeded\b|\bRESOURCE_EXHAUSTED\b|\brate limit reached for\b/i
+  },
+  { kind: 'overloaded', pattern: /\bAPI Error: 529\b|\boverloaded_error\b|\b529 Overloaded\b/i },
+  {
+    kind: 'auth',
+    pattern:
+      /\binvalid api key\b|please run \/login\b|\bfailed to authenticate\b|\b401 invalid authentication credentials\b|\boauth token (?:has )?expired\b|\bnot logged in\b/i
+  }
+]
+
+const RESET_HINT = /\b(?:resets?(?: at| in)? [\w:., ]{1,30}|try again (?:at|in) [\w:., ]{1,30})/i
+
+const AGENT_BINARIES = [
+  'claude',
+  'codex',
+  'grok',
+  'cursor-agent',
+  'codebuddy',
+  'omp',
+  'gemini',
+  'agy'
+]
+
+function missingBinary(line: string): boolean {
+  const match = /(?:^|\s|:)([\w.-]+): (?:command not found|not found)\b/i.exec(line)
+  return match !== null && AGENT_BINARIES.includes(match[1].toLowerCase())
+}
+
+/** Removes ANSI colour/cursor codes and TUI box borders around a line. */
+function clean(line: string): string {
+  return (
+    line
+      // oxlint-disable-next-line no-control-regex -- terminal snapshots can carry escape codes
+      .replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '')
+      .replace(/^[\s│┃|╭╮╰╯─━>⎿●✻*·]+|[\s│┃|╭╮╰╯─━]+$/g, '')
+      .trim()
+  )
+}
+
+export function classifyRunScreen(screen: string | null | undefined): XosRunLimitVerdict | null {
+  if (!screen) {
+    return null
+  }
+  const lines = screen.split('\n').map(clean).filter(Boolean).slice(-LIMIT_TAIL_LINES)
+  // Bottom-up: the most recent banner wins over anything earlier in the tail.
+  for (const line of lines.toReversed()) {
+    if (missingBinary(line)) {
+      return { kind: 'missing-binary', evidence: line.slice(0, 240), resetHint: null }
+    }
+    for (const rule of RULES) {
+      if (rule.pattern.test(line)) {
+        return {
+          kind: rule.kind,
+          evidence: line.slice(0, 240),
+          resetHint: RESET_HINT.exec(line)?.[0]?.trim() ?? null
+        }
+      }
+    }
+  }
+  return null
+}
+
+export function describeLimit(verdict: XosRunLimitVerdict): string {
+  const label = {
+    'usage-limit': 'usage limit',
+    overloaded: 'provider overloaded',
+    auth: 'not signed in',
+    'missing-binary': 'agent not installed'
+  }[verdict.kind]
+  return verdict.resetHint ? `${label} (${verdict.resetHint})` : label
+}

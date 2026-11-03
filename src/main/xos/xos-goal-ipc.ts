@@ -15,7 +15,7 @@ import type {
 import { allJobs, buildXosGoalBoard, findProject, type XosRepoSource } from './xos-goal-board'
 import { registerXosGoalCrudHandlers } from './xos-goal-crud-ipc'
 import { registerXosWorkItemHandlers } from './xos-work-items-ipc'
-import { registerXosModelCatalogHandlers } from './xos-model-catalog'
+import { registerXosRuntimeHandlers } from './xos-runtime-ipc'
 import { audit, xosHome } from './xos-crontab'
 
 const ART_PREFIX = '/images/admin/ops-cards/'
@@ -104,7 +104,7 @@ export function registerXosGoalHandlers(repos: XosRepoSource, runtime: OrcaRunti
   ipcMain.handle('xos:goals:getBoard', () => buildXosGoalBoard(repos))
   registerXosGoalCrudHandlers(repos)
   registerXosWorkItemHandlers(repos)
-  registerXosModelCatalogHandlers()
+  registerXosRuntimeHandlers()
 
   ipcMain.handle(
     'xos:goals:runNow',

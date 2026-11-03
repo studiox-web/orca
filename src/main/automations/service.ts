@@ -21,6 +21,7 @@ import {
   type AutomationRunTargetResult
 } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
+import { xosObserveFinishedRun } from '../xos/xos-run-fallback'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
@@ -184,6 +185,14 @@ export class AutomationService {
       return run
     }
     this.completionWatcher?.forget(run.id)
+    // XOS fork: usage-limit classification and the fallback chain (stage A2).
+    xosObserveFinishedRun(
+      {
+        automation: this.store.listAutomations().find((entry) => entry.id === run.automationId),
+        runNow: (automationId) => this.runNow(automationId)
+      },
+      run
+    )
     // Duplicate completion effects must not recalculate usage with a later attribution window.
     if (run.usage) {
       return run

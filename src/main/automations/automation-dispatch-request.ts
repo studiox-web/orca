@@ -28,6 +28,7 @@ import {
 } from '../../shared/automation-run-failure-copy'
 import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
+import { xosLaunchAutomation } from '../xos/xos-run-fallback'
 
 export type AutomationRendererChannel = Pick<WebContents, 'isDestroyed' | 'send'>
 
@@ -153,12 +154,14 @@ export async function requestAutomationDispatch(
   if (lateRefusal || !target.ok) {
     return refuse(lateRefusal ?? automationRunFailure('noDispatchHost'))
   }
+  // XOS fork: record the model this run uses; a fallback retry launches on the next model.
+  const launchAutomation = xosLaunchAutomation(automation, run)
   const renderer = automation.surface === 'chat' ? null : ctx.getRenderer()
   if (renderer) {
     return sendRendererDispatch(
       renderer,
       {
-        automation,
+        automation: launchAutomation,
         run,
         dispatchToken: createAutomationDispatchToken(automation.id, run.id)
       },
@@ -172,7 +175,7 @@ export async function requestAutomationDispatch(
   }
   return runHeadlessAutomationDispatch({
     ...ctx,
-    automation,
+    automation: launchAutomation,
     run,
     target,
     dispatcher: (request) => {
