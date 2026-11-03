@@ -1,0 +1,924 @@
+/* XOS fork: Cascade/DJVibe operations-card styles (from DJVibe resources/css/app.css),
+ * scoped under .xos-ops-cards with Cascade's teal/sand palette so cards keep their look
+ * inside any Orca theme. Same layer as Tailwind utilities, as in the source app. */
+@layer utilities {
+  .xos-ops-cards {
+    --background: oklch(0.978 0.005 80);
+    --foreground: oklch(0.141 0.038 243.61);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.141 0.038 243.61);
+    --primary: oklch(0.395 0.088 221.46);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.932 0.024 85.34);
+    --secondary-foreground: oklch(0.141 0.038 243.61);
+    --muted: oklch(0.932 0.024 85.34);
+    --muted-foreground: oklch(0.4 0.05 243);
+    --accent: oklch(0.932 0.024 85.34);
+    --accent-foreground: oklch(0.395 0.088 221.46);
+    --border: oklch(0.922 0 0);
+    --ring: oklch(0.395 0.088 221.46);
+    --chart-2: oklch(0.7 0.13 192);
+    --warning: #d97706;
+    background: var(--background);
+    color: var(--foreground);
+  }
+
+  .dark .xos-ops-cards {
+    --background: oklch(0.141 0.038 243.61);
+    --foreground: oklch(0.978 0.005 80);
+    --card: oklch(0.18 0.03 243);
+    --card-foreground: oklch(0.978 0.005 80);
+    --primary: oklch(0.7 0.13 192);
+    --primary-foreground: oklch(0.141 0.038 243.61);
+    --secondary: oklch(0.25 0.06 221);
+    --secondary-foreground: oklch(0.978 0.005 80);
+    --muted: oklch(0.25 0.06 221);
+    --muted-foreground: oklch(0.7 0.05 221);
+    --accent: oklch(0.25 0.06 221);
+    --accent-foreground: oklch(0.7 0.13 192);
+    --border: oklch(0.25 0.06 221);
+    --ring: oklch(0.7 0.13 192);
+    --chart-2: oklch(0.395 0.088 221.46);
+    --warning: #f59e0b;
+  }
+
+  /* Status tones for chips, panels and alerts; scoped here so the board keeps Cascade's colours. */
+  .xos-chip {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1rem;
+    white-space: nowrap;
+  }
+
+  .xos-tone-success {
+    --xos-tone: #059669;
+  }
+  .xos-tone-danger {
+    --xos-tone: #dc2626;
+  }
+  .xos-tone-warning {
+    --xos-tone: #d97706;
+  }
+  .dark .xos-tone-success {
+    --xos-tone: #34d399;
+  }
+  .dark .xos-tone-danger {
+    --xos-tone: #f87171;
+  }
+  .dark .xos-tone-warning {
+    --xos-tone: #fbbf24;
+  }
+  .xos-tone-success,
+  .xos-tone-danger,
+  .xos-tone-warning {
+    color: var(--xos-tone);
+    background-color: color-mix(in oklab, var(--xos-tone) 14%, transparent);
+    border-color: color-mix(in oklab, var(--xos-tone) 35%, transparent);
+  }
+  .xos-tone-neutral {
+    color: var(--muted-foreground);
+    background-color: var(--muted);
+  }
+
+  /* The leadership panel (C-suite) is gold-edged, as on the Laravel board. */
+  .xos-panel-lead {
+    border-color: color-mix(in oklab, var(--warning) 55%, transparent);
+    background-color: color-mix(in oklab, var(--warning) 6%, transparent);
+  }
+
+  /* Orca stays open all day: stop infinite foil/pulse animations while the board is hidden. */
+  .xos-ops-cards[data-animations-paused] *,
+  .xos-ops-cards[data-animations-paused] *::before,
+  .xos-ops-cards[data-animations-paused] *::after {
+    animation-play-state: paused !important;
+  }
+
+  .c-suite-foil {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    border-color: color-mix(in oklab, #f59e0b 54%, #d7d0c2);
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklab, #f59e0b 16%, #ffffff) 0%,
+      #ffffff 18%,
+      color-mix(in oklab, #f2e8d5 88%, #f59e0b) 42%,
+      color-mix(in oklab, #f59e0b 18%, #ffffff) 64%,
+      #ffffff 100%
+    );
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, #f59e0b 24%, transparent),
+      0 18px 42px -32px #f59e0b;
+  }
+
+  .c-suite-foil::before {
+    pointer-events: none;
+    position: absolute;
+    inset: -45%;
+    z-index: -1;
+    content: '';
+    background:
+      linear-gradient(
+        115deg,
+        transparent 0%,
+        color-mix(in oklab, #ffffff 0%, transparent) 28%,
+        color-mix(in oklab, #ffffff 78%, transparent) 42%,
+        color-mix(in oklab, #f59e0b 52%, transparent) 50%,
+        color-mix(in oklab, #38b2ac 20%, transparent) 58%,
+        transparent 74%
+      ),
+      repeating-linear-gradient(
+        35deg,
+        color-mix(in oklab, #ffffff 22%, transparent) 0 1px,
+        transparent 1px 9px
+      );
+    opacity: 0.58;
+    transform: translateX(-18%) rotate(0deg);
+    animation: c-suite-foil-sheen 7s linear infinite;
+  }
+
+  .c-suite-foil-card {
+    border-color: color-mix(in oklab, #f59e0b 62%, #d7d0c2);
+    background: linear-gradient(
+      145deg,
+      #ffffff 0%,
+      color-mix(in oklab, #f2e8d5 82%, #ffffff) 35%,
+      color-mix(in oklab, #f59e0b 14%, #ffffff) 60%,
+      #ffffff 100%
+    );
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, #f59e0b 30%, transparent),
+      0 16px 34px -28px #f59e0b;
+  }
+
+  .xos-card-link:hover .c-suite-foil-card,
+  .xos-card-link:focus-visible .c-suite-foil-card {
+    filter: saturate(1.08);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #f59e0b 40%, transparent),
+      0 0 0 1px color-mix(in oklab, #f59e0b 38%, transparent),
+      0 0 28px -12px #f59e0b,
+      0 22px 50px -28px #f59e0b;
+  }
+
+  .c-suite-foil-badge {
+    border-color: color-mix(in oklab, #f59e0b 48%, #001b2a);
+    background: #f59e0b;
+    color: #001b2a;
+    box-shadow: 0 0 18px -10px #f59e0b;
+  }
+
+  /* Dark-mode overrides — swap the white base for the dark card surface */
+  .dark .c-suite-foil {
+    border-color: color-mix(in oklab, #f59e0b 46%, oklch(0.25 0.06 221));
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklab, #f59e0b 12%, oklch(0.18 0.03 243)) 0%,
+      oklch(0.18 0.03 243) 18%,
+      color-mix(in oklab, #f59e0b 9%, oklch(0.18 0.03 243)) 42%,
+      color-mix(in oklab, #f59e0b 14%, oklch(0.18 0.03 243)) 64%,
+      oklch(0.18 0.03 243) 100%
+    );
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, #f59e0b 28%, transparent),
+      0 18px 42px -32px color-mix(in oklab, #f59e0b 55%, transparent);
+  }
+
+  .dark .c-suite-foil::before {
+    background:
+      linear-gradient(
+        115deg,
+        transparent 0%,
+        transparent 28%,
+        color-mix(in oklab, #f59e0b 38%, transparent) 42%,
+        color-mix(in oklab, #f59e0b 58%, transparent) 50%,
+        color-mix(in oklab, #38b2ac 22%, transparent) 58%,
+        transparent 74%
+      ),
+      repeating-linear-gradient(
+        35deg,
+        color-mix(in oklab, #f59e0b 14%, transparent) 0 1px,
+        transparent 1px 9px
+      );
+    opacity: 0.38;
+  }
+
+  .dark .c-suite-foil-card {
+    border-color: color-mix(in oklab, #f59e0b 52%, oklch(0.25 0.06 221));
+    background: linear-gradient(
+      145deg,
+      oklch(0.18 0.03 243) 0%,
+      color-mix(in oklab, #f59e0b 10%, oklch(0.18 0.03 243)) 35%,
+      color-mix(in oklab, #f59e0b 6%, oklch(0.18 0.03 243)) 60%,
+      oklch(0.18 0.03 243) 100%
+    );
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, #f59e0b 26%, transparent),
+      0 16px 34px -28px color-mix(in oklab, #f59e0b 48%, transparent);
+  }
+
+  .dark .xos-card-link:hover .c-suite-foil-card,
+  .dark .xos-card-link:focus-visible .c-suite-foil-card {
+    filter: saturate(1.1) brightness(1.06);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #f59e0b 32%, transparent),
+      0 0 0 1px color-mix(in oklab, #f59e0b 32%, transparent),
+      0 0 28px -12px color-mix(in oklab, #f59e0b 46%, transparent),
+      0 22px 50px -28px color-mix(in oklab, #f59e0b 38%, transparent);
+  }
+
+  .ops-spell-card {
+    position: relative;
+    isolation: isolate;
+    border-width: 2px;
+    background: linear-gradient(
+      145deg,
+      color-mix(in oklab, var(--secondary) 70%, var(--card)) 0%,
+      var(--card) 42%,
+      color-mix(in oklab, var(--primary) 7%, var(--card)) 100%
+    );
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--foreground) 8%, transparent),
+      0 16px 34px -30px var(--foreground);
+    transform: translateY(0) scale(1);
+    transition:
+      transform 180ms ease,
+      border-color 180ms ease,
+      box-shadow 180ms ease,
+      filter 180ms ease;
+  }
+
+  .ops-goal-viewer-shell,
+  .ops-goal-spell {
+    position: relative;
+    isolation: isolate;
+    border-width: 2px;
+    background: linear-gradient(
+      145deg,
+      color-mix(in oklab, var(--secondary) 68%, var(--card)) 0%,
+      var(--card) 44%,
+      color-mix(in oklab, var(--primary) 8%, var(--card)) 100%
+    );
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--foreground) 8%, transparent),
+      0 22px 54px -42px var(--foreground);
+  }
+
+  .ops-goal-viewer-shell::after,
+  .ops-goal-spell::after {
+    pointer-events: none;
+    position: absolute;
+    inset: -1px;
+    z-index: 1;
+    border-radius: inherit;
+    content: '';
+    background: linear-gradient(
+      115deg,
+      transparent 0%,
+      transparent 38%,
+      color-mix(in oklab, #ffffff 42%, transparent) 49%,
+      color-mix(in oklab, #67e8f9 18%, transparent) 55%,
+      transparent 68%,
+      transparent 100%
+    );
+    opacity: 0.22;
+    transform: translateX(18%);
+  }
+
+  .ops-goal-viewer-header {
+    border-bottom: 1px solid color-mix(in oklab, var(--foreground) 14%, var(--border));
+    background: color-mix(in oklab, var(--card) 86%, var(--secondary));
+    box-shadow: inset 0 1px 0 color-mix(in oklab, #ffffff 76%, transparent);
+  }
+
+  .ops-goal-spell-manager {
+    border-color: var(--primary);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--primary) 32%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--primary) 22%, transparent),
+      0 24px 58px -40px var(--primary);
+  }
+
+  .ops-goal-spell-art {
+    filter: saturate(1.08) contrast(1.03);
+  }
+
+  .ops-goal-spell-body {
+    background: color-mix(in oklab, var(--card) 90%, var(--secondary));
+    box-shadow: inset 0 1px 0 color-mix(in oklab, #ffffff 78%, transparent);
+  }
+
+  .ops-spell-card::after {
+    pointer-events: none;
+    position: absolute;
+    inset: -1px;
+    z-index: 1;
+    border-radius: inherit;
+    content: '';
+    background: linear-gradient(
+      115deg,
+      transparent 0%,
+      transparent 35%,
+      color-mix(in oklab, #ffffff 52%, transparent) 48%,
+      color-mix(in oklab, #67e8f9 20%, transparent) 54%,
+      transparent 68%,
+      transparent 100%
+    );
+    opacity: 0;
+    transform: translateX(-72%);
+  }
+
+  .xos-card-link:hover .ops-spell-card,
+  .xos-card-link:focus-visible .ops-spell-card {
+    transform: translateY(-0.18rem) scale(1.01);
+  }
+
+  .xos-card-link:hover .ops-spell-card::after,
+  .xos-card-link:focus-visible .ops-spell-card::after {
+    opacity: 0.62;
+    animation: ops-spell-card-hover-sheen 760ms ease-out both;
+  }
+
+  .ops-spell-card-manager {
+    background: linear-gradient(
+      145deg,
+      color-mix(in oklab, var(--primary) 12%, var(--card)) 0%,
+      var(--card) 36%,
+      color-mix(in oklab, var(--secondary) 78%, var(--card)) 100%
+    );
+    border-color: var(--primary);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--primary) 30%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--primary) 24%, transparent),
+      0 18px 42px -30px var(--primary);
+  }
+
+  .ops-spell-card-manager .ops-spell-card-nameplate,
+  .ops-spell-card-manager .ops-spell-type-line {
+    border-color: color-mix(in oklab, var(--primary) 42%, var(--border));
+    background: color-mix(in oklab, var(--primary) 10%, var(--card));
+  }
+
+  .ops-spell-card-manager .ops-spell-art-frame {
+    border-color: color-mix(in oklab, var(--primary) 56%, var(--border));
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--primary) 26%, transparent),
+      0 10px 22px -18px var(--primary);
+  }
+
+  .ops-spell-marshal-type-icon {
+    width: 0.8rem;
+    height: 0.8rem;
+    flex: 0 0 auto;
+    color: var(--primary);
+    filter: drop-shadow(0 0 5px color-mix(in oklab, #67e8f9 45%, transparent));
+  }
+
+  .ops-spell-regent-type-icon {
+    width: 0.86rem;
+    height: 0.86rem;
+    flex: 0 0 auto;
+    color: #f59e0b;
+    filter: drop-shadow(0 0 6px color-mix(in oklab, #f59e0b 55%, transparent));
+  }
+
+  .xos-card-link:hover .ops-spell-marshal-type-icon,
+  .xos-card-link:focus-visible .ops-spell-marshal-type-icon,
+  .xos-card-link:hover .ops-spell-regent-type-icon,
+  .xos-card-link:focus-visible .ops-spell-regent-type-icon {
+    animation: ops-spell-icon-pulse 1.35s ease-in-out infinite;
+  }
+
+  .ops-spell-card-fire {
+    border-color: #dc2626;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #dc2626 34%, transparent),
+      0 0 0 1px color-mix(in oklab, #dc2626 28%, transparent),
+      0 18px 42px -22px #dc2626;
+  }
+
+  .ops-spell-card-watch {
+    border-color: #f59e0b;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #f59e0b 36%, transparent),
+      0 0 0 1px color-mix(in oklab, #f59e0b 26%, transparent),
+      0 18px 42px -24px #f59e0b;
+  }
+
+  .ops-spell-card-locked-in {
+    border-color: #15803d;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #15803d 42%, transparent),
+      0 0 0 1px color-mix(in oklab, #15803d 30%, transparent),
+      0 0 24px -10px #15803d,
+      0 20px 46px -28px #15803d;
+  }
+
+  .xos-card-link:hover .ops-spell-card-locked-in,
+  .xos-card-link:focus-visible .ops-spell-card-locked-in {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #15803d 50%, transparent),
+      0 0 0 1px color-mix(in oklab, #15803d 38%, transparent),
+      0 0 32px -10px #15803d,
+      0 24px 54px -28px #15803d;
+  }
+
+  .ops-spell-card-warning-streak {
+    border-color: #f59e0b;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #f59e0b 48%, transparent),
+      0 0 0 1px color-mix(in oklab, #f59e0b 34%, transparent),
+      0 0 26px -12px #f59e0b,
+      0 20px 48px -28px #f59e0b;
+  }
+
+  .xos-card-link:hover .ops-spell-card-warning-streak,
+  .xos-card-link:focus-visible .ops-spell-card-warning-streak {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #f59e0b 56%, transparent),
+      0 0 0 1px color-mix(in oklab, #f59e0b 42%, transparent),
+      0 0 34px -10px #f59e0b,
+      0 24px 56px -28px #f59e0b;
+  }
+
+  .ops-spell-card-fire-streak {
+    border-color: #dc2626;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #dc2626 54%, transparent),
+      0 0 0 1px color-mix(in oklab, #dc2626 40%, transparent),
+      0 0 30px -10px #dc2626,
+      0 22px 52px -26px #dc2626;
+  }
+
+  .xos-card-link:hover .ops-spell-card-fire-streak,
+  .xos-card-link:focus-visible .ops-spell-card-fire-streak {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, #dc2626 64%, transparent),
+      0 0 0 1px color-mix(in oklab, #dc2626 48%, transparent),
+      0 0 38px -8px #dc2626,
+      0 26px 58px -24px #dc2626;
+  }
+
+  /* Festival card theme (DESIGN.md primary teal + chart-2 magenta accent —
+       both already theme-aware tokens, no new palette values). A soft
+       teal-to-magenta wash with a slow breathing glow. */
+  .ops-spell-card-festival {
+    border-color: color-mix(in oklab, var(--primary) 46%, var(--chart-2));
+    background: linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--primary) 14%, var(--card)) 0%,
+      var(--card) 48%,
+      color-mix(in oklab, var(--chart-2) 14%, var(--card)) 100%
+    );
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--primary) 24%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--chart-2) 20%, transparent),
+      0 0 22px -14px var(--primary),
+      0 20px 44px -30px var(--chart-2);
+    animation: ops-spell-card-festival-glow 4.2s ease-in-out infinite;
+  }
+
+  .xos-card-link:hover .ops-spell-card-festival,
+  .xos-card-link:focus-visible .ops-spell-card-festival {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--primary) 34%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--chart-2) 30%, transparent),
+      0 0 30px -10px var(--primary),
+      0 24px 52px -26px var(--chart-2);
+  }
+
+  .ops-spell-card-nameplate,
+  .ops-spell-type-line,
+  .ops-spell-rules-box {
+    border-color: color-mix(in oklab, var(--foreground) 18%, var(--border));
+    background: color-mix(in oklab, var(--card) 88%, var(--secondary));
+    box-shadow: inset 0 1px 0 color-mix(in oklab, #ffffff 78%, transparent);
+  }
+
+  .ops-spell-art-frame {
+    border-color: color-mix(in oklab, var(--primary) 34%, var(--border));
+    background:
+      radial-gradient(
+        circle at 28% 18%,
+        color-mix(in oklab, var(--accent) 28%, transparent),
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at 76% 68%,
+        color-mix(in oklab, var(--primary) 28%, transparent),
+        transparent 34%
+      ),
+      linear-gradient(
+        135deg,
+        color-mix(in oklab, var(--secondary) 76%, var(--card)) 0%,
+        color-mix(in oklab, var(--primary) 16%, var(--card)) 100%
+      );
+  }
+
+  .ops-spell-art-frame img {
+    transform: scale(1) translateY(0);
+    transition: transform 260ms ease;
+  }
+
+  .xos-card-link:hover .ops-spell-art-frame img,
+  .xos-card-link:focus-visible .ops-spell-art-frame img {
+    transform: scale(1.035) translateY(-1%);
+  }
+
+  .ops-spell-art-icon {
+    color: var(--primary);
+    filter: drop-shadow(0 10px 18px color-mix(in oklab, var(--primary) 24%, transparent));
+  }
+
+  .ops-spell-card-copy {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
+  .ops-spell-card-flavor {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .ops-spell-pip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    border: 1px solid color-mix(in oklab, var(--foreground) 20%, transparent);
+    border-radius: 9999px;
+    font-size: 0.625rem;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow:
+      inset 0 1px 2px color-mix(in oklab, #ffffff 72%, transparent),
+      0 1px 2px color-mix(in oklab, var(--foreground) 18%, transparent);
+  }
+
+  .ops-spell-pip.anthropic {
+    background: #f59e0b;
+  }
+
+  .ops-spell-pip.codex {
+    background: var(--primary);
+  }
+
+  .ops-spell-pip.antigravity {
+    background: #8b5cf6;
+  }
+
+  .ops-spell-pip.unknown,
+  .ops-spell-pip.numbered,
+  .ops-spell-pip.empty {
+    background: color-mix(in oklab, var(--muted) 58%, var(--card));
+    color: var(--foreground);
+    box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--card) 74%, transparent);
+  }
+
+  .ops-spell-stat-box {
+    display: inline-flex;
+    min-width: 2.75rem;
+    height: 2rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in oklab, var(--foreground) 26%, var(--border));
+    border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--card) 82%, var(--secondary));
+    color: var(--foreground);
+    font-size: 0.8125rem;
+    font-weight: 800;
+    line-height: 1;
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #ffffff 80%, transparent),
+      0 1px 2px color-mix(in oklab, var(--foreground) 16%, transparent);
+  }
+
+  .ops-run-meter {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, 0.56rem);
+    height: 2rem;
+    align-items: end;
+    gap: 0.2rem;
+    border: 1px solid color-mix(in oklab, var(--foreground) 22%, var(--border));
+    border-radius: var(--radius-sm);
+    background: color-mix(in oklab, var(--card) 84%, var(--secondary));
+    padding: 0.28rem 0.36rem;
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #ffffff 80%, transparent),
+      0 1px 2px color-mix(in oklab, var(--foreground) 14%, transparent);
+  }
+
+  .ops-run-meter:has(.is-streak-success),
+  .ops-run-meter:has(.is-streak-warning),
+  .ops-run-meter:has(.is-streak-danger) {
+    overflow: hidden;
+  }
+
+  .ops-run-meter:has(.is-streak-success) {
+    border-color: color-mix(in oklab, #15803d 50%, var(--border));
+    background: color-mix(in oklab, #15803d 14%, var(--card));
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #ffffff 78%, transparent),
+      inset 0 -8px 16px color-mix(in oklab, #15803d 18%, transparent),
+      0 0 16px -8px #15803d;
+  }
+
+  .ops-run-meter:has(.is-streak-warning) {
+    border-color: color-mix(in oklab, #f59e0b 58%, var(--border));
+    background: color-mix(in oklab, #f59e0b 16%, var(--card));
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #ffffff 78%, transparent),
+      inset 0 -8px 16px color-mix(in oklab, #f59e0b 20%, transparent),
+      0 0 18px -8px #f59e0b;
+  }
+
+  .ops-run-meter:has(.is-streak-danger) {
+    border-color: color-mix(in oklab, #dc2626 58%, var(--border));
+    background: color-mix(in oklab, #dc2626 14%, var(--card));
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #ffffff 72%, transparent),
+      inset 0 -10px 18px color-mix(in oklab, #dc2626 24%, transparent),
+      0 0 20px -7px #dc2626;
+  }
+
+  .ops-run-meter:has(.is-streak-success)::after,
+  .ops-run-meter:has(.is-streak-warning)::after,
+  .ops-run-meter:has(.is-streak-danger)::after {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    content: '';
+    opacity: 0.78;
+    transform: translateX(-120%);
+  }
+
+  .ops-run-meter:has(.is-streak-success)::after {
+    background: linear-gradient(
+      105deg,
+      transparent 0%,
+      transparent 28%,
+      color-mix(in oklab, #ffffff 70%, transparent) 46%,
+      color-mix(in oklab, #67e8f9 42%, transparent) 52%,
+      transparent 70%,
+      transparent 100%
+    );
+    animation: ops-run-meter-charge 2.8s ease-in-out infinite;
+  }
+
+  .ops-run-meter:has(.is-streak-warning)::after {
+    background: repeating-linear-gradient(
+      115deg,
+      transparent 0 0.28rem,
+      color-mix(in oklab, #f59e0b 44%, transparent) 0.28rem 0.52rem,
+      color-mix(in oklab, #ffffff 54%, transparent) 0.52rem 0.62rem,
+      transparent 0.62rem 0.96rem
+    );
+    animation: ops-run-meter-caution 3.2s linear infinite;
+  }
+
+  .ops-run-meter:has(.is-streak-danger)::after {
+    background:
+      radial-gradient(
+        circle at 22% 82%,
+        color-mix(in oklab, #f59e0b 58%, transparent),
+        transparent 26%
+      ),
+      radial-gradient(
+        circle at 54% 78%,
+        color-mix(in oklab, #dc2626 64%, transparent),
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at 82% 86%,
+        color-mix(in oklab, #f59e0b 48%, transparent),
+        transparent 24%
+      );
+    opacity: 0.86;
+    transform: translateY(18%);
+    animation: ops-run-meter-fire 1.2s ease-in-out infinite alternate;
+  }
+
+  .ops-run-meter-bar {
+    display: block;
+    width: 100%;
+    min-height: 1rem;
+    border: 1px solid color-mix(in oklab, var(--foreground) 18%, transparent);
+    border-radius: 2px;
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #ffffff 72%, transparent),
+      0 1px 2px color-mix(in oklab, var(--foreground) 18%, transparent);
+  }
+
+  .ops-run-meter-bar:nth-child(1) {
+    min-height: 1.42rem;
+  }
+
+  .ops-run-meter-bar:nth-child(2) {
+    min-height: 1.24rem;
+  }
+
+  .ops-run-meter-bar:nth-child(3) {
+    min-height: 1.08rem;
+  }
+
+  .ops-run-meter-bar:nth-child(4) {
+    min-height: 0.92rem;
+  }
+
+  .ops-run-meter-bar:nth-child(5) {
+    min-height: 0.76rem;
+  }
+
+  .ops-run-meter-bar-success {
+    background: #15803d;
+  }
+
+  .ops-run-meter-bar-success.is-streak-success {
+    background: linear-gradient(180deg, #67e8f9 0%, #15803d 38%, #15803d 100%);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #ffffff 86%, transparent),
+      0 0 10px -2px #15803d,
+      0 0 18px -8px #67e8f9;
+  }
+
+  .ops-run-meter-bar-warning {
+    background: #f59e0b;
+  }
+
+  .ops-run-meter-bar-warning.is-streak-warning {
+    background: linear-gradient(180deg, #ffffff 0%, #f59e0b 18%, #f59e0b 100%);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #ffffff 86%, transparent),
+      0 0 10px -2px #f59e0b,
+      0 0 18px -8px #ffffff;
+  }
+
+  .ops-run-meter-bar-danger {
+    background: #dc2626;
+  }
+
+  .ops-run-meter-bar-danger.is-streak-danger {
+    background: linear-gradient(180deg, #f59e0b 0%, #dc2626 28%, #7f1d1d 100%);
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #ffffff 70%, transparent),
+      0 0 12px -1px #dc2626,
+      0 0 20px -6px #f59e0b;
+  }
+
+  .ops-run-meter-bar.is-latest {
+    box-shadow:
+      inset 0 1px 0 color-mix(in oklab, #ffffff 82%, transparent),
+      0 0 0 1px color-mix(in oklab, #ffffff 68%, transparent),
+      0 0 12px currentColor;
+  }
+
+  .ops-run-meter-bar-success.is-latest {
+    color: #15803d;
+  }
+
+  .ops-run-meter-bar-warning.is-latest {
+    color: #f59e0b;
+  }
+
+  .ops-run-meter-bar-danger.is-latest {
+    color: #dc2626;
+  }
+
+  .ops-run-meter-bar.is-empty {
+    opacity: 0.4;
+  }
+
+  @keyframes ops-run-meter-charge {
+    0%,
+    32% {
+      transform: translateX(-120%);
+    }
+
+    68%,
+    100% {
+      transform: translateX(120%);
+    }
+  }
+
+  @keyframes ops-run-meter-caution {
+    0% {
+      transform: translateX(-60%);
+    }
+
+    100% {
+      transform: translateX(60%);
+    }
+  }
+
+  @keyframes ops-run-meter-fire {
+    0% {
+      opacity: 0.62;
+      transform: translateY(18%) scaleY(0.82);
+    }
+
+    100% {
+      opacity: 0.94;
+      transform: translateY(-10%) scaleY(1.12);
+    }
+  }
+
+  @keyframes ops-spell-card-hover-sheen {
+    0% {
+      transform: translateX(-72%);
+    }
+
+    100% {
+      transform: translateX(72%);
+    }
+  }
+
+  @keyframes ops-spell-icon-pulse {
+    0%,
+    100% {
+      filter: drop-shadow(0 0 4px color-mix(in oklab, currentColor 34%, transparent));
+      transform: scale(1);
+    }
+
+    50% {
+      filter: drop-shadow(0 0 10px color-mix(in oklab, currentColor 72%, transparent));
+      transform: scale(1.08);
+    }
+  }
+
+  @keyframes c-suite-foil-sheen {
+    0% {
+      transform: translateX(-28%) rotate(0deg);
+    }
+
+    100% {
+      transform: translateX(28%) rotate(0deg);
+    }
+  }
+
+  @keyframes ops-spell-card-festival-glow {
+    0%,
+    100% {
+      box-shadow:
+        inset 0 0 0 1px color-mix(in oklab, var(--primary) 24%, transparent),
+        0 0 0 1px color-mix(in oklab, var(--chart-2) 20%, transparent),
+        0 0 22px -14px var(--primary),
+        0 20px 44px -30px var(--chart-2);
+    }
+
+    50% {
+      box-shadow:
+        inset 0 0 0 1px color-mix(in oklab, var(--chart-2) 28%, transparent),
+        0 0 0 1px color-mix(in oklab, var(--primary) 26%, transparent),
+        0 0 28px -12px var(--chart-2),
+        0 22px 48px -28px var(--primary);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .c-suite-foil::before {
+      animation: none;
+      transform: none;
+    }
+
+    .ops-spell-card-festival {
+      animation: none;
+    }
+
+    .xos-card-link:hover .ops-spell-card,
+    .xos-card-link:focus-visible .ops-spell-card,
+    .xos-card-link:hover .ops-spell-art-frame img,
+    .xos-card-link:focus-visible .ops-spell-art-frame img {
+      transform: none;
+    }
+
+    .xos-card-link:hover .ops-spell-card::after,
+    .xos-card-link:focus-visible .ops-spell-card::after,
+    .xos-card-link:hover .ops-spell-marshal-type-icon,
+    .xos-card-link:focus-visible .ops-spell-marshal-type-icon,
+    .xos-card-link:hover .ops-spell-regent-type-icon,
+    .xos-card-link:focus-visible .ops-spell-regent-type-icon {
+      animation: none;
+    }
+
+    .ops-run-meter:has(.is-streak-success)::after,
+    .ops-run-meter:has(.is-streak-warning)::after,
+    .ops-run-meter:has(.is-streak-danger)::after {
+      animation: none;
+      transform: translateX(0);
+      opacity: 0.32;
+    }
+  }
+}

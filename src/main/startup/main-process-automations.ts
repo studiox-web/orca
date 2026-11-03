@@ -1,6 +1,7 @@
 import type { AutomationService } from '../automations/service'
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import { mainProcessState as state } from './main-process-state'
+import { registerXosGoalHandlers } from '../xos/xos-goal-ipc'
 
 export function initializeMainProcessAutomations(): AutomationService {
   const store = state.store
@@ -19,5 +20,7 @@ export function initializeMainProcessAutomations(): AutomationService {
     headless: state.isServeMode
   })
   state.automations = service
+  // XOS fork: Automations → Org chart board over legacy goal folders and crontab.
+  registerXosGoalHandlers(store, runtime)
   return service
 }
