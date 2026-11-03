@@ -15,6 +15,7 @@ import {
   type RunMeter
 } from './xos-goal-card-logic'
 import { fitCardText, formatTimestamp } from './xos-format'
+import { XosQueueChips } from './XosQueuePipes'
 import anthropicIcon from './assets/anthropic.png'
 import codexIcon from './assets/codex.png'
 import antigravityIcon from './assets/antigravity.jpg'
@@ -238,6 +239,7 @@ export function XosGoalCard({
 
             <div className="ops-spell-art-frame relative flex h-28 items-center justify-center overflow-hidden rounded-md border">
               {art && <img src={art} alt="" className="h-full w-full object-cover" />}
+              <XosQueueChips queues={item.queues} />
             </div>
 
             <div className="ops-spell-type-line flex items-center justify-between gap-2 rounded-sm border px-3 py-1.5">

@@ -15,6 +15,7 @@ import { goalSortKey, loadOrg } from './xos-goal-org'
 import { buildGoal } from './xos-goal-entry'
 import { listArchivedGoals } from './xos-goal-lifecycle'
 import { runningFor, runningGoalJobs, within } from './xos-goal-processes'
+import { goalQueues, scanProjectQueues } from './xos-work-items'
 
 export type XosRepoSource = {
   getRepos(): readonly {
@@ -25,7 +26,7 @@ export type XosRepoSource = {
   }[]
 }
 
-type ProjectCandidate = {
+export type ProjectCandidate = {
   root: string
   name: string
   worktreeSelector: string | null
@@ -56,6 +57,11 @@ function discoverProjects(repos: XosRepoSource, cronLines: ParsedCronLine[]): Pr
   return [...byRoot.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
+/** Goal projects (repos with automations/goals), without building the board. */
+export async function listGoalProjects(repos: XosRepoSource): Promise<ProjectCandidate[]> {
+  return discoverProjects(repos, parseCrontabWithPaused(await readCrontabText()))
+}
+
 export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBoard> {
   const now = Date.now()
   const warnings: string[] = []
@@ -80,6 +86,7 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
     const automationsDir = join(candidate.root, 'automations')
     const runs = readRunReceipts(automationsDir)
     const usage = readTokenUsage(automationsDir)
+    const queueScan = scanProjectQueues(candidate.root, { activeOnly: true })
     const goals = goalNames
       .map((goal) =>
         buildGoal({
@@ -90,6 +97,7 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
           usage: usage.get(goal) ?? [],
           cronJobs: projectJobs.filter((job) => job.goal === goal),
           running: runningFor(running, candidate.root, goal),
+          queues: goalQueues(queueScan, goal),
           now
         })
       )

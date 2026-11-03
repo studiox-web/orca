@@ -1,5 +1,6 @@
 // XOS fork: goal board data shared by main and renderer. Shapes follow the Cascade/DJVibe
 // Command Centre (`types/command-centre.ts`) so the ported card UI needs few changes.
+import type { XosGoalQueues, XosItemsApi } from './xos-items-types'
 
 export type XosGoalRun = {
   goal: string
@@ -110,6 +111,8 @@ export type XosGoal = {
   }
   logs: XosGoalLog[]
   messages: { inboxOpen: number }
+  /** Work queues this goal reads (in) and feeds (out), §3g. Read-only in stage 0. */
+  queues: XosGoalQueues
 }
 
 export type XosArchivedGoal = {
@@ -215,7 +218,7 @@ export type XosActionResult =
 
 export type XosGoalFileKind = 'goal' | 'status' | 'log'
 
-export type XosGoalsApi = {
+export type XosGoalsApi = XosItemsApi & {
   getBoard: () => Promise<XosGoalBoard>
   mutateCron: (mutation: XosCronMutation) => Promise<XosActionResult>
   runNow: (request: XosRunNowRequest) => Promise<XosActionResult>

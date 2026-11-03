@@ -10,5 +10,7 @@ export const xosGoalsApi: XosGoalsApi = {
   openFile: (args) => ipcRenderer.invoke('xos:goals:openFile', args),
   mutateGoal: (mutation) => ipcRenderer.invoke('xos:goals:mutateGoal', mutation),
   mutateArea: (mutation) => ipcRenderer.invoke('xos:goals:mutateArea', mutation),
-  getAudit: (args) => ipcRenderer.invoke('xos:goals:getAudit', args)
+  getAudit: (args) => ipcRenderer.invoke('xos:goals:getAudit', args),
+  getItems: (args) => ipcRenderer.invoke('xos:items:list', args),
+  getItem: (args) => ipcRenderer.invoke('xos:items:get', args)
 }

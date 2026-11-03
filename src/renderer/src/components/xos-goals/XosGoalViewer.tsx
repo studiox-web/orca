@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { XosGoal, XosProject } from '../../../../shared/xos-goals-types'
 import { XosGoalManage } from './XosGoalManage'
+import { queueSummary, XosGoalQueueList } from './XosQueuePipes'
 import { goalIdentity, OpsCastingCostPips, RunBattleMeter, useCardArt } from './XosGoalCard'
 import {
   automationBattleStats,
@@ -299,6 +300,10 @@ export function XosGoalViewer({
           </div>
         )}
       </section>
+
+      <Collapsible title="Queues" summary={queueSummary(item.queues)}>
+        <XosGoalQueueList queues={item.queues} projectKey={project.key} />
+      </Collapsible>
 
       <Collapsible title="Goal logs" summary={`${item.logs.length} recent`}>
         <div className="grid gap-2 md:grid-cols-2">

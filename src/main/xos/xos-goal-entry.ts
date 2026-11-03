@@ -19,6 +19,7 @@ import {
   parseStatusFields,
   readHead
 } from './xos-goal-files'
+import type { XosGoalQueues } from '../../shared/xos-items-types'
 import { areaForGoal, type XosOrg } from './xos-goal-org'
 
 const DAY_MS = 86_400_000
@@ -105,9 +106,10 @@ export function buildGoal(args: {
   usage: XosGoalUsage[]
   cronJobs: XosCronJob[]
   running: XosRunningJob | null
+  queues: XosGoalQueues
   now: number
 }): XosGoal {
-  const { project, goal, org, runs, usage, cronJobs, running, now } = args
+  const { project, goal, org, runs, usage, cronJobs, running, queues, now } = args
   const goalDir = join(project.root, 'automations', 'goals', goal)
   const goalPath = join(goalDir, 'GOAL.md')
   const statusPath = join(goalDir, 'STATUS.md')
@@ -188,6 +190,7 @@ export function buildGoal(args: {
       }))
     },
     logs,
-    messages: { inboxOpen: countOpenInbox(join(goalDir, 'inbox')) }
+    messages: { inboxOpen: countOpenInbox(join(goalDir, 'inbox')) },
+    queues
   }
 }
