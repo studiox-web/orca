@@ -36,3 +36,17 @@ with an `automations/goals` folder. Code: `src/main/xos/` and `src/renderer/src/
   `~/.orca-xos/audit.jsonl`.
 - Run now opens a terminal in the project running the same command cron would (goal runs keep their locks and
   receipts); projects not added to Orca run detached with output in `~/.orca-xos/runs/`.
+
+## Automation runtime (stage A)
+
+On an automation's detail page, **Models, fallbacks and limits** holds the fork's per-automation runtime
+settings (stored in `~/.orca-xos/automation-runtime.json`; each run's model, reason, outcome and commit go
+to `~/.orca-xos/automation-runs.jsonl`). The editor gets Model and Effort pickers.
+
+- Fallback chain: a terminal run that ends on a usage limit, overload, sign-in problem or missing agent is
+  retried on the next model. Scheduled runs always; manual runs when "Also on manual runs" is on.
+- Auto: picks the tier's model with the most quota left before reset; the tier map is editable there.
+- Lock lane / wait / timeout: same flock files as `run-goal-cron.sh`, so Orca and crontab runs never overlap.
+- Commit after each run: only the listed owned paths, under the shared `git-commit.lock`, optional push.
+
+Status and remaining work: `xos/PLAN.md` §4a.

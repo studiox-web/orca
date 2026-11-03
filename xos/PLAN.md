@@ -1,6 +1,7 @@
 # Cascade/XOS Automation Framework → Orca: Gap Analysis & Expansion Plan
 
-Status: plan v3.2 (2026-11-03), interview complete; §3g queues and §3h PM view (Tasks) added. Nothing implemented yet. All queues and items live in the Orca project home.
+Status: plan v3.2 (2026-11-03), interview complete; §3g queues and §3h PM view (Tasks) added. All queues and items live in the Orca project home.
+**Implemented on `xos` (2026-11-03): stage 0 and stage A** — see §4a for what exists, where, and what is left. Next: stage B.
 Related: the `xos` branch already adds a read-only **crontab external manager** that enriches `run-goal-cron.sh` jobs with JSONL receipts (`src/main/automations/external-crontab-*.ts`), plus fork build and switch scripts.
 
 ## 0. Direction
@@ -611,6 +612,26 @@ max_runs_per_day: 3
 | **E. Analytics + boards**   | OV3, OV4, PL1–PL4 as the **Pipeline view** (flow strip + Queue Boards, item history, funnel, velocity, cost per feature; §3g), GD6, OV5                                                                                                                                                                                                                                         | Laravel automation pages can be deleted                                                    |
 | **F. Personas and media**   | EM1–EM6 (generic: avatar, references, galleries, review, sidecar generation)                                                                                                                                                                                                                                                                                                    | Employee studio; Cascade-only builders (listing picker) optional                           |
 | **G. Portfolio**            | PF1–PF7                                                                                                                                                                                                                                                                                                                                                                         | The XOS vision without a separate app                                                      |
+
+### 4a. Implementation status
+
+| Stage | State                                             | Commits                                                               | Notes                                                                                                                                                            |
+| ----- | ------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0** | Done, in daily use                                | through b136f49ece, 3bb16bb738 (update progress window)               | Org chart board, Goal Viewer, project switcher, §3d CRUD with backups/audit, queue counts (§3g), Tasks → Goals source (§3h), Help → Check for Updates self-build |
+| **A** | Code-complete, **not yet live-tested in the app** | a14c8b9c9a (A1), eeb03b08a2 (A2), daff322748 (A3), 3df854c59a (A4/A5) | See below                                                                                                                                                        |
+| B–G   | Not started                                       |                                                                       |                                                                                                                                                                  |
+
+Stage A as built (all fork code in `src/main/xos/` and `src/renderer/src/components/xos-goals/`; settings live in `~/.orca-xos/automation-runtime.json`, run events in `~/.orca-xos/automation-runs.jsonl`):
+
+- **A1 §3.2 model picker**: Model + Effort selects in the automation editor (terminal surface), from the live catalog; writes upstream `extraAgentArgs` (`src/shared/xos-model-args.ts`).
+- **A2 RT4/RT5/RT6 fallback chain**: terminal runs have no exit code, so `xos-limit-classifier.ts` reads the last 25 screen lines (usage limit, spend cap, 429, overloaded, auth, missing binary). A limited run starts a linked retry on the next model (`xos-run-fallback.ts`); manual runs only when opted in. Notification per hop.
+- **A3 RT7 + RT15**: lane locks share `run-goal-cron.sh`'s flock files (`xos-lane-lock.ts`), busy lane = skip or queue with wait; per-automation timeout (`xos-run-gate.ts`).
+- **A4 RT8**: post-run commit of owned paths only, under the shared `git-commit.lock`, optional push; copy paths from the legacy `commit-automation-changes.sh` (`xos-auto-commit.ts`). Existing-workspace, local runs only.
+- **A5 §3.3 Auto + §3.4 before-launch skip + GD2**: tier/agents/reserve/effort; ranking by remaining quota relative to reset from `RateLimitService` (`xos-auto-mode.ts`, `xos-quota.ts`); editable tier map; run history with model, reason, duration, outcome, commit.
+
+Upstream hooks (keep minimal when rebasing): `automation-dispatch-request.ts` (`xosBeforeLaunch`), `automations/service.ts markDispatchResult` (`xosAfterRunFinished`), `runtime-automation-service.ts` (`registerXosAutomationHost`), `provider-account-services.ts` (`registerXosQuotaSource`), `AutomationEditorSettingsSidebar.tsx` and `AutomationDetail.tsx` (UI mounts).
+
+Known gaps carried into stage B: chat-surface runs get no model override/fallback (needs typed `AgentSessionUsageLimit`); nested child runs in the same lane (RT13, `CASCADE_ACTIVE_LOCK_LANE`) see the lane busy; Auto picks across agents, not across accounts of one agent; antigravity has no model flags; per-run worktrees are never auto-committed (plan: PR flow). Pre-existing test failures on `xos`, unrelated: `AutomationRunHistory.test.tsx` (date format) and two external-manager probe tests in `AutomationsPage*.test.tsx`.
 
 Migration happens _during_ B–E, one goal at a time: (1) the goal runs in Orca, (2) remove its crontab line (the `xos` crontab manager shows both, so nothing double-runs), (3) compare receipts for a week. djvibe's live content loop goes first (Cascade goal crons have been off since about July). Cascade and studiox goals get re-enabled selectively after stage C.
 
