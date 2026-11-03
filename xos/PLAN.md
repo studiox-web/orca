@@ -1,6 +1,6 @@
 # Cascade/XOS Automation Framework → Orca: Gap Analysis & Expansion Plan
 
-Status: plan v3 (2026-11-02), interview complete. Nothing implemented yet.
+Status: plan v3.2 (2026-11-03), interview complete; §3g queues and §3h PM view (Tasks) added. Nothing implemented yet. All queues and items live in the Orca project home.
 Related: the `xos` branch already adds a read-only **crontab external manager** that enriches `run-goal-cron.sh` jobs with JSONL receipts (`src/main/automations/external-crontab-*.ts`), plus fork build and switch scripts.
 
 ## 0. Direction
@@ -166,7 +166,7 @@ Transport: the bot runs on this machine, or reaches it over SSH, and shells out 
 | PL3 | **Content pipeline**: research (trends, marketplace, sources) → ideas (inbox/accepted/rejected) → briefs (ready/assigned) → drafts → published                                                                               | G                                                                         | S (generic board) |
 | PL4 | GitHub sync: classify issue → route to feature/bug/feedback folders, labels, hidden processed marker, **close the issue when its feature doc completes**                                                                     | P                                                                         | M                 |
 
-PL1–PL3 are all "folders of markdown with frontmatter, shown as columns". One generic **Queue Board** (config: columns = folders, card fields = frontmatter keys) covers all three, plus djvibe's content and festival queues.
+PL1–PL3 are all "folders of markdown with frontmatter, shown as columns". The folders also drive _when_ goals run; see §3g. One generic **Queue Board** (config: columns = folders, card fields = frontmatter keys) covers all three, plus djvibe's content and festival queues.
 
 ### 2.8 Portfolio layer (designed in XOS, never built)
 
@@ -288,6 +288,46 @@ Add (all small; follows the existing host-filter pattern):
 - **Ways to switch projects:** the header switcher with breadcrumb (_All projects › DJVibe › Content_), the command palette ("Go to project…"), recent-project shortcuts, and `orca goals open --project djvibe`. It defaults to the project of the active workspace, else the last one viewed.
 - Project-level CRUD in the org chart: colour, logo, starter pack, archive, and **pause project** (pauses every goal in it). Adding the repo itself stays Orca's normal "add project" flow.
 
+### Menu map (where it shows up in Orca's sidebar)
+
+Orca's left sidebar today: Search, Setup guide, **Tasks**, Artifacts, Skills, **Automations**, Agent dashboard, Mobile (`SidebarNav.tsx`). Each entry can be hidden from its right-click menu. **No new top-level entries.** The work goes into the two that already exist, plus badges:
+
+```
+Sidebar                         Opens
+─────────────────────────       ──────────────────────────────────────────────
+🔍 Search                       + "Go to project…", "Open goal…", "Open item…"
+✅ Tasks            ● 3          GitHub | GitLab | Linear | Jira | Goals (new)
+                                  Goals = local work items (§3h): Board | List
+                                  type tabs: Features · Bugs · Content · …
+                                  badge = items waiting on you (approve/reject)
+🗓 Automations      ▶2 ⚠1        [All projects ▾] › DJVibe › Content
+                                  Org chart | Pipeline | Automations | Runs | Cards
+                                  badge = running now / failed or stuck
+   (worktree list)               automation-run worktrees show 🤖 + item chip
+```
+
+- **Automations** = the _who and when_. Its sub-tabs:
+  - **Org chart** (default): the cards, areas and managers (§3c).
+  - **Pipeline**: the flow strip of goals and queue pipes (§3g).
+  - **Automations / Runs**: the existing lists, with a project filter.
+  - **Cards**: deck packs (§3a).
+  - The Goal Viewer opens on top when you click a card.
+- **Tasks → Goals** = the _what_: features, bugs and content as a PM board (§3h).
+- **The two link to each other:**
+  - a queue pipe in Pipeline opens Tasks filtered to that stage;
+  - an item's drawer opens its owner goal or its run;
+  - a goal card shows "working on: <item>".
+- **One project switcher state** is shared by Automations and Tasks → Goals. Picking DJVibe in one picks it in the other.
+- **"Needs you" stays in the badges**, not in a separate page:
+  - the Tasks badge counts items awaiting approval or decisions (pitches, retro proposals, blocked items);
+  - the Automations badge counts failed or stuck runs;
+  - each badge opens its list pre-filtered.
+
+  The same counts feed desktop notifications, the mobile app and `orca goals status --json` for the bot.
+
+- **Worktrees created by automation runs** appear in the normal worktree list with a robot marker and the item they are working on. That is where you drill in and take over (§3e).
+- Runs on a project's automation worktree (ops goals, §3f) can be grouped under one collapsible "Automation" row per project, so they don't crowd the list.
+
 ## 3c. UI direction: Cascade's Operations board and Goal Viewer become Orca's goal UI
 
 Decision (2026-11-02): Cascade's **Operations dashboard** and **Goal Viewer** are the target look. Orca's automation table stays as a secondary **"List"** view (useful for plain automations, bulk edits and hosts).
@@ -385,18 +425,192 @@ Laravel worktree setup (needed for per-run worktrees): an `orca.yaml` setup scri
 
 Locks still matter, but less: per-run worktrees remove file collisions for code goals. Lanes remain for shared resources (local DB/media, deploy, git push to `main`).
 
+## 3g. Queues and handoffs: the file structure is the work signal
+
+In Cascade the folders did the scheduling, not just the storage. Every goal had an input queue and an output queue. Cron fired often, and each run checked its folders first and exited cheaply when there was no work, or when the next stage was already full. Goals handed work to each other by **moving a markdown file** from one folder to the next. That is how the dev loop (Dream → Groom → Build → QA → Fix → Retro) ran by itself, and Orca needs to keep it.
+
+**The Dev Shop loop as queues (Cascade today):**
+
+| Goal                                | Reads (input queue)                                                                     | Writes (output queue)                                                                                                                                                      | Self-gating rule (today lives inside GOAL.md prose)                                                                       |
+| ----------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `feature-dreamer`                   | `themes.md`, `competitors.md`, rejection buckets (feedback)                             | `feature-dreamer/inbox/*.md` (max 5 pitches per run)                                                                                                                       | Stop if inbox has 30 or more files, if 8 or more planned specs are `ready: true`, after 3 dry runs, or after 3 runs today |
+| `feature-backlog-groomer`           | `feature-dreamer/inbox/*.md` and `inbox/accepted/`, plus stale `docs/features/planned/` | `docs/features/planned/*.md` with a `builder:` block, or a rejection bucket (`not-now`, `too-big`, `off-brand`, `wrong-direction`, `duplicate`, `not-interested`, `other`) | Keep the ready count between a **floor of 5** and a **ceiling of 8** (hard cap 10). No-op when nothing to groom           |
+| `implement-planned-feature-backlog` | `docs/features/planned/` where `builder.ready: true`, ordered by priority and rank      | Code + tests + commit, spec moved to `docs/features/completed/`                                                                                                            | DoD when no ready specs remain                                                                                            |
+| `staging-qa`                        | Each staging deploy                                                                     | `automations/bugs/inbox/*.md` (deduped)                                                                                                                                    | Runs after deploy                                                                                                         |
+| `fix-qa-bugs`                       | `automations/bugs/inbox/`, then `docs/bugs/incoming/`                                   | `bugs/resolved/`, `docs/bugs/{in-progress,fixed,archived}/`                                                                                                                | DoD when both inboxes are empty; must finish an interrupted bug before picking another                                    |
+| `feature-loop-retrospective`        | Builder logs, completed specs, `inbox/approved/`                                        | Proposals into `inbox/` (needs approval), applied ones to `inbox/processed/`                                                                                               | Weekly                                                                                                                    |
+| `feature-dev-manager`               | Every child's STATUS, logs and queue counts                                             | Area health (`healthy` / `watch` / `action_needed` / `blocked`), next move, `assets/latest-summary.md`                                                                     | Runs children until healthy or a stop condition                                                                           |
+| Any goal                            | `inbox/*-operator-*.md` with `status: open` and no `responded_at`                       | Reply, then the file moves to `inbox/processed/`                                                                                                                           | `run-inbox-watch.sh` scans every minute and starts a cheap reply run (RT9, RT11)                                          |
+
+**Problems with the old way:**
+
+- The gating rules lived in prose that the agent re-read on every run, so tokens were spent just to decide there was nothing to do.
+- The cron fired regardless, so "nothing to do" runs showed up as noise.
+- The dashboard counted folders on every page load.
+- Nothing recorded how long an item sat in a queue.
+
+### How it fits Orca
+
+**1. Queues become declared data, not prose.** Each goal declares its queues in GOAL.md frontmatter, which is editable in the goal editor:
+
+```yaml
+queues:
+  in:
+    - id: candidates
+      path: inbox/ # relative to the goal home (§5)
+      ready_when: count >= 1
+  out:
+    - id: ready-specs
+      path: items/feature/planned/ # relative to the Orca project home
+      match: builder.ready == true
+      floor: 5 # below this, upstream is "starved" (wake the groomer)
+      ceiling: 8 # at or above this, upstream pauses (backpressure)
+      hard_cap: 10
+  rejects: inbox/{not-now,too-big,off-brand,wrong-direction,duplicate,not-interested,other}/
+max_runs_per_day: 3
+```
+
+**2. Orca evaluates the gate itself, before spawning an agent.** A built-in "queue gate" runs next to the existing `precheck`, at zero token cost.
+
+- If the input queue is empty or downstream is at its ceiling, the run is recorded as `skipped_precheck` with a readable reason, such as "inbox empty" or "downstream full: 8/8 ready".
+- Orca's current precheck is a shell command judged only by its exit code. It runs only for scheduled triggers, and its stdout is not passed to the agent.
+- Two small extensions:
+  - (a) native queue rules;
+  - (b) a short queue snapshot injected into the prompt, such as "12 candidates, 3 ready specs, oldest 4d", so the agent no longer re-counts folders.
+- Adds **RT16** (queue gate) and **RT17** (queue context in prompt).
+
+**3. Event triggers replace polling.** Orca watches the input-queue folders (it already has to watch the goal home for the index, §5).
+
+- When a file lands, the goal is queued to run, debounced and capped by `max_runs_per_day` and the lock lane.
+- When downstream drops below its floor, the upstream goal wakes. That is the "keep Builder fed" rule, made mechanical.
+- The schedule stays as a safety-net sweep.
+- This is RT11 generalised from operator messages to every queue.
+
+**4. Where queue folders live: all in Orca, none in product repos (decided 2026-11-03).**
+
+- Every queue and work item lives under the Orca project home: `~/.orca-xos/projects/<project>/`.
+  - `items/<type>/<stage>/*.md`: features, bugs, content and festivals, e.g. `items/feature/planned/`.
+  - `goals/<goal>/`: goal-private files such as the inbox, rejection buckets and retro proposals.
+- The project home is one git repo per project. Orca auto-commits it, so item history survives without adding commits to product repos (the old framework caused about 97% of Cascade's commits).
+- **Product repos keep only code.** Builders, fixers and writers work in a worktree of the product repo and read their item by absolute path (`ORCA_PROJECT_HOME`, `ORCA_ITEM`), which works because everything runs on one machine.
+- **Orca moves items between stages, not the agent's commit.**
+  - The run claims the item.
+  - On success, Orca moves it to the next stage and records the branch, commit, PR and run id in its frontmatter.
+  - On failure, the item goes back to its stage, unclaimed, with the error attached.
+- For history on the code side, the builder puts the item id and title in its commit message or PR body (`Item: feature/123-…`).
+- **Migration:** `orca goals import` copies `automations/goals/*`, `docs/features/*`, `docs/bugs/*` and `docs/feedback/*` from each repo into the project home. After a week of matching receipts, those folders are deleted from the repo.
+  - Nothing in the apps reads them at runtime, only the Command Centre, `RefreshDashboardSummary` and `LintFeatureDirectory`, which all retire with the Laravel automation pages.
+  - DJVibe also has `docs/projects`, which needs checking before import.
+- Queue paths in GOAL.md are relative to the project home; there is no product-repo prefix.
+
+**5. Claiming.** Lock lanes alone can't stop two runs, or a manual "Continue on…" session (§3e), from picking the same item.
+
+- When a run takes an item, Orca writes `claimed_by: <run id>` and `claimed_at` into the item's frontmatter.
+- The queue gate ignores claimed items.
+- A claim older than the run's timeout is released automatically.
+
+**6. Item history comes for free.**
+
+- The index records every file move as a transition (item, from, to, run id, time).
+- That gives, with no extra agent work:
+  - time in each queue;
+  - stuck-item alerts;
+  - the funnel (Dreamer inbox → Accepted → Ready → Completed);
+  - weekly velocity;
+  - **cost per shipped feature**, because each transition carries the run id and therefore its tokens.
+- Rejection reasons become real stats ("40% `too-big` this month"), which is the feedback the dreamer reads.
+
+**7. The UI: a Pipeline view inside Automations.** It sits next to the Org chart and uses the same "All projects" switcher. It is the generic Queue Board from §2.7, laid out as a flow.
+
+- **Flow strip:** goal cards (Cascade card art) joined by queue pipes that show counts and the floor/ceiling band. Starved pipes are amber, backed-up pipes red, healthy green. Clicking a pipe opens its board.
+- **Queue Board:** columns = folders, cards = items with frontmatter chips (priority, rank, size, risk, ready).
+- Full CRUD (§3d):
+  - drag an item between columns (= file move, audited);
+  - approve or reject a pitch into a bucket;
+  - edit the `builder:` block;
+  - "Build this now" starts the builder in a new worktree on that one spec, which is the drill-in path from §3e.
+- **Bug Queue** and **Content Pipeline** are two more queue configs, not new screens.
+- The area manager's health (`feature-dev-manager`) is computed mostly from queue rules (starved, backed up, stuck item age). The manager agent then only has to explain the health and act on it.
+
+**8. Templates/decks (§3a).** A deck pack ships its goals **with their queue wiring**. Installing _Dev Shop_ creates the dreamer, groomer, builder, QA, fixer and retro goals, and pre-connects their queues, so the loop runs as soon as it is installed. The Content Studio pack is the same idea for research → ideas → briefs → drafts → published.
+
+**Pilot note:** DJVibe only has `staging-qa` from this loop, plus its content loop. Prove the queue gate and Pipeline view on DJVibe's **content** loop first (same mechanics). Then bring Cascade's Dev Shop over as the first full deck install.
+
+## 3h. PM view: work items in Orca's Tasks section
+
+§3g covers _when_ goals run. This section covers the _items_ they move along, the PM view: what is in the backlog, how far each item has got, and who touches it next.
+
+**What Orca has today:** the **Tasks** page reads outside trackers: GitHub issues, PRs and Projects (including a kanban `ProjectBoard`), GitLab, Linear and Jira. From any task you can start a workspace (worktree + agent) linked to it. It has **no local or file-based source**, and nothing in it knows about automations.
+
+**Options considered:**
+
+| Option                                                 | Good                                                                                                                                                                                                                                     | Bad                                                                                                                                                                      |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A. GitHub Issues/Projects as the backlog               | Already in Tasks, mobile app, PR linking, Cascade already had github-sync (PL4)                                                                                                                                                          | Every agent read/write is an API call (rate limits, network, slower, more tokens); long specs in issue bodies are clumsy; dreamer's 30-pitch firehose would flood issues |
+| B. Separate board inside Automations only              | Simple to build                                                                                                                                                                                                                          | Two places to look for "work"; ignores the Tasks UX Orca already has                                                                                                     |
+| **C. Local work items as a new Tasks source (chosen)** | Items stay markdown files (cheapest for agents, already how Cascade works); the PM view lives where Orca users expect tasks; "start workspace from task" already exists and becomes the manual drill-in; GitHub stays an optional mirror | New task-source provider to build (but it is read/write on local files, so simpler than the remote ones)                                                                 |
+
+**Recommended design (C):**
+
+1. **One item = one markdown file that gets enriched as it moves.** Each stage's goal adds its own section and frontmatter, so the spec builds up in one place:
+   - Idea (dreamer): pitch, `dreamer:` provenance.
+   - Groomed (groomer): full spec, acceptance criteria, `builder:` block (`ready`, `priority`, `rank`, `size`, `risk`, `touches`).
+   - In progress (builder): `claimed_by`, worktree/branch, implementation notes.
+   - Verify (QA): verification result, linked bug items.
+   - Done: commit/PR link, cost, cycle time.
+     The `stage` is the folder it sits in (§3g), so moving the file still drives the automation.
+
+2. **New Tasks source: "Goals" (local).** Next to GitHub/GitLab/Linear/Jira in the Tasks source bar, scoped by the "All projects"/project switcher.
+   - **Board view:** columns = stages (reusing the `ProjectBoard` kanban layout). **List view:** sortable by priority, rank, size, age, owner goal.
+   - Item **types** come from queue configs: Feature, Bug, Content piece, Festival, Proposal. Each type has its own stages, e.g. Content: Research → Idea → Brief → Draft → Published.
+   - **Item drawer:** rendered spec with editable frontmatter chips, plus an **activity timeline**. The timeline comes from the §3g transition index and shows which goal moved or enriched the item, when, on which run, at what cost, with a link to that run's transcript.
+   - **Actions:**
+     - create item (operator idea → straight into the right inbox);
+     - edit spec;
+     - drag to a stage;
+     - approve/reject with a reason bucket;
+     - set ready;
+     - **"Build now"** starts the builder in a new worktree on this one item, using the existing start-workspace-from-task flow;
+     - **"Work on it myself"** opens a manual agent session on it (§3e).
+   - CLI for the bot: `orca items list|show|create|move|edit --project --type --stage --json`.
+
+3. **Automations ↔ Tasks link.**
+   - The Automations **Pipeline view** (§3g) shows the flow: goals and pipes with counts and health. Clicking a pipe opens Tasks filtered to that stage.
+   - Each goal card shows "working on: <item>".
+   - Each item shows its owner goal and its next goal.
+
+4. **GitHub for the outside world only (decided 2026-11-03, after checking `gh` and Orca's GitHub code):**
+   - **Orca does not sync GitHub locally.** Its GitHub Issues and Projects views (`src/main/github/project-view/*`) call the live API and keep only in-memory caches. Reads need the network and count against the shared limit of 5,000 GraphQL points an hour. Agents would hit the same limits through `gh`.
+   - **GitHub Projects** (v2) can do the job: `gh project item-list/item-edit/field-create`, custom fields, and Orca already has a Projects board with field editing. But drafts are not real issues, long specs live in the issue body, and every move is an API call. Also, the current `gh` token lacks the `read:project`/`project` scope (`gh auth refresh -s project`), and the installed `gh` is 2.45 (old).
+   - **Local files are the source of truth** for the internal loop (dreamer → groomer → builder → QA). That is the fastest option, it works offline, it costs no API calls, and agents read files cheaply.
+   - **GitHub Issues = intake from outside:**
+     - customer and outside bug reports, feedback and feature requests come in as issues;
+     - Cascade's existing `automations/github-sync/` already classifies issues (feature/bug/feedback/support/invalid), labels them, routes them to local files, adds a hidden "processed" marker, and **closes the issue when its feature doc reaches `completed/`**;
+     - port that as a small sync goal or Orca job per project. The sync writes local items with `source: github#123`, and the item drawer links back to the issue.
+   - **GitHub Projects (optional, later):** a read-only mirror of selected items, if you want an outside view of the roadmap. It is not used for agent work.
+
+5. **Templates (§3a).** A deck pack declares its item types and stages along with its goals. Installing _Dev Shop_ adds the Feature and Bug types to Tasks; _Content Studio_ adds the Content type.
+
+**Roadmap placement:**
+
+- **Stage 0:** a read-only "Goals" Tasks source over the existing Cascade/DJVibe repo folders (`docs/features/*`, `docs/bugs/*`, dreamer inbox, djvibe content queues) until `orca goals import` moves them into the project home, with board + drawer.
+- **Stage B:** the transition index and timeline.
+- **Stage C:** CRUD actions and the `orca items` CLI.
+- **Stage D:** "Build now" and claiming.
+- **Stage E:** funnel, velocity and cost per item.
+
 ## 4. Expansion roadmap
 
-| Stage                       | Contents                                                                                                                                                                                                                                                              | Unlocks                                                                                    |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **0. Central board**        | §3c Operations board + Goal Viewer in Orca over existing goal folders, receipts and crontab; §3b project switcher; **§3d CRUD for goals and legacy cron jobs** (edit contract/schedule, pause/resume, run now, archive/delete) with backups, versioning and audit log | One central place to see and control everything, before any runtime migration              |
-| **A. Runtime parity**       | §3 model picker + fallback list + Auto, RT4, RT6, RT7, RT8, RT15, GD2                                                                                                                                                                                                 | Any single Cascade/djvibe goal can run from Orca with identical safety                     |
-| **B. Goal entity**          | GS1–GS3, GS6, GS7, RT3, RT9, RT10, RT12, RT14; `orca goals import <repo>` reads `automations/goals/*`                                                                                                                                                                 | "Orca Goals": one goal = contract + state folder + run modes + lane + chain                |
-| **C. Agent API**            | §2.3a CLI commands (`orca goals …`, `orca usage …`, `orca models list`), MS1/MS3/MS7, RT11 (event trigger when an inbox file appears)                                                                                                                                 | Grok/OpenAI operator bot can read everything and message goals; inbox watcher cron retired |
-| **D. Operations UI (live)** | Switch the §3c adapter to Orca runs; actions (Run now, live tail, manager command, open agent); UI9, OV1, OV2                                                                                                                                                         | The board drives real Orca goals, not just shows them                                      |
-| **E. Analytics + boards**   | OV3, OV4, PL1–PL4, GD6, OV5                                                                                                                                                                                                                                           | Laravel automation pages can be deleted                                                    |
-| **F. Personas and media**   | EM1–EM6 (generic: avatar, references, galleries, review, sidecar generation)                                                                                                                                                                                          | Employee studio; Cascade-only builders (listing picker) optional                           |
-| **G. Portfolio**            | PF1–PF7                                                                                                                                                                                                                                                               | The XOS vision without a separate app                                                      |
+| Stage                       | Contents                                                                                                                                                                                                                                                                                                                                                                        | Unlocks                                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **0. Central board**        | §3c Operations board + Goal Viewer in Orca over existing goal folders, receipts and crontab; §3b project switcher; **§3d CRUD for goals and legacy cron jobs** (edit contract/schedule, pause/resume, run now, archive/delete) with backups, versioning and audit log; **read-only queue counts** on cards (§3g); **read-only "Goals" Tasks source** (board + item drawer, §3h) | One central place to see and control everything, before any runtime migration              |
+| **A. Runtime parity**       | §3 model picker + fallback list + Auto, RT4, RT6, RT7, RT8, RT15, GD2                                                                                                                                                                                                                                                                                                           | Any single Cascade/djvibe goal can run from Orca with identical safety                     |
+| **B. Goal entity**          | GS1–GS3, GS6, GS7, RT3, RT9, RT10, RT12, RT14, **RT16 queue gate + RT17 queue context + claiming (§3g)**; `orca goals import <repo>` reads `automations/goals/*`                                                                                                                                                                                                                | "Orca Goals": one goal = contract + state folder + run modes + lane + chain                |
+| **C. Agent API**            | §2.3a CLI commands (`orca goals …`, `orca usage …`, `orca models list`), MS1/MS3/MS7, RT11 generalised: event triggers on any input queue plus floor-based wake-ups (§3g)                                                                                                                                                                                                       | Grok/OpenAI operator bot can read everything and message goals; inbox watcher cron retired |
+| **D. Operations UI (live)** | Switch the §3c adapter to Orca runs; actions (Run now, live tail, manager command, open agent); UI9, OV1, OV2                                                                                                                                                                                                                                                                   | The board drives real Orca goals, not just shows them                                      |
+| **E. Analytics + boards**   | OV3, OV4, PL1–PL4 as the **Pipeline view** (flow strip + Queue Boards, item history, funnel, velocity, cost per feature; §3g), GD6, OV5                                                                                                                                                                                                                                         | Laravel automation pages can be deleted                                                    |
+| **F. Personas and media**   | EM1–EM6 (generic: avatar, references, galleries, review, sidecar generation)                                                                                                                                                                                                                                                                                                    | Employee studio; Cascade-only builders (listing picker) optional                           |
+| **G. Portfolio**            | PF1–PF7                                                                                                                                                                                                                                                                                                                                                                         | The XOS vision without a separate app                                                      |
 
 Migration happens _during_ B–E, one goal at a time: (1) the goal runs in Orca, (2) remove its crontab line (the `xos` crontab manager shows both, so nothing double-runs), (3) compare receipts for a week. djvibe's live content loop goes first (Cascade goal crons have been off since about July). Cascade and studiox goals get re-enabled selectively after stage C.
 
@@ -421,7 +635,7 @@ Settled (2026-11-02): **centralize everything automation-related in Orca.** Evid
 Layout:
 
 - **Orca store (SQLite, our own fork-owned file, so we never migrate upstream's profile schema):** definitions and versions, card identities, templates/packs, schedules, model/chain, lanes, runs, fallback events, usage, messages, approvals, and the search index.
-- **Orca goals home (files, outside repos):** `~/.orca-xos/projects/<project>/goals/<goal>/` holds GOAL/STATUS/MEMORY/SOUL/LESSONS, `log/`, `inbox/` and `assets/`; shared contracts and card art live there too. These stay plain files because agents read and write files natively (cheapest in tokens). Orca watches the folder and keeps the index current, so the UI never scans. The home is its own git repo, auto-committed by Orca, so history survives without polluting product repos. Runs get `ORCA_GOAL_HOME` and the path in the prompt.
+- **Orca goals home (files, outside repos):** `~/.orca-xos/projects/<project>/goals/<goal>/` holds GOAL/STATUS/MEMORY/SOUL/LESSONS, `log/`, `inbox/` and `assets/`; shared contracts and card art live there too. These stay plain files because agents read and write files natively (cheapest in tokens). Orca watches the folder and keeps the index current, so the UI never scans. The home is its own git repo, auto-committed by Orca, so history survives without polluting product repos. Runs get `ORCA_GOAL_HOME` and the path in the prompt. Work items (features, bugs, content) live there too under `items/<type>/<stage>/`, not in product repos (§3g.4).
 - **What stays in product repos:** only what the product itself consumes: content drafts that get published, feature/bug docs the app links to, and deploy scripts. Goals reach the repo through their workspace, as normal agent work.
 - **Benefits:** one place to back up; worktree-per-run goals all see the same state; no repo diffs from STATUS edits.
 - **Risks:** the store is per machine (back up the goals home and SQLite nightly). That is acceptable: everything runs on this desktop, and only published content and deploys go to the VPS (through goals' existing deploy/publish scripts).
