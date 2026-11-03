@@ -3,8 +3,6 @@ import { isBuiltin } from 'node:module'
 import { join } from 'node:path'
 import type { Plugin, Rollup } from 'vite'
 
-type NormalizedInputOptions = Rollup.NormalizedInputOptions
-type NormalizedOutputOptions = Rollup.NormalizedOutputOptions
 type OutputBundle = Rollup.OutputBundle
 type OutputChunk = Rollup.OutputChunk
 
@@ -33,7 +31,8 @@ export const CLI_MAIN_ENTRY_NAMES = [
   ].map((module) => `persistence/profile-state/profile-state-${module}`),
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
-  'startup/http1-compatibility-marker'
+  'startup/http1-compatibility-marker',
+  'xos/xos-project-home'
 ] as const
 
 // Plain-Node processes and CLI modules cannot load Electron's API.
@@ -76,7 +75,7 @@ type EntryRuntime = 'plain-Node process' | 'worker thread'
 const ELECTRON_REQUIRE_RE = /require\(\s*["'`]electron(?:\/[^"'`]+)?["'`]\s*\)/
 
 // Pin guarded names to Rollup inputs or renames silently remove entries from the guard.
-function assertEntryNamesAreRollupInputs(input: NormalizedInputOptions['input']): void {
+function assertEntryNamesAreRollupInputs(input: Rollup.NormalizedInputOptions['input']): void {
   if (typeof input === 'string' || Array.isArray(input)) {
     return
   }
@@ -286,10 +285,10 @@ export function createPlainNodeEntryGuardPlugin(
 
   return {
     name: 'orca-plain-node-entry-guard',
-    buildStart(options: NormalizedInputOptions) {
+    buildStart(options: Rollup.NormalizedInputOptions) {
       assertEntryNamesAreRollupInputs(options.input)
     },
-    writeBundle(options: NormalizedOutputOptions, bundle: OutputBundle) {
+    writeBundle(options: Rollup.NormalizedOutputOptions, bundle: OutputBundle) {
       // Skip dev-watch smoke or every rebuild respawns daemon-entry; gate produced builds only.
       if (this.meta.watchMode) {
         return
