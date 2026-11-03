@@ -48,6 +48,7 @@ const target = (): { repoRoot: string; cwd: string; local: boolean } => ({
   local: true
 })
 
+// ast-grep-ignore: test-no-real-time-wait -- waits for OS flock child process release
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 300))
 
 beforeEach(() => {
@@ -106,6 +107,60 @@ describe('lane locks', () => {
     const result = await gate.xosBeforeLaunch(automation('a'), run('a3', 'a'), target())
     expect('automation' in result).toBe(true)
     gate.xosReleaseRun('a3')
+  })
+
+  it('allows nested child runs in the same lane via CASCADE_ACTIVE_LOCK_LANE or xosGrantInheritedLane while blocking self-recursion (RT13)', async () => {
+    writeRunConfig('parent-goal', { lockLane: 'repo-mutating' })
+    writeRunConfig('child-goal', { lockLane: 'repo-mutating' })
+
+    const parentLaunch = await gate.xosBeforeLaunch(
+      automation('parent-goal'),
+      run('p1', 'parent-goal'),
+      target()
+    )
+    expect('automation' in parentLaunch).toBe(true)
+
+    // Without inheritance, child-goal sees the lane as busy.
+    const blockedChild = await gate.xosBeforeLaunch(
+      automation('child-goal'),
+      run('c1', 'child-goal'),
+      target()
+    )
+    expect(blockedChild).toEqual({
+      refusal: 'Lane "repo-mutating" is busy with another run; skipped.'
+    })
+
+    // With xosGrantInheritedLane, child-goal inherits the active lane lock.
+    gate.xosGrantInheritedLane('child-goal', 'repo-mutating')
+    const allowedChild = await gate.xosBeforeLaunch(
+      automation('child-goal'),
+      run('c2', 'child-goal'),
+      target()
+    )
+    expect('automation' in allowedChild).toBe(true)
+    gate.xosReleaseRun('c2')
+
+    // With CASCADE_ACTIVE_LOCK_LANE, child-goal inherits the lane, but parent-goal still cannot recurse on itself.
+    process.env.CASCADE_ACTIVE_LOCK_LANE = 'repo-mutating'
+    try {
+      const envChild = await gate.xosBeforeLaunch(
+        automation('child-goal'),
+        run('c3', 'child-goal'),
+        target()
+      )
+      expect('automation' in envChild).toBe(true)
+      gate.xosReleaseRun('c3')
+
+      const selfRecurse = await gate.xosBeforeLaunch(
+        automation('parent-goal'),
+        run('p2', 'parent-goal'),
+        target()
+      )
+      expect('refusal' in selfRecurse).toBe(true)
+    } finally {
+      delete process.env.CASCADE_ACTIVE_LOCK_LANE
+      gate.xosReleaseRun('p1')
+    }
   })
 })
 

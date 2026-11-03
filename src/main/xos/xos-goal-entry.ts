@@ -1,4 +1,5 @@
 // XOS fork: build one goal card (XosGoal) from its folder, receipts, usage and cron lines.
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
   XosCronJob,
@@ -17,14 +18,21 @@ import {
   mtimeIso,
   parseFrontmatter,
   parseStatusFields,
-  readHead
+  readHead,
+  safeReaddir
 } from './xos-goal-files'
 import type { XosGoalQueues } from '../../shared/xos-items-types'
 import { areaForGoal, type XosOrg } from './xos-goal-org'
+import { resolveProjectGoalsDir } from './xos-project-home'
 
 const DAY_MS = 86_400_000
 
-export type GoalProject = { root: string }
+export type GoalProject = { root: string; goalsDir?: string }
+
+function optionalDocPath(goalDir: string, filename: string): string | null {
+  const full = join(goalDir, filename)
+  return existsSync(full) ? full : null
+}
 
 function cardResult(
   status: Record<string, string>,
@@ -110,9 +118,13 @@ export function buildGoal(args: {
   now: number
 }): XosGoal {
   const { project, goal, org, runs, usage, cronJobs, running, queues, now } = args
-  const goalDir = join(project.root, 'automations', 'goals', goal)
+  const goalDir = join(project.goalsDir ?? resolveProjectGoalsDir(project.root), goal)
   const goalPath = join(goalDir, 'GOAL.md')
   const statusPath = join(goalDir, 'STATUS.md')
+  const sidecars = safeReaddir(join(goalDir, 'sidecars'))
+    .filter((name) => name.endsWith('.md') && !name.startsWith('.'))
+    .map((name) => name.replace(/\.md$/, ''))
+    .sort()
   const goalText = readHead(goalPath, 8192)
   const fm = parseFrontmatter(goalText)
   const status = parseStatusFields(readHead(statusPath, 32 * 1024))
@@ -151,6 +163,11 @@ export function buildGoal(args: {
       goalPath,
       statusPath,
       logDirectory: join(goalDir, 'log'),
+      memoryPath: optionalDocPath(goalDir, 'MEMORY.md'),
+      soulPath: optionalDocPath(goalDir, 'SOUL.md'),
+      lessonsPath: optionalDocPath(goalDir, 'LESSONS.md'),
+      decisionsPath: optionalDocPath(goalDir, 'DECISIONS.md'),
+      sidecars,
       configuredModel: frontmatterString(fm, 'model'),
       configuredReasoning: frontmatterString(fm, 'model_reasoning_effort'),
       agents: frontmatterList(fm, 'agents'),

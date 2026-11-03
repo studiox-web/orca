@@ -24,6 +24,7 @@ import {
   restoreGoalFolder
 } from './xos-goal-lifecycle'
 import { removeArea, setGoalArea, upsertArea } from './xos-goal-org-edit'
+import { commitProjectHome, importProjectGoals } from './xos-project-home'
 
 const BACKUP_NOTE = 'A backup is in ~/.orca-xos/crontab-backups.'
 
@@ -174,6 +175,16 @@ export async function applyGoalMutation(
   }
   const orgName = basename(project.root)
   switch (mutation.kind) {
+    case 'import-project':
+      try {
+        const { meta } = await importProjectGoals(project.root)
+        return {
+          ok: true,
+          message: `Imported ${meta.goalsImported} goals and ${meta.itemsImported} items into ~/.orca-xos/projects/${meta.slug}.`
+        }
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) }
+      }
     case 'create':
       return attempt(() => {
         const title = mutation.title.trim() || mutation.goal
@@ -187,6 +198,7 @@ export async function applyGoalMutation(
         if (mutation.areaId) {
           setGoalArea(orgName, mutation.goal, mutation.areaId)
         }
+        void commitProjectHome(project.root, `xos: create goal ${mutation.goal}`)
         return {
           ok: true,
           openPath: goalPath,
@@ -194,13 +206,15 @@ export async function applyGoalMutation(
         }
       })
     case 'set-area':
-      return attempt(() => ({
-        ok: true,
-        message: setGoalArea(orgName, mutation.goal, mutation.areaId)
-      }))
+      return attempt(() => {
+        const message = setGoalArea(orgName, mutation.goal, mutation.areaId)
+        void commitProjectHome(project.root, `xos: update area for ${mutation.goal}`)
+        return { ok: true, message }
+      })
     case 'restore':
       return attempt(() => {
         const goal = restoreGoalFolder(project.goalsDir, mutation.archived)
+        void commitProjectHome(project.root, `xos: restore goal ${goal}`)
         return {
           ok: true,
           message: `Restored ${goal}. Its schedule stays paused until you resume it.`
@@ -228,6 +242,7 @@ export async function applyGoalMutation(
       }
       return attempt(() => {
         archiveGoalFolder(project.goalsDir, goal.goal)
+        void commitProjectHome(project.root, `xos: archive goal ${goal.goal}`)
         return {
           ok: true,
           message: `Archived ${goal.goal}${jobIds.length ? ` and paused ${plural(jobIds.length, 'crontab line')}` : ''}. Restore it from Archived goals.`
@@ -258,6 +273,7 @@ export async function applyGoalMutation(
         if (project.orgSource === 'org.json') {
           setGoalArea(orgName, entry.goal, null)
         }
+        void commitProjectHome(project.root, `xos: delete archived goal ${entry.goal}`)
         return {
           ok: true,
           message: `Deleted ${entry.goal}${jobIds.length ? ` and removed ${plural(jobIds.length, 'crontab line')}` : ''}. Git still has its history.`

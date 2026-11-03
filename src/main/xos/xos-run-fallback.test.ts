@@ -99,4 +99,42 @@ describe('fallback chain', () => {
     xosObserveFinishedRun({ automation, runNow }, run('s2', 'scheduled', LIMIT))
     expect(runNow).not.toHaveBeenCalled()
   })
+
+  it('falls back on chat-surface runs when usageLimitReached or auth failure is observed', async () => {
+    const chatAutomation: Automation = { ...automation, id: 'chat-auto-1', surface: 'chat' }
+    writeRunConfig(chatAutomation.id, {
+      fallbacks: [{ agent: 'codex', model: 'gpt-5.4', effort: 'medium' }],
+      fallbackOnManualRuns: false
+    })
+    const runNow = vi.fn(async () => undefined)
+    const chatRun1: AutomationRun = {
+      ...run('c1', 'scheduled'),
+      automationId: chatAutomation.id,
+      sessionKind: 'chat'
+    }
+    await xosLaunchAutomation(chatAutomation, chatRun1)
+
+    const failedChatRun1: AutomationRun = {
+      ...chatRun1,
+      status: 'dispatch_failed',
+      outputSnapshot: {
+        format: 'plain_text',
+        content: 'Usage limit reached · resets at 2026-04-03T20:00:00.000Z',
+        capturedAt: 0,
+        truncated: false
+      },
+      error: 'Usage limit reached · resets at 2026-04-03T20:00:00.000Z'
+    }
+    xosObserveFinishedRun({ automation: chatAutomation, runNow }, failedChatRun1)
+    expect(runNow).toHaveBeenCalledWith('chat-auto-1')
+
+    const chatRun2: AutomationRun = {
+      ...run('c2', 'manual'),
+      automationId: chatAutomation.id,
+      sessionKind: 'chat'
+    }
+    const retried = await xosLaunchAutomation(chatAutomation, chatRun2)
+    expect(retried.agentId).toBe('codex')
+    expect(retried.extraAgentArgs).toBe('-m gpt-5.4 -c model_reasoning_effort=medium')
+  })
 })

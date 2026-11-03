@@ -11,7 +11,8 @@ import type {
   XosQueueTone,
   XosWorkItem
 } from '../../shared/xos-items-types'
-import { isDirectory, parseFrontmatter, readHead, safeReaddir } from './xos-goal-files'
+import { parseFrontmatter, readHead, safeReaddir } from './xos-goal-files'
+import { resolveStageDirs } from './xos-project-home'
 import { LEGACY_ITEM_TYPES, type LegacyItemType, type LegacyStage } from './xos-queue-map'
 
 const ITEM_HEAD_BYTES = 8 * 1024
@@ -31,8 +32,8 @@ function isItemFile(name: string): boolean {
   return name.endsWith('.md') && !name.startsWith('.') && name.toLowerCase() !== 'readme.md'
 }
 
-function listStage(root: string, stage: LegacyStage): ScannedStage | null {
-  const dirs = stage.paths.map((rel) => join(root, rel)).filter(isDirectory)
+function listStage(root: string, typeId: string, stage: LegacyStage): ScannedStage | null {
+  const dirs = resolveStageDirs(root, typeId, stage)
   if (dirs.length === 0) {
     return null
   }
@@ -70,7 +71,7 @@ export function scanProjectQueues(root: string, options: { activeOnly: boolean }
   for (const type of LEGACY_ITEM_TYPES) {
     const stages = type.stages
       .filter((stage) => !options.activeOnly || (stage.kind ?? 'active') === 'active')
-      .map((stage) => listStage(root, stage))
+      .map((stage) => listStage(root, type.id, stage))
       .filter((stage): stage is ScannedStage => stage !== null)
     if (stages.length > 0) {
       scanned.push({ type, stages })

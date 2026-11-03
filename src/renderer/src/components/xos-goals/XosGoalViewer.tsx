@@ -1,7 +1,7 @@
 // XOS fork: the Goal Viewer, ported from DJVibe's GoalDetailPanel (overview tab). Laravel links
 // became Orca actions: Run now opens a terminal, Pause/Resume edit crontab, files open in Orca.
 import React from 'react'
-import { ArrowLeft, Clock3, Cpu, FileText, Pause, Play, RefreshCw, Timer } from 'lucide-react'
+import { ArrowLeft, Clock3, Cpu, FileText, Mail, Pause, Play, RefreshCw, Timer } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { XosGoal, XosProject } from '../../../../shared/xos-goals-types'
@@ -29,6 +29,7 @@ import {
   CronJobRow,
   DetailTile,
   GoalFact,
+  GoalRunBar,
   StatusBadge,
   type XosGoalActions
 } from './XosGoalViewerParts'
@@ -89,6 +90,18 @@ export function XosGoalViewer({
               ? `Running ${formatDuration(item.running.elapsedSeconds) ?? ''}`
               : 'Run now'}
           </Button>
+          {item.messages.inboxOpen > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => actions.runGoal(item, { mode: 'reply' })}
+            >
+              <Mail className="size-4" />
+              Reply inbox ({item.messages.inboxOpen})
+            </Button>
+          )}
           {item.viewer.cron.configured && (
             <Button
               type="button"
@@ -101,26 +114,31 @@ export function XosGoalViewer({
               {item.paused ? 'Resume schedule' : 'Pause schedule'}
             </Button>
           )}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => actions.openFile(item.viewer.goalPath)}
-          >
-            <FileText className="size-4" />
-            GOAL.md
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => actions.openFile(item.viewer.statusPath)}
-          >
-            <FileText className="size-4" />
-            STATUS.md
-          </Button>
+          {[
+            ['GOAL.md', item.viewer.goalPath],
+            ['STATUS.md', item.viewer.statusPath],
+            ['MEMORY.md', item.viewer.memoryPath],
+            ['SOUL.md', item.viewer.soulPath],
+            ['LESSONS.md', item.viewer.lessonsPath],
+            ['DECISIONS.md', item.viewer.decisionsPath]
+          ]
+            .filter((entry): entry is [string, string] => Boolean(entry[1]))
+            .map(([label, filePath]) => (
+              <Button
+                key={label}
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => actions.openFile(filePath)}
+              >
+                <FileText className="size-4" />
+                {label}
+              </Button>
+            ))}
         </div>
       </div>
+
+      <GoalRunBar item={item} busy={busy} onRun={(options) => actions.runGoal(item, options)} />
 
       <section
         className={[

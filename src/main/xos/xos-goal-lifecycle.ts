@@ -12,6 +12,7 @@ import {
   readHead,
   safeReaddir
 } from './xos-goal-files'
+import { projectHomeDir } from './xos-project-home'
 
 export const ARCHIVE_DIR = '_archive'
 export const GOAL_SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/
@@ -45,7 +46,9 @@ export function newGoalContract(args: {
   title: string
   agent: string
 }): string {
-  const templateText = readHead(join(args.root, 'automations', '_template', 'goal.md'), 64 * 1024)
+  const templateText =
+    readHead(join(projectHomeDir(args.root), '_template', 'goal.md'), 64 * 1024) ??
+    readHead(join(args.root, 'automations', '_template', 'goal.md'), 64 * 1024)
   const fenced = templateText
     ? /## GOAL\.md Template\s*\n+```markdown\n([\s\S]*?)\n```/.exec(templateText)?.[1]
     : undefined
@@ -91,7 +94,9 @@ export function createGoalFolder(args: {
   if (existsSync(dir) || existsSync(join(args.goalsDir, ARCHIVE_DIR, args.goal))) {
     throw new Error(`A goal named ${args.goal} already exists (or is archived).`)
   }
-  mkdirSync(join(dir, 'log'), { recursive: true })
+  for (const sub of ['log', 'inbox', 'assets', 'sidecars']) {
+    mkdirSync(join(dir, sub), { recursive: true })
+  }
   writeFileSync(join(dir, 'log', '.gitkeep'), '')
   writeFileSync(join(dir, 'GOAL.md'), newGoalContract(args))
   writeFileSync(

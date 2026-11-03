@@ -7,6 +7,7 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
+import { formatChatFailureLine } from '../xos/xos-limit-classifier'
 
 export function resolveChatAutomationRun(
   snapshot: AgentJournalSnapshot,
@@ -55,10 +56,13 @@ function observationForResolvedRun(
   }
   const turn = turnItem ? readAgentJournalTurn(turnItem.body) : null
   if (!turn || !turnItem) {
+    const rejectionLine = formatChatFailureLine(submission.rejection, submission.reason)
     return submission.dispatchState === 'rejected' || submission.dispatchState === 'unknown'
       ? {
           status: 'dispatch_failed',
-          error: `${agent} could not confirm this run's prompt. Open the chat before running it again.`
+          error:
+            rejectionLine ??
+            `${agent} could not confirm this run's prompt. Open the chat before running it again.`
         }
       : null
   }
@@ -66,14 +70,23 @@ function observationForResolvedRun(
     return null
   }
   const buffer = createHeadlessAutomationOutputSnapshotBuffer()
+  let statusFailureLine: string | null = null
   for (const item of snapshot.items) {
     if (
       item.agentId ||
       item.turnScope?.kind !== 'turn' ||
-      item.turnScope.turnItemId !== turnItem.itemId ||
-      item.body.kind !== 'message' ||
-      item.body.role !== 'assistant'
+      item.turnScope.turnItemId !== turnItem.itemId
     ) {
+      continue
+    }
+    if (item.body.kind === 'status' && 'failure' in item.body && item.body.failure) {
+      const line = formatChatFailureLine(item.body.failure, item.body.text)
+      if (line) {
+        statusFailureLine = line
+      }
+      continue
+    }
+    if (item.body.kind !== 'message' || item.body.role !== 'assistant') {
       continue
     }
     for (const block of item.body.blocks) {
@@ -89,9 +102,11 @@ function observationForResolvedRun(
     error:
       outcome === 'success'
         ? null
-        : outcome === 'cancellation' || turn.state === 'interrupted'
-          ? `${agent} was Interrupted. Open the chat or run the automation again.`
-          : `${agent} did not complete this run. Open the chat and try again.`
+        : statusFailureLine
+          ? statusFailureLine
+          : outcome === 'cancellation' || turn.state === 'interrupted'
+            ? `${agent} was Interrupted. Open the chat or run the automation again.`
+            : `${agent} did not complete this run. Open the chat and try again.`
   }
 }
 

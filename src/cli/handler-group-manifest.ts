@@ -62,6 +62,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/automations.js')).AUTOMATION_HANDLERS
   },
   {
+    name: 'xos-goals',
+    keys: ['goals import'],
+    load: async () => (await import('./handlers/xos-goals.js')).XOS_GOALS_HANDLERS
+  },
+  {
     name: 'project',
     keys: [
       'project list',

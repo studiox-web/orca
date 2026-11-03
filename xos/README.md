@@ -49,4 +49,21 @@ to `~/.orca-xos/automation-runs.jsonl`). The editor gets Model and Effort picker
 - Lock lane / wait / timeout: same flock files as `run-goal-cron.sh`, so Orca and crontab runs never overlap.
 - Commit after each run: only the listed owned paths, under the shared `git-commit.lock`, optional push.
 
-Status and remaining work: `xos/PLAN.md` §4a.
+## Goal entity & centralized project home (stage B)
+
+- `orca goals import [<repo>] [--json]` initializes `~/.orca-xos/projects/<slug>/` (own Git repo with `goals/`,
+  `shared/`, `AGENTS.md`, `items/<type>/<stage>/`, `org.json`, `project.json`), imports in-repo goals and work items,
+  rewrites matching crontab entries (`--goal-dir` + `--repo-root`), and auto-commits.
+- Dual-source discovery: the board, Goal Viewer, and Tasks → Goals source read both `<repo>/goals/` and
+  `~/.orca-xos/projects/<slug>/goals/`.
+- Native prompt assembly (`AGENTS.md` + `GOAL.md` with `@shared/...` includes + `SOUL.md`/`LESSONS.md`/`DECISIONS.md` +
+  `STATUS.md` + `MEMORY.md` + open `inbox/*.md` marked read + latest log + queue snapshot + operator message).
+- Run modes in Goal Viewer: normal run, `Reply inbox` (`gpt-5.4-mini`, `low`, `dm` lane, no fallback, no auto-commit),
+  sidecar run (`sidecars/<name>.md`), operator run-with-message, and `Definition of Done met` stop/reopen handling.
+- Declared `queues:` frontmatter in `GOAL.md`, pre-run queue gate (`skipped_precheck` on daily cap, empty input queue,
+  or downstream ceiling/hard cap), item claiming (`claimed_by`/`claimed_at` with stale-claim expiry), and transition
+  index (`transitions.jsonl`).
+- Stage A carryover fixes: nested child runs in the same lane inherit the active lane lock (`CASCADE_ACTIVE_LOCK_LANE`),
+  and chat-surface automation runs forward model/effort overrides and classify structured failure facts for fallback.
+
+Status and remaining work: `xos/PLAN.md` §4a–4b (Stages C–G next).

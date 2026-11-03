@@ -35,6 +35,7 @@ export const CLI_COMMAND_NAMES = [
   'full-screenshot',
   'geolocation',
   'get',
+  'goals',
   'goto',
   'highlight',
   'host',

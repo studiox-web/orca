@@ -1,6 +1,7 @@
 // XOS fork: assemble the goal board (stage 0) from existing goal folders, run receipts and crontab.
 // Read-only; every write lives in the §3d CRUD modules (xos-crontab*, xos-goal-lifecycle, org-edit).
 import { basename, join, resolve } from 'node:path'
+import { isRepoOnCatalogHost } from '../../shared/execution-host'
 import type { XosCronJob, XosGoalBoard, XosProject } from '../../shared/xos-goals-types'
 import { isDirectory, safeReaddir } from './xos-goal-files'
 import { readRunReceipts, readTokenUsage } from './xos-goal-receipts'
@@ -15,6 +16,7 @@ import { goalSortKey, loadOrg } from './xos-goal-org'
 import { buildGoal } from './xos-goal-entry'
 import { listArchivedGoals } from './xos-goal-lifecycle'
 import { runningFor, runningGoalJobs, within } from './xos-goal-processes'
+import { hasProjectGoals, resolveProjectGoalsDir } from './xos-project-home'
 import { goalQueues, scanProjectQueues } from './xos-work-items'
 
 export type XosRepoSource = {
@@ -35,11 +37,11 @@ export type ProjectCandidate = {
 function discoverProjects(repos: XosRepoSource, cronLines: ParsedCronLine[]): ProjectCandidate[] {
   const byRoot = new Map<string, ProjectCandidate>()
   for (const repo of repos.getRepos()) {
-    if (repo.connectionId) {
+    if (!isRepoOnCatalogHost(repo)) {
       continue // single-machine operation: remote repos are not goal projects
     }
     const root = resolve(repo.path)
-    if (!byRoot.has(root) && isDirectory(join(root, 'automations', 'goals'))) {
+    if (!byRoot.has(root) && hasProjectGoals(root)) {
       byRoot.set(root, {
         root,
         name: repo.displayName || basename(root),
@@ -50,7 +52,7 @@ function discoverProjects(repos: XosRepoSource, cronLines: ParsedCronLine[]): Pr
   // Repos not added to Orca still show up when the crontab runs goals in them.
   for (const line of cronLines) {
     const root = line.workdir ? resolve(line.workdir) : null
-    if (root && !byRoot.has(root) && isDirectory(join(root, 'automations', 'goals'))) {
+    if (root && !byRoot.has(root) && hasProjectGoals(root)) {
       byRoot.set(root, { root, name: basename(root), worktreeSelector: null })
     }
   }
@@ -72,7 +74,7 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
   const projects: XosProject[] = []
 
   for (const candidate of discoverProjects(repos, cronLines)) {
-    const goalsDir = join(candidate.root, 'automations', 'goals')
+    const goalsDir = resolveProjectGoalsDir(candidate.root)
     const goalNames = safeReaddir(goalsDir).filter(
       (name) => !name.startsWith('_') && !name.startsWith('.') && isDirectory(join(goalsDir, name))
     )
@@ -90,7 +92,7 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
     const goals = goalNames
       .map((goal) =>
         buildGoal({
-          project: candidate,
+          project: { ...candidate, goalsDir },
           goal,
           org,
           runs: runs.get(goal) ?? [],

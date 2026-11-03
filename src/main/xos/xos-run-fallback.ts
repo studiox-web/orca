@@ -84,7 +84,7 @@ async function planRoot(
   config: XosAutomationRunConfig
 ): Promise<{ options: XosModelChoice[]; start: number; reason: string | null }> {
   const primary = primaryChoice(automation)
-  if (config.auto && automation.surface !== 'chat') {
+  if (config.auto) {
     const preview = await xosPreviewAuto(config.auto)
     const picks = preview.candidates.filter((entry) => entry.available).map((entry) => entry.choice)
     if (picks.length === 0) {
@@ -212,10 +212,7 @@ export function xosObserveFinishedRun(
     }
     const chain = chains.get(run.id)
     chains.delete(run.id)
-    const verdict =
-      run.sessionKind === 'terminal'
-        ? (classifyRunScreen(run.outputSnapshot?.content) ?? classifyRunScreen(run.error))
-        : null
+    const verdict = classifyRunScreen(run.outputSnapshot?.content) ?? classifyRunScreen(run.error)
     appendLedger({
       type: 'outcome',
       runId: run.id,

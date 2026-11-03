@@ -114,3 +114,50 @@ export function describeLimit(verdict: XosRunLimitVerdict): string {
   }[verdict.kind]
   return verdict.resetHint ? `${label} (${verdict.resetHint})` : label
 }
+
+/** Map a typed chat-session failure fact (`AgentSessionFailureFact`) to a screen line classifyRunScreen matches. */
+export function formatChatFailureLine(
+  failure:
+    | {
+        kind?: string
+        usageLimit?: { window?: string; resetsAt?: number }
+        retry?: { status?: number; error?: string }
+      }
+    | null
+    | undefined,
+  fallbackText?: string | null
+): string | null {
+  const kind = failure?.kind
+  if (!kind) {
+    return fallbackText?.trim() || null
+  }
+  if (kind === 'usageLimitReached') {
+    const resetAt = failure?.usageLimit?.resetsAt
+    const resetSuffix =
+      typeof resetAt === 'number' && Number.isFinite(resetAt)
+        ? ` · resets at ${new Date(resetAt).toISOString()}`
+        : ''
+    return `Usage limit reached${resetSuffix}`
+  }
+  if (
+    kind === 'notSignedIn' ||
+    kind === 'claudeAccountFolderMissing' ||
+    kind === 'claudeAccountSetupFailed'
+  ) {
+    return fallbackText?.trim() ? `${fallbackText.trim()} (not logged in)` : 'Not logged in'
+  }
+  if (
+    kind === 'cliMissing' ||
+    kind === 'agentCommandNotRunnable' ||
+    kind === 'runtimeNotInstalled'
+  ) {
+    return 'claude: command not found'
+  }
+  if (
+    kind === 'providerRetrying' &&
+    (failure?.retry?.status === 529 || failure?.retry?.error === 'overloaded')
+  ) {
+    return '529 Overloaded'
+  }
+  return fallbackText?.trim() || null
+}

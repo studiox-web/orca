@@ -76,10 +76,15 @@ export function useXosGoalActions(
         api
           ? report(`area:${mutation.kind}`, () => api.mutateArea(mutation))
           : Promise.resolve(false),
-      runGoal: (goal) => {
+      runGoal: (goal, options) => {
         if (project && api) {
           void report(goal.goal, () =>
-            api.runNow({ kind: 'goal', projectKey: project.key, goal: goal.goal })
+            api.runNow({
+              kind: 'goal',
+              projectKey: project.key,
+              goal: goal.goal,
+              ...options
+            })
           )
         }
       },

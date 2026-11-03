@@ -1,13 +1,5 @@
-// XOS fork: the stage A gate in front of every automation launch.
-// - RT7 lane locks (xos-lane-lock): a busy lane skips the run, or queues it when the automation
-//   allows waiting; it starts as soon as the lane frees. The scheduler awaits each dispatch, so
-//   waiting must never block inside the dispatch itself.
-// - RT15 timeouts: a terminal run still going after its limit is marked failed and its terminal
-//   closed, which also releases its lane.
-// - Model overlay for fallback retries and Auto mode (xos-run-fallback).
-// - RT8 auto-commit: a finished run's owned paths are committed while it still holds its lane.
-// Locks are released when the run's final result is recorded, and by a sweep for any run that
-// ended through a path that never reports to the service.
+// XOS fork: the stage A/B gate in front of every automation launch (RT7 lane locks, RT8 auto-commit,
+// RT13 inherited child lanes, RT15 timeouts, and model overlay for fallback retries and Auto mode).
 import {
   isFinalAutomationRunStatus,
   type Automation,
@@ -63,13 +55,37 @@ let host: XosAutomationHost | null = null
 let sweepTimer: NodeJS.Timeout | null = null
 const held = new Map<string, Held>()
 const waiters: Waiter[] = []
+const inheritedLanes = new Map<string, { lane: string; expiresAt: number }>()
 
-export function registerXosAutomationHost(next: XosAutomationHost): void {
-  host = next
-  if (!sweepTimer) {
+/** RT13: allow a nested child run of `automationId` to inherit an already-held lock lane. */
+export function xosGrantInheritedLane(automationId: string, lane: string): void {
+  inheritedLanes.set(automationId, { lane, expiresAt: Date.now() + 2 * 60_000 })
+}
+
+function consumeInheritedLane(automationId: string, lane: string): boolean {
+  if (process.env.CASCADE_ACTIVE_LOCK_LANE === lane) {
+    return true
+  }
+  const entry = inheritedLanes.get(automationId)
+  if (entry && entry.lane === lane && entry.expiresAt > Date.now()) {
+    inheritedLanes.delete(automationId)
+    return true
+  }
+  return false
+}
+
+function syncSweepTimer(): void {
+  if (held.size === 0 && waiters.length === 0 && sweepTimer) {
+    clearInterval(sweepTimer)
+    sweepTimer = null
+  } else if ((held.size > 0 || waiters.length > 0) && !sweepTimer) {
     sweepTimer = setInterval(() => void sweep(), SWEEP_MS)
     sweepTimer.unref()
   }
+}
+
+export function registerXosAutomationHost(next: XosAutomationHost): void {
+  host = next
 }
 
 async function acquireAll(files: string[]): Promise<HeldLock[] | null> {
@@ -96,9 +112,13 @@ export async function xosBeforeLaunch(
   const repoRoot = target.local ? target.repoRoot : null
   if (config.lockLane && repoRoot) {
     const laneFile = laneLockFile(repoRoot, config.lockLane)
+    const inherited = consumeInheritedLane(automation.id, config.lockLane)
+    const lockFiles = inherited
+      ? [automationLockFile(repoRoot, automation.id)]
+      : [automationLockFile(repoRoot, automation.id), laneFile]
     let locks: HeldLock[] | null
     try {
-      locks = await acquireAll([automationLockFile(repoRoot, automation.id), laneFile])
+      locks = await acquireAll(lockFiles)
     } catch (error) {
       return { refusal: `Could not take lane "${config.lockLane}": ${String(error)}` }
     }
@@ -133,6 +153,7 @@ export async function xosBeforeLaunch(
     entry.timer.unref()
     held.set(run.id, entry)
   }
+  syncSweepTimer()
   return { automation: await xosLaunchAutomation(automation, run) }
 }
 
@@ -143,6 +164,7 @@ function enqueue(waiter: Waiter): void {
   } else {
     waiters[index] = waiter
   }
+  syncSweepTimer()
 }
 
 /** Releases a run's locks and timer, then lets a queued automation take the freed lane. */
@@ -156,6 +178,7 @@ export function xosReleaseRun(runId: string): void {
     clearTimeout(entry.timer)
   }
   entry.locks.forEach((lock) => lock.release())
+  syncSweepTimer()
   if (entry.locks.length > 0) {
     void wakeWaiters()
   }
@@ -237,6 +260,7 @@ async function wakeWaiters(): Promise<void> {
       console.warn('[xos] queued lane run could not start', error)
     })
   }
+  syncSweepTimer()
 }
 
 async function timeOut(automationId: string, runId: string, minutes: number): Promise<void> {

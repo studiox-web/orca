@@ -80,6 +80,11 @@ export type XosGoal = {
     goalPath: string
     statusPath: string
     logDirectory: string
+    memoryPath?: string | null
+    soulPath?: string | null
+    lessonsPath?: string | null
+    decisionsPath?: string | null
+    sidecars?: string[]
     configuredModel: string | null
     configuredReasoning: string | null
     agents: string[]
@@ -193,6 +198,7 @@ export type XosGoalMutation =
   /** `confirm` must equal the archived folder name. Also removes the goal's crontab lines. */
   | { kind: 'delete'; projectKey: string; archived: string; confirm: string; crontabHash: string }
   | { kind: 'set-area'; projectKey: string; goal: string; areaId: string | null }
+  | { kind: 'import-project'; projectKey: string }
 
 export type XosAreaMutation =
   | { kind: 'upsert'; projectKey: string; area: XosGoalArea }
@@ -209,8 +215,18 @@ export type XosAuditEvent = {
   [key: string]: unknown
 }
 
+export type XosGoalRunMode = 'normal' | 'reply' | 'sidecar'
+
 export type XosRunNowRequest =
-  | { kind: 'goal'; projectKey: string; goal: string }
+  | {
+      kind: 'goal'
+      projectKey: string
+      goal: string
+      mode?: XosGoalRunMode
+      sidecar?: string
+      message?: string
+      runner?: string
+    }
   | { kind: 'job'; jobId: string }
 
 export type XosActionResult =

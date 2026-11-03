@@ -1,6 +1,6 @@
 // XOS fork: §3d goal management in the Goal Viewer: move to another area, add a schedule, archive.
 import React, { useState } from 'react'
-import { Archive, CalendarPlus } from 'lucide-react'
+import { Archive, CalendarPlus, FolderInput } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -95,6 +95,20 @@ export function XosGoalManage({
         <CalendarPlus className="size-4" />
         Add schedule
       </Button>
+      {project.goalsDir.startsWith(project.root) && (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={() => {
+            void actions.goalOp({ kind: 'import-project', projectKey: project.key }, item.goal)
+          }}
+        >
+          <FolderInput className="size-4" />
+          Import to ~/.orca-xos
+        </Button>
+      )}
       <Button
         type="button"
         size="sm"

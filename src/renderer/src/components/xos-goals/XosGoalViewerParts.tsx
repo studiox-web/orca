@@ -1,13 +1,30 @@
 // XOS fork: Goal Viewer building blocks (tiles, facts, collapsibles, crontab rows) and its action contract.
 import React, { useState } from 'react'
-import { ChevronDown, ChevronRight, Pause, Pencil, Play, type LucideIcon } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  MessageSquare,
+  Pause,
+  Pencil,
+  Play,
+  type LucideIcon
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import type {
   XosAreaMutation,
   XosCronJob,
   XosCronMutation,
   XosGoal,
-  XosGoalMutation
+  XosGoalMutation,
+  XosGoalRunMode
 } from '../../../../shared/xos-goals-types'
 import { formatTimestamp, relativeTime } from './xos-format'
 import { XosCronJobDialog } from './XosCronJobDialog'
@@ -15,13 +32,19 @@ import { XosCronJobDialog } from './XosCronJobDialog'
 /** A mutation minus the crontab hash, which the actions hook fills in from the loaded board. */
 export type WithoutHash<T> = T extends unknown ? Omit<T, 'crontabHash'> : never
 
+export type XosGoalRunOptions = {
+  mode?: XosGoalRunMode
+  sidecar?: string
+  message?: string
+}
+
 export type XosGoalActions = {
   busy: string | null
   /** Each resolves true when the change succeeded (a toast reports either way). */
   cron: (mutation: WithoutHash<XosCronMutation>, busyKey?: string) => Promise<boolean>
   goalOp: (mutation: WithoutHash<XosGoalMutation>, busyKey?: string) => Promise<boolean>
   areaOp: (mutation: XosAreaMutation) => Promise<boolean>
-  runGoal: (goal: XosGoal) => void
+  runGoal: (goal: XosGoal, options?: XosGoalRunOptions) => void
   setGoalPaused: (goal: XosGoal, paused: boolean) => void
   runJob: (job: XosCronJob) => void
   setJobPaused: (job: XosCronJob, paused: boolean) => void
@@ -177,5 +200,72 @@ export function CronJobRow({
         onClose={() => setEditing(false)}
       />
     </div>
+  )
+}
+
+export function GoalRunBar({
+  item,
+  busy,
+  onRun
+}: {
+  item: XosGoal
+  busy: boolean
+  onRun: (options: XosGoalRunOptions) => void
+}): React.JSX.Element {
+  const [message, setMessage] = useState('')
+  const [sidecar, setSidecar] = useState<string>('__normal__')
+  const sidecars = item.viewer.sidecars ?? []
+
+  const submit = (event: React.FormEvent): void => {
+    event.preventDefault()
+    const trimmed = message.trim()
+    const isSidecar = sidecar !== '__normal__'
+    onRun({
+      mode: isSidecar ? 'sidecar' : 'normal',
+      ...(isSidecar ? { sidecar } : {}),
+      ...(trimmed ? { message: trimmed } : {})
+    })
+    setMessage('')
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 p-3"
+    >
+      <MessageSquare className="size-4 shrink-0 text-primary" />
+      <Input
+        value={message}
+        onChange={(event) => setMessage(event.target.value)}
+        placeholder={`Tell ${item.goal} what to focus on in this run (optional)…`}
+        className="min-w-60 flex-1"
+        disabled={busy || item.running !== null}
+        aria-label="Operator message for run"
+      />
+      {sidecars.length > 0 && (
+        <Select value={sidecar} onValueChange={setSidecar} disabled={busy}>
+          <SelectTrigger className="w-44" aria-label="Contract mode">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper" side="bottom" align="end" sideOffset={4}>
+            <SelectItem value="__normal__">Standard GOAL.md</SelectItem>
+            {sidecars.map((name) => (
+              <SelectItem key={name} value={name}>
+                Sidecar: {name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+      <Button
+        type="submit"
+        size="sm"
+        variant="secondary"
+        disabled={busy || item.running !== null || (!message.trim() && sidecar === '__normal__')}
+      >
+        <Play className="size-4" />
+        {sidecar !== '__normal__' ? `Run ${sidecar}` : 'Send & run'}
+      </Button>
+    </form>
   )
 }
