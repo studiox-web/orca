@@ -1,4 +1,4 @@
-// XOS fork: Org chart header: breadcrumb, project switcher, card theme, refresh, list view.
+// XOS fork: Org chart header: breadcrumb, project switcher, card theme, refresh, history, list view.
 import React from 'react'
 import { ChevronRight, List, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import type { XosGoal, XosGoalBoard, XosProject } from '../../../../shared/xos-g
 import type { CardThemeSelection } from './xos-goal-card-logic'
 import { formatTimestamp } from './xos-format'
 import { ALL, type Prefs } from './xos-org-prefs'
+import { XosAuditButton } from './XosAuditSheet'
 
 export function XosOrgChartHeader({
   board,
@@ -151,6 +152,7 @@ export function XosOrgChartHeader({
           <RefreshCw className={loading ? 'animate-spin' : ''} />
           Refresh
         </Button>
+        <XosAuditButton generatedAt={board?.generatedAt ?? null} />
         <Button type="button" variant="outline" onClick={onShowList}>
           <List />
           Automations list

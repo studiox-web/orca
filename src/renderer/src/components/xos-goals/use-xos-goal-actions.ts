@@ -1,10 +1,12 @@
-// XOS fork: Run now, pause/resume and open-file actions for the board, reported as toasts.
+// XOS fork: board actions (run now, pause/resume, §3d CRUD, open file), reported as toasts.
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type {
   XosActionResult,
   XosCronJob,
+  XosCronMutation,
   XosGoalBoard,
+  XosGoalMutation,
   XosProject
 } from '../../../../shared/xos-goals-types'
 import type { XosGoalActions } from './XosGoalViewerParts'
@@ -17,29 +19,63 @@ export function useXosGoalActions(
   const api = window.api.xosGoals
   const [busy, setBusy] = useState<string | null>(null)
 
+  const openFile = useCallback(
+    (path: string) => {
+      void api?.openFile({ path }).then((result) => {
+        if (!result.ok) {
+          toast.error(result.error)
+        }
+      })
+    },
+    [api]
+  )
+
   const report = useCallback(
-    async (key: string, action: () => Promise<XosActionResult>) => {
+    async (key: string, action: () => Promise<XosActionResult>): Promise<boolean> => {
       setBusy(key)
       try {
         const result = await action()
         if (result.ok) {
           toast.success(result.message)
+          if (result.openPath) {
+            openFile(result.openPath)
+          }
         } else {
           toast.error(result.error)
         }
+        return result.ok
       } catch (caught) {
         toast.error(caught instanceof Error ? caught.message : String(caught))
+        return false
       } finally {
         setBusy(null)
         void refresh()
       }
     },
-    [refresh]
+    [openFile, refresh]
   )
 
-  return useMemo(
-    () => ({
+  return useMemo<XosGoalActions>(() => {
+    const hash = board?.crontabHash ?? ''
+    const cron: XosGoalActions['cron'] = (mutation, busyKey) =>
+      api
+        ? report(busyKey ?? mutation.kind, () =>
+            api.mutateCron({ ...mutation, crontabHash: hash } as XosCronMutation)
+          )
+        : Promise.resolve(false)
+    return {
       busy,
+      cron,
+      goalOp: (mutation, busyKey) =>
+        api
+          ? report(busyKey ?? mutation.kind, () =>
+              api.mutateGoal({ ...mutation, crontabHash: hash } as XosGoalMutation)
+            )
+          : Promise.resolve(false),
+      areaOp: (mutation) =>
+        api
+          ? report(`area:${mutation.kind}`, () => api.mutateArea(mutation))
+          : Promise.resolve(false),
       runGoal: (goal) => {
         if (project && api) {
           void report(goal.goal, () =>
@@ -48,14 +84,14 @@ export function useXosGoalActions(
         }
       },
       setGoalPaused: (goal, paused) => {
-        if (project && api && board) {
-          void report(goal.goal, () =>
-            api.mutateCron({
+        if (project) {
+          void cron(
+            {
               kind: paused ? 'pause-goal' : 'resume-goal',
               projectKey: project.key,
-              goal: goal.goal,
-              crontabHash: board.crontabHash
-            })
+              goal: goal.goal
+            },
+            goal.goal
           )
         }
       },
@@ -65,24 +101,9 @@ export function useXosGoalActions(
         }
       },
       setJobPaused: (job: XosCronJob, paused: boolean) => {
-        if (api && board) {
-          void report(job.id, () =>
-            api.mutateCron({
-              kind: paused ? 'pause-job' : 'resume-job',
-              jobId: job.id,
-              crontabHash: board.crontabHash
-            })
-          )
-        }
+        void cron({ kind: paused ? 'pause-job' : 'resume-job', jobId: job.id }, job.id)
       },
-      openFile: (path: string) => {
-        void api?.openFile({ path }).then((result) => {
-          if (!result.ok) {
-            toast.error(result.error)
-          }
-        })
-      }
-    }),
-    [api, board, busy, project, report]
-  )
+      openFile
+    }
+  }, [api, board, busy, openFile, project, report])
 }

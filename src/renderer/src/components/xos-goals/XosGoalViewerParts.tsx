@@ -1,12 +1,26 @@
 // XOS fork: Goal Viewer building blocks (tiles, facts, collapsibles, crontab rows) and its action contract.
 import React, { useState } from 'react'
-import { ChevronDown, ChevronRight, Pause, Play, type LucideIcon } from 'lucide-react'
+import { ChevronDown, ChevronRight, Pause, Pencil, Play, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { XosCronJob, XosGoal } from '../../../../shared/xos-goals-types'
+import type {
+  XosAreaMutation,
+  XosCronJob,
+  XosCronMutation,
+  XosGoal,
+  XosGoalMutation
+} from '../../../../shared/xos-goals-types'
 import { formatTimestamp, relativeTime } from './xos-format'
+import { XosCronJobDialog } from './XosCronJobDialog'
+
+/** A mutation minus the crontab hash, which the actions hook fills in from the loaded board. */
+export type WithoutHash<T> = T extends unknown ? Omit<T, 'crontabHash'> : never
 
 export type XosGoalActions = {
   busy: string | null
+  /** Each resolves true when the change succeeded (a toast reports either way). */
+  cron: (mutation: WithoutHash<XosCronMutation>, busyKey?: string) => Promise<boolean>
+  goalOp: (mutation: WithoutHash<XosGoalMutation>, busyKey?: string) => Promise<boolean>
+  areaOp: (mutation: XosAreaMutation) => Promise<boolean>
   runGoal: (goal: XosGoal) => void
   setGoalPaused: (goal: XosGoal, paused: boolean) => void
   runJob: (job: XosCronJob) => void
@@ -106,6 +120,7 @@ export function CronJobRow({
   actions: XosGoalActions
 }): React.JSX.Element {
   const busy = actions.busy === job.id
+  const [editing, setEditing] = useState(false)
   return (
     <div className="flex flex-col gap-2 rounded-lg border bg-background/60 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
@@ -144,7 +159,23 @@ export function CronJobRow({
           {job.paused ? <Play className="size-4" /> : <Pause className="size-4" />}
           {job.paused ? 'Resume' : 'Pause'}
         </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={busy}
+          aria-label={`Edit ${job.goal ?? job.name}`}
+          onClick={() => setEditing(true)}
+        >
+          <Pencil className="size-4" />
+          Edit
+        </Button>
       </div>
+      <XosCronJobDialog
+        target={editing ? { mode: 'edit', job } : null}
+        actions={actions}
+        onClose={() => setEditing(false)}
+      />
     </div>
   )
 }

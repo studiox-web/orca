@@ -8,6 +8,7 @@ import { filterOptions, goalMatchesFilter, type OrgFilter } from './xos-org-hier
 import { AreaGroups, filterIcon, OrgChart } from './XosOrgChartViews'
 import { CronJobRow, type XosGoalActions } from './XosGoalViewerParts'
 import type { Prefs } from './xos-org-prefs'
+import { XosArchivedGoals, XosProjectToolbar } from './XosProjectManage'
 
 export function XosOrgProjectBoard({
   project,
@@ -84,10 +85,13 @@ export function XosOrgProjectBoard({
             </ToggleGroup>
           </div>
         </div>
-        <span className="inline-flex w-fit items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
-          <Filter className="size-4 text-primary" />
-          Showing {visibleGoals.length} of {projectGoals.length} goals
-        </span>
+        <div className="flex flex-col gap-3 xl:items-end">
+          <XosProjectToolbar project={project} actions={actions} onCreated={setSelectedGoal} />
+          <span className="inline-flex w-fit items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm text-muted-foreground">
+            <Filter className="size-4 text-primary" />
+            Showing {visibleGoals.length} of {projectGoals.length} goals
+          </span>
+        </div>
       </section>
       {visibleGoals.length === 0 ? (
         <section className="rounded-lg border border-dashed bg-muted/20 p-6 text-center text-sm">
@@ -102,6 +106,7 @@ export function XosOrgProjectBoard({
           goals={visibleGoals}
           cardTheme={prefs.cardTheme}
           collapsed={collapsed}
+          actions={actions}
           onToggle={(id) =>
             setCollapsed((current) => {
               const next = new Set(current)
@@ -120,6 +125,7 @@ export function XosOrgProjectBoard({
           project={project}
           goals={visibleGoals}
           cardTheme={prefs.cardTheme}
+          actions={actions}
           onOpen={(goal) => setSelectedGoal(goal.goal)}
         />
       )}
@@ -137,6 +143,7 @@ export function XosOrgProjectBoard({
           ))}
         </section>
       )}
+      <XosArchivedGoals project={project} actions={actions} />
     </>
   )
 }

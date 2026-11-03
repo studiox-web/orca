@@ -79,7 +79,7 @@ export function XosOrgChartPage({ onShowList }: { onShowList: () => void }): Rea
         ) : selected ? (
           <XosGoalViewer
             item={selected}
-            projectKey={project.key}
+            project={project}
             cardTheme={prefs.cardTheme}
             actions={actions}
             onBack={() => setSelectedGoal(null)}

@@ -4,7 +4,8 @@ import React from 'react'
 import { ArrowLeft, Clock3, Cpu, FileText, Pause, Play, RefreshCw, Timer } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import type { XosGoal } from '../../../../shared/xos-goals-types'
+import type { XosGoal, XosProject } from '../../../../shared/xos-goals-types'
+import { XosGoalManage } from './XosGoalManage'
 import { goalIdentity, OpsCastingCostPips, RunBattleMeter, useCardArt } from './XosGoalCard'
 import {
   automationBattleStats,
@@ -33,13 +34,13 @@ import {
 
 export function XosGoalViewer({
   item,
-  projectKey,
+  project,
   cardTheme,
   actions,
   onBack
 }: {
   item: XosGoal
-  projectKey: string
+  project: XosProject
   cardTheme: CardThemeSelection
   actions: XosGoalActions
   onBack: () => void
@@ -47,7 +48,7 @@ export function XosGoalViewer({
   const isManager = item.goal === item.area.manager
   const isCSuite = item.area.id === 'c-suite'
   const identity = goalIdentity(item, cardTheme)
-  const art = useCardArt(projectKey, identity)
+  const art = useCardArt(project.key, identity)
   const runMeter = automationRunBattleMeter(item)
   const castingCost = automationCastingCost(item)
   const battleStats = automationBattleStats(item)
@@ -237,6 +238,8 @@ export function XosGoalViewer({
           )}
         </section>
       )}
+
+      <XosGoalManage item={item} project={project} actions={actions} onArchived={onBack} />
 
       <section className="space-y-3 rounded-lg border bg-muted/20 p-3">
         <div className="flex items-center justify-between gap-3">

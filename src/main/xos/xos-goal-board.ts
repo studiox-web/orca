@@ -1,7 +1,7 @@
 // XOS fork: assemble the goal board (stage 0) from existing goal folders, run receipts and crontab.
-// Read-only over the repos; the only writes are the guarded crontab edits in xos-crontab.ts.
+// Read-only; every write lives in the §3d CRUD modules (xos-crontab*, xos-goal-lifecycle, org-edit).
 import { basename, join, resolve } from 'node:path'
-import type { XosGoalBoard, XosProject } from '../../shared/xos-goals-types'
+import type { XosCronJob, XosGoalBoard, XosProject } from '../../shared/xos-goals-types'
 import { isDirectory, safeReaddir } from './xos-goal-files'
 import { readRunReceipts, readTokenUsage } from './xos-goal-receipts'
 import {
@@ -13,6 +13,7 @@ import {
 } from './xos-crontab'
 import { goalSortKey, loadOrg } from './xos-goal-org'
 import { buildGoal } from './xos-goal-entry'
+import { listArchivedGoals } from './xos-goal-lifecycle'
 import { runningFor, runningGoalJobs, within } from './xos-goal-processes'
 
 export type XosRepoSource = {
@@ -97,8 +98,10 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
         const right = goalSortKey(org, b.area, b.goal)
         return left[0] - right[0] || left[1] - right[1] || left[2].localeCompare(right[2])
       })
+    const archived = listArchivedGoals(goalsDir)
+    const archivedNames = new Set(archived.map((entry) => entry.goal))
     for (const job of projectJobs) {
-      if (job.goal && !known.has(job.goal)) {
+      if (job.goal && !known.has(job.goal) && !archivedNames.has(job.goal)) {
         warnings.push(
           `${candidate.name}: crontab runs goal "${job.goal}", which has no folder in automations/goals.`
         )
@@ -111,7 +114,9 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
       goalsDir,
       worktreeSelector: candidate.worktreeSelector,
       orgSource: org.source,
+      areas: org.areas.map(({ goals: _goals, ...area }) => area),
       goals,
+      archived,
       scripts: projectJobs.filter((job) => !job.goal || !known.has(job.goal))
     })
   }
@@ -125,4 +130,18 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
       .map((line) => toCronJob(line, new Set(), now)),
     warnings
   }
+}
+
+export function findProject(board: XosGoalBoard, key: string): XosProject | null {
+  return board.projects.find((project) => project.key === key) ?? null
+}
+
+export function allJobs(board: XosGoalBoard): XosCronJob[] {
+  return [
+    ...board.projects.flatMap((project) => [
+      ...project.goals.flatMap((goal) => goal.viewer.cron.jobs),
+      ...project.scripts
+    ]),
+    ...board.otherJobs
+  ]
 }

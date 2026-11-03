@@ -155,16 +155,18 @@ function backupCrontab(text: string): string {
   return path
 }
 
+export type CrontabWriteResult = { ok: true; changed: number } | { ok: false; error: string }
+
 /**
- * Pauses or resumes the given line ids. Refuses when the crontab no longer matches the hash the
- * caller saw, so an edit made elsewhere (crontab -e, an installer script) is never overwritten.
+ * The one guarded write path: refuses when the crontab no longer matches the hash the caller saw
+ * (so an edit made elsewhere, by crontab -e or an installer script, is never overwritten), backs
+ * the old table up, installs the new one and records the change in the audit log.
  */
-export async function setCronLinesPaused(args: {
-  ids: ReadonlySet<string>
-  paused: boolean
+export async function rewriteCrontab(args: {
   expectedHash: string
-  reason: string
-}): Promise<{ ok: true; changed: number } | { ok: false; error: string }> {
+  edit: (text: string) => { next: string; changed: string[] } | { error: string }
+  audit: Record<string, unknown>
+}): Promise<CrontabWriteResult> {
   const text = await readCrontabText()
   if (hashCrontab(text) !== args.expectedHash) {
     return {
@@ -172,21 +174,15 @@ export async function setCronLinesPaused(args: {
       error: 'The crontab changed since the board loaded. Refresh and try again.'
     }
   }
-  const lines = text.split('\n')
-  const targets = parseCrontabWithPaused(text).filter(
-    (entry) => args.ids.has(entry.id) && entry.paused !== args.paused
-  )
-  if (targets.length === 0) {
+  const edited = args.edit(text)
+  if ('error' in edited) {
+    return { ok: false, error: edited.error }
+  }
+  if (edited.changed.length === 0) {
     return { ok: true, changed: 0 }
   }
-  for (const entry of targets) {
-    const line = lines[entry.lineIndex]
-    lines[entry.lineIndex] = args.paused
-      ? `${PAUSED_MARKER}${line}`
-      : line.slice(PAUSED_MARKER.length)
-  }
-  let next = lines.join('\n')
-  if (!next.endsWith('\n')) {
+  let next = edited.next
+  if (next && !next.endsWith('\n')) {
     next += '\n'
   }
   const backup = backupCrontab(text)
@@ -197,11 +193,32 @@ export async function setCronLinesPaused(args: {
       error: `crontab refused the update: ${write.stderr.trim() || `exit ${write.code}`}`
     }
   }
-  audit({
-    action: args.paused ? 'cron.pause' : 'cron.resume',
-    reason: args.reason,
-    lines: targets.map((entry) => entry.command),
-    backup
+  audit({ ...args.audit, lines: edited.changed, backup })
+  return { ok: true, changed: edited.changed.length }
+}
+
+/** Pauses (comments out with a marker) or resumes the given line ids. */
+export function setCronLinesPaused(args: {
+  ids: ReadonlySet<string>
+  paused: boolean
+  expectedHash: string
+  reason: string
+}): Promise<CrontabWriteResult> {
+  return rewriteCrontab({
+    expectedHash: args.expectedHash,
+    audit: { action: args.paused ? 'cron.pause' : 'cron.resume', reason: args.reason },
+    edit: (text) => {
+      const lines = text.split('\n')
+      const targets = parseCrontabWithPaused(text).filter(
+        (entry) => args.ids.has(entry.id) && entry.paused !== args.paused
+      )
+      for (const entry of targets) {
+        const line = lines[entry.lineIndex]
+        lines[entry.lineIndex] = args.paused
+          ? `${PAUSED_MARKER}${line}`
+          : line.slice(PAUSED_MARKER.length)
+      }
+      return { next: lines.join('\n'), changed: targets.map((entry) => entry.command) }
+    }
   })
-  return { ok: true, changed: targets.length }
 }

@@ -22,6 +22,8 @@ import {
   type OrgFilter
 } from './xos-org-hierarchy'
 import type { CardThemeSelection } from './xos-goal-card-logic'
+import { XosScopeControls } from './XosAreaControls'
+import type { XosGoalActions } from './XosGoalViewerParts'
 
 export function HealthBadge({ health }: { health: AreaHealth }): React.JSX.Element {
   return <span className={`xos-chip xos-tone-${health.tone}`}>{health.label}</span>
@@ -78,6 +80,7 @@ export function OrgChart({
   goals,
   cardTheme,
   collapsed,
+  actions,
   onToggle,
   onOpen
 }: {
@@ -85,6 +88,7 @@ export function OrgChart({
   goals: XosGoal[]
   cardTheme: CardThemeSelection
   collapsed: Set<string>
+  actions: XosGoalActions
   onToggle: (id: string) => void
   onOpen: (goal: XosGoal) => void
 }): React.JSX.Element {
@@ -171,6 +175,7 @@ export function OrgChart({
                       {node.counts.attention} attention
                     </span>
                   )}
+                  {area && <XosScopeControls project={project} area={area} actions={actions} />}
                 </div>
               </div>
               {!isCollapsed && (
@@ -188,11 +193,13 @@ export function AreaGroups({
   project,
   goals,
   cardTheme,
+  actions,
   onOpen
 }: {
   project: XosProject
   goals: XosGoal[]
   cardTheme: CardThemeSelection
+  actions: XosGoalActions
   onOpen: (goal: XosGoal) => void
 }): React.JSX.Element {
   const groups = [...new Map(goals.map((goal) => [goal.area.id, goal.area])).values()].map(
@@ -224,13 +231,18 @@ export function AreaGroups({
                 </p>
               )}
             </div>
-            <span
-              className={
-                area.id === 'c-suite' ? 'xos-chip c-suite-foil-badge' : 'xos-chip xos-tone-neutral'
-              }
-            >
-              {items.length} goal{items.length === 1 ? '' : 's'}
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <XosScopeControls project={project} area={area} actions={actions} />
+              <span
+                className={
+                  area.id === 'c-suite'
+                    ? 'xos-chip c-suite-foil-badge'
+                    : 'xos-chip xos-tone-neutral'
+                }
+              >
+                {items.length} goal{items.length === 1 ? '' : 's'}
+              </span>
+            </div>
           </div>
           <CardGrid goals={items} project={project} cardTheme={cardTheme} onOpen={onOpen} />
         </section>

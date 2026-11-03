@@ -1,5 +1,5 @@
-// XOS fork: IPC for the Automations → Org chart board. Registered from register-core-handlers.ts
-// with one line, so upstream rebases only touch that hook.
+// XOS fork: IPC for the Automations → Org chart board (read, run now, art, open file). Registered
+// from main-process-automations.ts with one line; the §3d writes live in xos-goal-crud-ipc.ts.
 import { spawn } from 'node:child_process'
 import { closeSync, mkdirSync, openSync, readFileSync, statSync } from 'node:fs'
 import { extname, join, normalize, relative, resolve, sep } from 'node:path'
@@ -8,13 +8,13 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   XosActionResult,
   XosCronJob,
-  XosCronMutation,
   XosGoalBoard,
   XosProject,
   XosRunNowRequest
 } from '../../shared/xos-goals-types'
-import { buildXosGoalBoard, type XosRepoSource } from './xos-goal-board'
-import { audit, setCronLinesPaused, xosHome } from './xos-crontab'
+import { allJobs, buildXosGoalBoard, findProject, type XosRepoSource } from './xos-goal-board'
+import { registerXosGoalCrudHandlers } from './xos-goal-crud-ipc'
+import { audit, xosHome } from './xos-crontab'
 
 const ART_PREFIX = '/images/admin/ops-cards/'
 const ART_MAX_BYTES = 4 * 1024 * 1024
@@ -23,20 +23,6 @@ const ART_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg'
-}
-
-function findProject(board: XosGoalBoard, key: string): XosProject | null {
-  return board.projects.find((project) => project.key === key) ?? null
-}
-
-function allJobs(board: XosGoalBoard): XosCronJob[] {
-  return [
-    ...board.projects.flatMap((project) => [
-      ...project.goals.flatMap((goal) => goal.viewer.cron.jobs),
-      ...project.scripts
-    ]),
-    ...board.otherJobs
-  ]
 }
 
 function jobProject(board: XosGoalBoard, job: XosCronJob): XosProject | null {
@@ -114,59 +100,7 @@ async function launch(
 
 export function registerXosGoalHandlers(repos: XosRepoSource, runtime: OrcaRuntimeService): void {
   ipcMain.handle('xos:goals:getBoard', () => buildXosGoalBoard(repos))
-
-  ipcMain.handle(
-    'xos:goals:mutateCron',
-    async (_event, mutation: XosCronMutation): Promise<XosActionResult> => {
-      const board = await buildXosGoalBoard(repos)
-      let ids: string[] = []
-      let label = ''
-      if (mutation.kind === 'pause-goal' || mutation.kind === 'resume-goal') {
-        const goal = findProject(board, mutation.projectKey)?.goals.find(
-          (g) => g.goal === mutation.goal
-        )
-        if (!goal) {
-          return { ok: false, error: `Goal ${mutation.goal} was not found.` }
-        }
-        ids = goal.viewer.cron.jobs.map((job) => job.id)
-        label = `goal ${mutation.goal}`
-        if (ids.length === 0) {
-          return {
-            ok: false,
-            error: `${mutation.goal} has no crontab schedule to ${mutation.kind === 'pause-goal' ? 'pause' : 'resume'}.`
-          }
-        }
-      } else {
-        const job = allJobs(board).find((candidate) => candidate.id === mutation.jobId)
-        if (!job) {
-          return {
-            ok: false,
-            error: 'That crontab line no longer exists. Refresh the board.'
-          }
-        }
-        ids = [job.id]
-        label = job.name
-      }
-      const paused = mutation.kind === 'pause-goal' || mutation.kind === 'pause-job'
-      const result = await setCronLinesPaused({
-        ids: new Set(ids),
-        paused,
-        expectedHash: mutation.crontabHash,
-        reason: `${paused ? 'pause' : 'resume'} ${label} from the Orca board`
-      })
-      if (!result.ok) {
-        return result
-      }
-      return {
-        ok: true,
-        changedLines: result.changed,
-        message:
-          result.changed === 0
-            ? `Nothing to change: ${label} is already ${paused ? 'paused' : 'running on schedule'}.`
-            : `${paused ? 'Paused' : 'Resumed'} ${label} (${result.changed} crontab line${result.changed === 1 ? '' : 's'}). A backup is in ~/.orca-xos/crontab-backups.`
-      }
-    }
-  )
+  registerXosGoalCrudHandlers(repos)
 
   ipcMain.handle(
     'xos:goals:runNow',
