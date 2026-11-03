@@ -28,7 +28,41 @@ type ConfigFile = { version: 1; automations: Record<string, XosAutomationRunConf
 
 export const EMPTY_RUN_CONFIG: XosAutomationRunConfig = {
   fallbacks: [],
-  fallbackOnManualRuns: false
+  fallbackOnManualRuns: false,
+  lockLane: null,
+  lockWaitMinutes: 0,
+  timeoutMinutes: null
+}
+
+const LANE = /^[a-z0-9][a-z0-9-]{0,40}$/
+
+/** Normalizes untrusted input (IPC or a hand-edited file) into a valid config. */
+export function cleanRunConfig(
+  value: Partial<XosAutomationRunConfig> | undefined
+): XosAutomationRunConfig {
+  const minutes = (raw: unknown, max: number): number =>
+    Math.min(max, Math.max(0, Math.round(Number(raw) || 0)))
+  const lane = typeof value?.lockLane === 'string' ? value.lockLane.trim().toLowerCase() : ''
+  const timeout = minutes(value?.timeoutMinutes, 24 * 60)
+  return {
+    fallbacks: (value?.fallbacks ?? [])
+      .map(cleanChoice)
+      .filter((choice): choice is XosModelChoice => choice !== null)
+      .slice(0, MAX_FALLBACKS),
+    fallbackOnManualRuns: value?.fallbackOnManualRuns === true,
+    lockLane: LANE.test(lane) ? lane : null,
+    lockWaitMinutes: minutes(value?.lockWaitMinutes, 240),
+    timeoutMinutes: timeout > 0 ? timeout : null
+  }
+}
+
+function isEmpty(config: XosAutomationRunConfig): boolean {
+  return (
+    config.fallbacks.length === 0 &&
+    !config.fallbackOnManualRuns &&
+    config.lockLane === null &&
+    config.timeoutMinutes === null
+  )
 }
 
 function configPath(): string {
@@ -59,32 +93,19 @@ function cleanChoice(value: unknown): XosModelChoice | null {
 }
 
 export function readRunConfig(automationId: string): XosAutomationRunConfig {
-  const stored = readConfigFile().automations[automationId]
-  if (!stored) {
-    return EMPTY_RUN_CONFIG
-  }
-  return {
-    fallbacks: (stored.fallbacks ?? [])
-      .map(cleanChoice)
-      .filter((choice): choice is XosModelChoice => choice !== null)
-      .slice(0, MAX_FALLBACKS),
-    fallbackOnManualRuns: stored.fallbackOnManualRuns === true
-  }
+  return cleanRunConfig(readConfigFile().automations[automationId])
 }
 
-export function writeRunConfig(automationId: string, config: XosAutomationRunConfig): void {
+export function writeRunConfig(
+  automationId: string,
+  config: Partial<XosAutomationRunConfig>
+): void {
   const file = readConfigFile()
-  const fallbacks = config.fallbacks
-    .map(cleanChoice)
-    .filter((choice): choice is XosModelChoice => choice !== null)
-    .slice(0, MAX_FALLBACKS)
-  if (fallbacks.length === 0 && !config.fallbackOnManualRuns) {
+  const clean = cleanRunConfig(config)
+  if (isEmpty(clean)) {
     delete file.automations[automationId]
   } else {
-    file.automations[automationId] = {
-      fallbacks,
-      fallbackOnManualRuns: config.fallbackOnManualRuns
-    }
+    file.automations[automationId] = clean
   }
   mkdirSync(xosHome(), { recursive: true })
   const tmp = `${configPath()}.tmp`

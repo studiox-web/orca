@@ -23,6 +23,14 @@ export type XosAutomationRunConfig = {
   fallbacks: XosModelChoice[]
   /** Scheduled runs always fall back; manual "Run now" runs only when this is on (plan §3.4). */
   fallbackOnManualRuns: boolean
+  /** RT7: runs in one lane of a repo never overlap, also with legacy crontab runs (same flock
+   *  files). Setting a lane also stops two runs of this automation from overlapping. */
+  lockLane: string | null
+  /** With a busy lane: 0 skips the run; otherwise it is queued and starts when the lane frees,
+   *  if that happens within this many minutes. */
+  lockWaitMinutes: number
+  /** RT15: stop a terminal run that is still going after this many minutes. */
+  timeoutMinutes: number | null
 }
 
 export type XosRunLimitKind = 'usage-limit' | 'overloaded' | 'auth' | 'missing-binary'

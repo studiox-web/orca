@@ -27,9 +27,23 @@ type Pending = Chain & { parentRunId: string; reason: string; expiresAt: number 
 
 const pending = new Map<string, Pending>()
 const chains = new Map<string, Chain>()
+/** Automations started from a lane queue: their run counts as scheduled (it replaces one). */
+const queuedStarts = new Map<string, number>()
 /** Upstream may report one completion twice; only the first may start a fallback. */
 const handled = new Set<string>()
 const HANDLED_LIMIT = 500
+
+export function markQueuedStart(automationId: string): void {
+  queuedStarts.set(automationId, Date.now() + PENDING_TTL_MS)
+}
+
+function rootTrigger(automationId: string, run: AutomationRun): AutomationRun['trigger'] {
+  const until = queuedStarts.get(automationId)
+  queuedStarts.delete(automationId)
+  return run.trigger === 'manual' && until !== undefined && until > Date.now()
+    ? 'scheduled'
+    : run.trigger
+}
 
 export function primaryChoice(automation: Automation): XosModelChoice {
   const { model, effort } = readXosModelArgs(automation.agentId, automation.extraAgentArgs ?? '')
@@ -55,7 +69,7 @@ export function xosLaunchAutomation(automation: Automation, run: AutomationRun):
     let launched = automation
     let chain: Chain = {
       rootRunId: run.id,
-      rootTrigger: run.trigger,
+      rootTrigger: rootTrigger(automation.id, run),
       attempt: 0,
       choice: primaryChoice(automation)
     }

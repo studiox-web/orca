@@ -4,7 +4,7 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseCrontab, type CrontabEntry } from '../automations/external-crontab-jobs'
 import { nextAutomationOccurrenceAfter } from '../../shared/automation-schedule-occurrences'
@@ -14,7 +14,14 @@ export const PAUSED_MARKER = '#orca-xos-paused# '
 const BACKUP_KEEP = 50
 
 export function xosHome(): string {
-  return process.env.ORCA_XOS_HOME ?? join(homedir(), '.orca-xos')
+  if (process.env.ORCA_XOS_HOME) {
+    return process.env.ORCA_XOS_HOME
+  }
+  // Upstream tests drive the dispatch hooks too; they must never write to the real ~/.orca-xos.
+  if (process.env.VITEST) {
+    return join(tmpdir(), `orca-xos-vitest-${process.pid}`)
+  }
+  return join(homedir(), '.orca-xos')
 }
 
 function run(

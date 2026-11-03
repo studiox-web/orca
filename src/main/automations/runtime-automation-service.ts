@@ -20,6 +20,7 @@ import {
   createRuntimeAutomationRunTerminalObserver
 } from './runtime-terminal-run-observer'
 import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
+import { registerXosAutomationHost } from '../xos/xos-run-gate'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -179,6 +180,23 @@ export function createRuntimeAutomationService(input: {
       : undefined
   })
   runtime.setAutomationService(service)
+  // XOS fork: stage A lane locks, run timeouts and fallback retries need these.
+  registerXosAutomationHost({
+    findRun: (automationId, runId) =>
+      store.listAutomationRuns(automationId).find((entry) => entry.id === runId) ?? null,
+    findAutomation: (id) => store.listAutomations().find((entry) => entry.id === id) ?? null,
+    runNow: (automationId) => service.runNow(automationId),
+    markDispatchResult: (result) => service.markDispatchResult(result),
+    closeRunTerminal: async (run) => {
+      const paneKey = run.terminalPaneKey
+      const handle = paneKey
+        ? (launchedHandles.get(paneKey) ?? runtime.getTerminalHandleForPaneKey(paneKey))
+        : null
+      if (handle) {
+        await runtime.closeTerminal(handle)
+      }
+    }
+  })
   if (input.headless) {
     bindHeadlessRunTerminalRetention(service, store, runtime)
   }

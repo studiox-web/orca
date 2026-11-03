@@ -24,6 +24,7 @@ import type {
 } from '../../../../shared/xos-runtime-types'
 import type { AutomationDraft } from '../automations/AutomationEditorDialog'
 import { XosAutomationModelField } from './XosAutomationModelField'
+import { XosAutomationRunLimits } from './XosAutomationRunLimits'
 import { relativeTime } from './xos-format'
 import './xos-ops-cards.css'
 
@@ -159,7 +160,7 @@ export function XosAutomationFallbacks({
     <section className="space-y-3 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">
       <div className="flex items-center justify-between gap-2">
         <div className="text-[11px] font-medium uppercase text-muted-foreground">
-          Model and fallbacks
+          Models, fallbacks and limits
         </div>
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           Also on manual runs
@@ -239,6 +240,7 @@ export function XosAutomationFallbacks({
         When a run stops on a usage limit, overload, sign-in problem or missing agent, Orca starts
         it again on the next model. Other failures never fall back.
       </p>
+      <XosAutomationRunLimits config={config} onSave={(next) => void save(next)} />
       {attempts.length > 0 && (
         <ul className="space-y-1 border-t pt-2">
           {attempts.map((attempt) => (
