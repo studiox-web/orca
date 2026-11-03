@@ -7,10 +7,15 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, Notification } from 'electron'
 import { xosHome } from './xos-crontab'
+import { XosUpdateWindow } from './xos-update-window'
 
-type BuildState = { sha: string; builtAt: string }
+type BuildState = { sha: string; builtAt: string; durationMs?: number }
+
+/** Used for the first estimate, before any build has recorded its duration. */
+const DEFAULT_BUILD_MS = 3 * 60_000
 
 let busy = false
+let progress: XosUpdateWindow | null = null
 
 function repoDir(): string {
   return process.env.ORCA_XOS_REPO ?? join(homedir(), 'projects', 'orca-fork')
@@ -62,8 +67,8 @@ async function ask(message: string, detail: string, buttons: string[]): Promise<
   return result.response
 }
 
-function runBuild(sha: string): Promise<{ ok: boolean; logPath: string }> {
-  const logPath = join(stateDir(), `build-${new Date().toISOString().replace(/[:.]/g, '-')}.log`)
+function runBuild(sha: string, logPath: string): Promise<{ ok: boolean; logPath: string }> {
+  const startedAt = Date.now()
   const fd = openSync(logPath, 'a')
   return new Promise((resolve) => {
     const child = spawn('/bin/bash', [join(repoDir(), 'xos', 'build.sh')], {
@@ -73,7 +78,11 @@ function runBuild(sha: string): Promise<{ ok: boolean; logPath: string }> {
     child.on('close', (code) => {
       closeSync(fd)
       if (code === 0) {
-        const state: BuildState = { sha, builtAt: new Date().toISOString() }
+        const state: BuildState = {
+          sha,
+          builtAt: new Date().toISOString(),
+          durationMs: Date.now() - startedAt
+        }
         writeFileSync(join(stateDir(), 'last-build.json'), JSON.stringify(state))
       }
       resolve({ ok: code === 0, logPath })
@@ -156,7 +165,7 @@ async function checkAndUpdate(): Promise<void> {
         log || '(commit list unavailable)',
         branch !== 'xos' ? `\nNote: the checkout is on "${branch}", not "xos".` : '',
         dirty ? '\nNote: the checkout has uncommitted changes; they will be included.' : '',
-        '\nBuilding takes a few minutes in the background; you can keep working.'
+        '\nBuilding takes a few minutes. A small window shows the progress; you can hide it and keep working.'
       ].join('\n'),
       ['Build and install', 'Cancel']
     )
@@ -164,13 +173,26 @@ async function checkAndUpdate(): Promise<void> {
       return
     }
   }
-  notify(`Building ${head} in the background…`)
-  const result = await runBuild(head)
-  if (!result.ok) {
-    await ask('The XOS build failed.', `See the log: ${result.logPath}`, ['OK'])
-    return
-  }
-  await offerInstall(head)
+  await buildWithProgress(head, built?.durationMs ?? DEFAULT_BUILD_MS)
+}
+
+/** Runs the build behind a progress window that turns into the install prompt. */
+async function buildWithProgress(sha: string, expectedMs: number): Promise<void> {
+  const logPath = join(stateDir(), `build-${new Date().toISOString().replace(/[:.]/g, '-')}.log`)
+  const window = new XosUpdateWindow(sha, logPath, expectedMs, (action) => {
+    window.close()
+    progress = null
+    if (action === 'install') {
+      installAndRestart()
+    }
+  })
+  progress = window
+  window.start()
+  const result = await runBuild(sha, logPath)
+  window.finish(result.ok)
+  notify(
+    result.ok ? `Build ${sha} is ready to install.` : 'The XOS build failed. See the update window.'
+  )
 }
 
 /** Handles the fork's update menu item; returns false outside packaged Linux fork builds. */
@@ -178,8 +200,12 @@ export function startXosSelfUpdate(): boolean {
   if (!app.isPackaged || process.platform !== 'linux' || !runningSha()) {
     return false
   }
-  if (busy) {
-    notify('An XOS update is already in progress.')
+  if (busy || progress) {
+    if (progress) {
+      progress.show()
+    } else {
+      notify('An XOS update is already in progress.')
+    }
     return true
   }
   busy = true
