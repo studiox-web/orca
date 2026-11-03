@@ -3,6 +3,7 @@ import type { UpdateCheckOptions } from '../../shared/update-status-types'
 import type { ReleaseChannel } from '../../shared/release-channel'
 import { UpdaterScheduling } from './updater-scheduling'
 import { releaseUpdatesEnabled } from './updater-fork-guard'
+import { startXosSelfUpdate } from '../xos/xos-self-update'
 
 export abstract class UpdaterMenuChecks extends UpdaterScheduling {
   protected checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
@@ -14,7 +15,10 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
       return
     }
     if (!releaseUpdatesEnabled()) {
-      this.sendStatus({ state: 'not-available', userInitiated: true })
+      // XOS fork: the menu item builds and installs the fork from the local xos checkout.
+      if (!startXosSelfUpdate()) {
+        this.sendStatus({ state: 'not-available', userInitiated: true })
+      }
       return
     }
     if (options?.localBuild) {
