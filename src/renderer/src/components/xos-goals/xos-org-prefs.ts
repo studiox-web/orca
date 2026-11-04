@@ -4,7 +4,10 @@ import type { CardThemeSelection } from './xos-goal-card-logic'
 export const ALL = 'all'
 export const PREFS_KEY = 'orca.xos.orgChart.prefs'
 
-export type Layout = 'chart' | 'areas'
+export type Layout = 'chart' | 'areas' | 'pipeline' | 'analytics'
+
+const isLayout = (value: unknown): value is Layout =>
+  value === 'chart' || value === 'areas' || value === 'pipeline' || value === 'analytics'
 export type Prefs = {
   projectKey: string
   cardTheme: CardThemeSelection
@@ -27,7 +30,7 @@ export function readPrefs(): Prefs {
           : 'noir',
         imageMode: stored.cardTheme?.imageMode === 'light' ? 'light' : 'dark'
       },
-      layout: stored.layout === 'areas' ? 'areas' : 'chart'
+      layout: isLayout(stored.layout) ? stored.layout : 'chart'
     }
   } catch {
     return fallback
