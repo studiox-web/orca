@@ -152,7 +152,11 @@ export function CronJobRow({
         <p className="flex items-center gap-2 font-medium">
           <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{job.schedule}</code>
           <span className="truncate">{job.goal ?? job.name}</span>
-          {job.paused && <span className="xos-chip xos-tone-warning">Paused</span>}
+          {job.paused && (
+            <span className="xos-chip xos-tone-warning">
+              {job.pausedBy === 'migration' ? 'Paused for migration' : 'Paused'}
+            </span>
+          )}
         </p>
         <p className="mt-1 truncate font-mono text-xs text-muted-foreground" title={job.command}>
           {job.command}

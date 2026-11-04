@@ -1,5 +1,5 @@
 // XOS fork: Stage C Agent-facing CLI backend (§2.3a) for `orca goals`.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import type {
   XosAuditEvent,
@@ -15,30 +15,36 @@ import { isDirectory } from './xos-goal-files'
 import { listGoalInboxMessages, sendGoalInboxMessage } from './xos-goal-inbox'
 import { resolveOrCreateAreaId, setGoalArea } from './xos-goal-org-edit'
 import { projectSlug } from './xos-goal-org'
-import { assembleGoalPrompt } from './xos-goal-prompt'
 import { patchMarkdownFrontmatter } from './xos-item-claims'
 import { commitProjectHome, hasProjectGoals } from './xos-project-home'
+import { readKnownProjects } from './xos-project-registry'
 
 export { listGoalInboxMessages, sendGoalInboxMessage }
 
 export function cliRepoSource(cwd: string, projectFilter?: string): XosRepoSource {
-  const candidates = new Set<string>()
+  const candidates = new Map<string, string>()
   const resolvedCwd = resolve(cwd)
   if (hasProjectGoals(resolvedCwd)) {
-    candidates.add(resolvedCwd)
+    candidates.set(resolvedCwd, basename(resolvedCwd))
   }
   if (projectFilter) {
     const resolvedFilter = resolve(cwd, projectFilter)
     if (isDirectory(resolvedFilter)) {
-      candidates.add(resolvedFilter)
+      candidates.set(resolvedFilter, basename(resolvedFilter))
+    }
+  }
+  // M12: every project Orca has shown, so `--project djvibe` and all-project views work anywhere.
+  for (const { root, name } of readKnownProjects()) {
+    if (hasProjectGoals(root) && !candidates.has(root)) {
+      candidates.set(root, name)
     }
   }
   return {
     getRepos: () =>
-      [...candidates].map((path, index) => ({
+      [...candidates].map(([path, displayName], index) => ({
         id: `cli-${index}`,
         path,
-        displayName: basename(path)
+        displayName
       }))
   }
 }
@@ -81,7 +87,9 @@ export function resolveTargetProject(
   if (filter) {
     return board.projects.find((p) => matchesProjectFilter(p, filter, cwd)) ?? null
   }
-  return board.projects.find((p) => p.root === resolve(cwd)) ?? board.projects[0] ?? null
+  const here = board.projects.find((p) => p.root === resolve(cwd))
+  // Writes must never guess between projects.
+  return here ?? (board.projects.length === 1 ? board.projects[0] : null)
 }
 
 export function findBoardGoal(
@@ -90,16 +98,14 @@ export function findBoardGoal(
   projectFilter: string | undefined,
   cwd: string
 ): { project: XosProject; goal: XosGoal } | null {
-  for (const project of board.projects) {
-    if (!matchesProjectFilter(project, projectFilter, cwd)) {
-      continue
-    }
+  const found = board.projects.flatMap((project) => {
     const goal = project.goals.find((g) => g.goal === goalName)
-    if (goal) {
-      return { project, goal }
-    }
-  }
-  return null
+    return goal && matchesProjectFilter(project, projectFilter, cwd) ? [{ project, goal }] : []
+  })
+  // A name in two projects needs --project, unless the cwd already says which.
+  return found.length === 1
+    ? found[0]
+    : (found.find((match) => match.project.root === resolve(cwd)) ?? null)
 }
 
 export async function editGoalFromCli(args: {
@@ -184,86 +190,23 @@ export async function editGoalFromCli(args: {
   return { ok: true, goalPath, changes }
 }
 
-export function runGoalFromCli(args: {
-  project: XosProject
-  goal: XosGoal
-  rawMode?: string
-  sidecar?: string
-  message?: string
-  agent?: string
-  bypassQueueGate?: boolean
-}):
-  | {
-      ok: true
-      project: string
-      goal: string
-      mode: XosGoalRunMode
-      sidecar: string | null
-      agent: string
-      model: string | null
-      effort: string | null
-      lockLane: string
-      promptPath: string
-      reopenedFromDod: boolean
-      openInboxCount: number
-    }
-  | { ok: false; skipped?: boolean; status?: string; error: string } {
-  let mode: XosGoalRunMode = 'normal'
-  let sidecar = args.sidecar
-  if (args.rawMode) {
-    if (args.rawMode === 'reply') {
-      mode = 'reply'
-    } else if (args.rawMode === 'sidecar' || args.rawMode.startsWith('sidecar:')) {
-      mode = 'sidecar'
-      if (args.rawMode.startsWith('sidecar:')) {
-        sidecar = args.rawMode.slice('sidecar:'.length)
-      }
-    } else if (args.rawMode !== 'normal') {
-      return { ok: false, error: `Invalid run mode "${args.rawMode}".` }
-    }
-  } else if (sidecar) {
-    mode = 'sidecar'
+/** `--mode normal|reply|sidecar[:name]` into what the run takes. */
+export function parseRunMode(
+  rawMode: string | undefined,
+  sidecarFlag: string | undefined
+): { mode: XosGoalRunMode; sidecar?: string } | { error: string } {
+  if (rawMode === 'reply') {
+    return { mode: 'reply' }
   }
-  const assembled = assembleGoalPrompt({
-    repoRoot: args.project.root,
-    goal: args.goal.goal,
-    mode,
-    sidecar,
-    operatorMessage: args.message,
-    requestedAgent: args.agent ?? args.goal.viewer.agents[0],
-    bypassQueueGate: args.bypassQueueGate ?? true
-  })
-  void commitProjectHome(args.project.root, `xos: prepare ${mode} run for ${args.goal.goal}`)
-  if (assembled.status !== 'ready') {
-    return { ok: false, skipped: true, status: assembled.status, error: assembled.reason }
+  if (rawMode?.startsWith('sidecar:')) {
+    return { mode: 'sidecar', sidecar: rawMode.slice('sidecar:'.length) }
   }
-  const runDir = join(xosHome(), 'runs')
-  mkdirSync(runDir, { recursive: true })
-  const promptPath = join(runDir, `${args.project.name}-${args.goal.goal}-${Date.now()}.prompt.md`)
-  writeFileSync(promptPath, assembled.prompt, 'utf8')
-  audit({
-    action: 'goal.run_now',
-    project: args.project.name,
-    goal: args.goal.goal,
-    mode,
-    sidecar: sidecar ?? null,
-    agent: assembled.agent,
-    promptPath
-  })
-  return {
-    ok: true,
-    project: args.project.name,
-    goal: args.goal.goal,
-    mode,
-    sidecar: sidecar ?? null,
-    agent: assembled.agent,
-    model: assembled.model,
-    effort: assembled.effort,
-    lockLane: assembled.lockLane,
-    promptPath,
-    reopenedFromDod: assembled.reopenedFromDod,
-    openInboxCount: assembled.openInboxCount
+  if (rawMode === 'sidecar' || (!rawMode && sidecarFlag)) {
+    return { mode: 'sidecar', sidecar: sidecarFlag }
   }
+  return !rawMode || rawMode === 'normal'
+    ? { mode: 'normal' }
+    : { error: `Invalid run mode "${rawMode}".` }
 }
 
 export function readCliAuditHistory(args: {

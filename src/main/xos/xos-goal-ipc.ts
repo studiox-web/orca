@@ -22,7 +22,18 @@ import { registerXosRuntimeHandlers } from './xos-runtime-ipc'
 import { registerXosTakeoverHandlers } from './xos-takeover-ipc'
 import { audit, xosHome } from './xos-crontab'
 import { assembleGoalPrompt } from './xos-goal-prompt'
-import { startNativeGoalRun } from './xos-live-runs'
+import { scheduleGoal, replaceCronJob, type XosScheduleHost } from './xos-goal-schedule'
+import {
+  adoptNativeRuns,
+  liveRunRegistry,
+  startNativeGoalRun,
+  stopNativeGoalRun
+} from './xos-live-runs'
+import { rememberProjects } from './xos-project-registry'
+import { startXosQueueRuntime } from './xos-queue-runtime'
+import { listAgentQuotas } from './xos-quota'
+import { xosStopGoalAutomationRun } from './xos-run-gate'
+import { setXosRpcBackend, type XosRpcBackend } from './xos-rpc-backend'
 import { commitProjectHome, isGoalCentral, projectHomeDir } from './xos-project-home'
 
 const ART_PREFIX = '/images/admin/ops-cards/'
@@ -146,6 +157,7 @@ async function runGoalNow(
     message: request.message,
     runner: request.runner,
     force: request.force,
+    inheritedLane: request.inheritedLane,
     trigger: 'manual'
   })
   audit({
@@ -161,8 +173,45 @@ async function runGoalNow(
   return started.ok ? { ok: true, message: started.message } : started
 }
 
+function createRpcBackend(repos: XosRepoSource, runtime: OrcaRuntimeService): XosRpcBackend {
+  const schedule: XosScheduleHost = {
+    createAutomation: (input) => runtime.createAutomation(input)
+  }
+  return {
+    runGoal: async ({ repoRoot, agent, inheritedLane, ...input }) =>
+      runGoalNow(runtime, await buildXosGoalBoard(repos), {
+        kind: 'goal',
+        projectKey: repoRoot,
+        runner: agent,
+        inheritedLane,
+        ...input
+      }),
+    stopGoal: async ({ repoRoot, goal }) => {
+      const native = [...liveRunRegistry().values()].find(
+        (run) => run.repoRoot === repoRoot && run.goal === goal && run.finishedAt === null
+      )
+      if (native) {
+        return stopNativeGoalRun(native.runId)
+      }
+      return (await xosStopGoalAutomationRun(repoRoot, goal))
+        ? { ok: true, message: `Stopped ${goal}.` }
+        : { ok: false, error: `${goal} has no run Orca can stop.` }
+    },
+    scheduleGoal: (input) => scheduleGoal(schedule, input),
+    replaceCronJob: (input) => replaceCronJob(schedule, input),
+    usageLimits: listAgentQuotas
+  }
+}
+
 export function registerXosGoalHandlers(repos: XosRepoSource, runtime: OrcaRuntimeService): void {
-  ipcMain.handle('xos:goals:getBoard', () => buildXosGoalBoard(repos))
+  setXosRpcBackend(createRpcBackend(repos, runtime))
+  adoptNativeRuns()
+  startXosQueueRuntime()
+  ipcMain.handle('xos:goals:getBoard', async () => {
+    const board = await buildXosGoalBoard(repos)
+    rememberProjects(board.projects.map(({ root, name }) => ({ root, name })))
+    return board
+  })
   registerXosGoalCrudHandlers(repos)
   registerXosStudioHandlers(repos)
   registerXosWorkItemHandlers(repos)

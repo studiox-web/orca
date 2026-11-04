@@ -4,7 +4,7 @@ import { basename, dirname, join, normalize, relative, resolve } from 'node:path
 import { audit } from './xos-crontab'
 import { parseFrontmatter, readHead, safeReaddir } from './xos-goal-files'
 import { patchMarkdownFrontmatter } from './xos-item-claims'
-import { commitProjectHome, resolveSharedDirs } from './xos-project-home'
+import { commitProjectHome, resolveGoalDir, resolveSharedDirs } from './xos-project-home'
 
 const MAX_INBOX_BYTES = 32 * 1024
 const MAX_INBOX_TOTAL_BYTES = 48 * 1024
@@ -206,7 +206,6 @@ export function listGoalInboxMessages(goalDir: string): Record<string, unknown>[
 export function sendGoalInboxMessage(args: {
   projectRoot: string
   projectName: string
-  goalsDir: string
   goal: string
   body: string
   from?: string
@@ -220,7 +219,7 @@ export function sendGoalInboxMessage(args: {
   const stamp = nowIso.replace(/[:.]/g, '-')
   const sender = (args.from?.trim() || 'operator').replace(/[^A-Za-z0-9_-]/g, '-')
   const id = `${stamp}__from-${sender}__to-${args.goal}`
-  const inboxDir = join(args.goalsDir, args.goal, 'inbox')
+  const inboxDir = join(resolveGoalDir(args.projectRoot, args.goal), 'inbox')
   mkdirSync(inboxDir, { recursive: true })
   const copiedAttachments: string[] = []
   for (const rawAttach of args.attachments ?? []) {

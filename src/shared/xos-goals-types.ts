@@ -99,6 +99,8 @@ export type XosCronJob = {
   goal: string | null
   runner: string | null
   paused: boolean
+  /** 'migration': paused by hand for the cutover; only a resume of this one line undoes it. */
+  pausedBy?: 'orca' | 'migration' | null
   nextRunAt: string | null
 }
 
@@ -207,7 +209,15 @@ export type XosGoalBoard = {
   warnings: string[]
 }
 
-export type XosCronMutation =
+/** Starts the error of a crontab write that needs the operator to adopt a line first. */
+export const XOS_NOT_ADOPTED_PREFIX = 'Not adopted:'
+
+export type XosCronMutation = XosCronMutationBody & {
+  /** The operator adopts unmanaged lines by confirming this change (§3d). */
+  adopt?: boolean
+}
+
+type XosCronMutationBody =
   | {
       kind: 'pause-goal'
       projectKey: string
@@ -280,6 +290,8 @@ export type XosRunNowRequest =
       runner?: string
       /** Run even though the queue gate says there is no work (operator override). */
       force?: boolean
+      /** RT13: the lane of the run asking for this one. */
+      inheritedLane?: string
     }
   | { kind: 'job'; jobId: string }
 

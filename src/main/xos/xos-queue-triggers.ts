@@ -4,8 +4,8 @@
 // fs watchers and debounce live in xos-queue-watcher.ts.
 import { join, resolve, sep } from 'node:path'
 import { frontmatterString, parseFrontmatter, readHead } from './xos-goal-files'
-import { readRunReceipts } from './xos-goal-receipts'
-import { automationLockFile, isLockFree, laneLockFile } from './xos-lane-lock'
+import { goalRunsToday } from './xos-native-receipts'
+import { goalLockFile, isLockFree, laneLockFile } from './xos-lane-lock'
 import { listProjectGoals, resolveGoalDir } from './xos-project-home'
 import {
   countDownstreamFloorItems,
@@ -47,21 +47,17 @@ function withinDir(filePath: string, dir: string): boolean {
   return cleanFile === cleanDir || cleanFile.startsWith(cleanDir + sep)
 }
 
-function defaultRunsToday(repoRoot: string, goal: string, nowMs: number): number {
-  const dayPrefix = new Date(nowMs).toISOString().slice(0, 10)
-  const runs = readRunReceipts(join(repoRoot, 'automations')).get(goal) ?? []
-  return runs.filter(
-    (r) =>
-      r.started_at?.startsWith(dayPrefix) &&
-      !String(r.status ?? '')
-        .toLowerCase()
-        .includes('skip')
-  ).length
-}
-
 function stageReadyKey(typeId?: string, stageId?: string): string | undefined {
   return LEGACY_ITEM_TYPES.find((t) => t.id === typeId)?.stages.find((s) => s.id === stageId)
     ?.readyKey
+}
+
+function floorKey(queue: {
+  matchKey?: string
+  typeId?: string
+  stageId?: string
+}): string | undefined {
+  return queue.matchKey ?? stageReadyKey(queue.typeId, queue.stageId)
 }
 
 export async function evaluateProjectQueueTriggers(
@@ -82,7 +78,7 @@ export async function evaluateProjectQueueTriggers(
     }
     const [lFree, gFree] = await Promise.all([
       isLockFree(laneLockFile(args.repoRoot, lockLane)),
-      isLockFree(automationLockFile(args.repoRoot, goal))
+      isLockFree(goalLockFile(args.repoRoot, goal))
     ])
     return !lFree || !gFree
   }
@@ -125,7 +121,7 @@ export async function evaluateProjectQueueTriggers(
       continue
     }
 
-    const baseRuns = (args.getRunsToday ?? defaultRunsToday)(args.repoRoot, goal, nowMs)
+    const baseRuns = (args.getRunsToday ?? goalRunsToday)(args.repoRoot, goal, nowMs)
     const extraRuns = args.dispatchedToday?.get(`${args.repoRoot}:${goal}`) ?? 0
     const gate = evaluateGoalQueueGate({
       repoRoot: args.repoRoot,
@@ -142,11 +138,7 @@ export async function evaluateProjectQueueTriggers(
       if (!outQ.floor || outQ.floor <= 0 || outQ.paths.length === 0) {
         return false
       }
-      const count = countDownstreamFloorItems(
-        outQ.paths,
-        stageReadyKey(outQ.typeId, outQ.stageId),
-        nowMs
-      )
+      const count = countDownstreamFloorItems(outQ.paths, floorKey(outQ), nowMs)
       const touched =
         !args.changedPaths?.length ||
         args.changedPaths.some(
@@ -159,11 +151,7 @@ export async function evaluateProjectQueueTriggers(
 
     if (starvedOut) {
       if (!(await isBusy(lockLane, goal))) {
-        const count = countDownstreamFloorItems(
-          starvedOut.paths,
-          stageReadyKey(starvedOut.typeId, starvedOut.stageId),
-          nowMs
-        )
+        const count = countDownstreamFloorItems(starvedOut.paths, floorKey(starvedOut), nowMs)
         recordEvent({
           repoRoot: args.repoRoot,
           goal,

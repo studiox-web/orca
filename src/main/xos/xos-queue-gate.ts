@@ -73,6 +73,21 @@ export function countDownstreamFloorItems(
   return count
 }
 
+function countMatchingItems(dirs: string[], key?: string, value?: string): number {
+  let count = 0
+  for (const dir of dirs) {
+    for (const name of safeReaddir(dir).filter(isMarkdownItem)) {
+      if (
+        !key ||
+        matchesExpr(parseFrontmatter(readHead(join(dir, name), ITEM_HEAD_BYTES)), key, value)
+      ) {
+        count += 1
+      }
+    }
+  }
+  return count
+}
+
 export function countOpenReplyMessages(
   goalDir: string,
   goal: string,
@@ -86,7 +101,8 @@ export function countOpenReplyMessages(
       continue
     }
     const status = String(fm.status ?? 'open').toLowerCase()
-    if (status === 'open' && !fm.responded_at && String(fm.from ?? '') !== goal) {
+    // read_at: a reply run already took this one; a failed run must not re-trigger forever.
+    if (status === 'open' && !fm.responded_at && !fm.read_at && String(fm.from ?? '') !== goal) {
       count += 1
     }
   }
@@ -169,8 +185,10 @@ export function evaluateGoalQueueGate(args: {
       }
     }
     queueCandidates.sort((a, b) => a.mtimeMs - b.mtimeMs)
-    candidateItemPaths.push(...queueCandidates.map((c) => c.path))
-    totalEligibleIn += eligible
+    if (eligible >= (queue.minCount ?? 1)) {
+      candidateItemPaths.push(...queueCandidates.map((c) => c.path))
+      totalEligibleIn += eligible
+    }
     const readyPart = queue.readyKey ? `${eligible} ready / ${total} total` : `${eligible} ready`
     const claimPart = claimed > 0 ? `, ${claimed} claimed` : ''
     inSummaries.push(`${queue.label}: ${readyPart}${claimPart}${formatAge(oldestMs, nowMs)}`)
@@ -178,10 +196,7 @@ export function evaluateGoalQueueGate(args: {
 
   const outSummaries: string[] = []
   for (const queue of declared.out) {
-    const count = queue.paths.reduce(
-      (sum, dir) => sum + safeReaddir(dir).filter(isMarkdownItem).length,
-      0
-    )
+    const count = countMatchingItems(queue.paths, queue.matchKey, queue.matchValue)
     const cap = queue.hardCap ?? queue.ceiling
     outSummaries.push(
       `${queue.label}: ${count}${cap ? `/${cap}` : ''}${queue.floor ? ` (floor ${queue.floor})` : ''}`

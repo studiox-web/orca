@@ -14,7 +14,11 @@ function printOut(json: boolean, payload: unknown, text: string): void {
 export const XOS_GOALS_BOARD_HANDLERS: Record<string, CommandHandler> = {
   'goals import': async ({ flags, cwd, json }) => {
     const repoPath = resolve(cwd, getOptionalStringFlag(flags, 'repo') ?? '.')
-    const result = await importProjectGoals(repoPath)
+    const goals = getOptionalStringFlag(flags, 'goal')
+    const result = await importProjectGoals(repoPath, {
+      goals: goals ? goals.split(',').map((goal) => goal.trim()) : undefined,
+      force: flags.get('force') === true
+    })
     const { meta, homeDir } = result
     printOut(
       json,

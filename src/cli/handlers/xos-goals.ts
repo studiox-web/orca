@@ -6,7 +6,9 @@ import {
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../flags'
+import type { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError } from '../runtime/types'
+import type { XosActionResult, XosGoal, XosProject } from '../../shared/xos-goals-types'
 import {
   cliRepoSource,
   editGoalFromCli,
@@ -14,14 +16,15 @@ import {
   listGoalInboxMessages,
   matchesProjectFilter,
   readCliAuditHistory,
+  parseRunMode,
   resolveTargetProject,
-  runGoalFromCli,
   sendGoalInboxMessage
 } from '../../main/xos/xos-goal-cli'
 import { buildXosGoalBoard } from '../../main/xos/xos-goal-board'
 import { applyGoalMutation } from '../../main/xos/xos-goal-crud'
 import { toggleCliGoalEnabled } from '../../main/xos/xos-usage-models-cli'
 import { XOS_GOALS_BOARD_HANDLERS } from './xos-goals-board'
+import { XOS_GOALS_OPS_HANDLERS } from './xos-goals-ops'
 
 function printOut(json: boolean, payload: unknown, text: string): void {
   console.log(json ? JSON.stringify(payload, null, 2) : text)
@@ -36,6 +39,27 @@ async function resolveBoardAndGoal(flags: Map<string, string | boolean>, cwd: st
     throw new RuntimeClientError('not_found', `Goal "${goalName}" not found.`)
   }
   return { board, ...found, projectFilter }
+}
+
+/** The run happens in the Orca that owns locks and receipts: the CLI only asks and reports. */
+async function launchGoalRun(
+  client: RuntimeClient,
+  json: boolean,
+  project: XosProject,
+  goal: XosGoal,
+  options: Record<string, unknown>
+): Promise<void> {
+  const inheritedLane = process.env.CASCADE_ACTIVE_LOCK_LANE
+  const { result } = await client.call<XosActionResult>('xos.goal.run', {
+    repoRoot: project.root,
+    goal: goal.goal,
+    ...options,
+    ...(inheritedLane ? { inheritedLane } : {})
+  })
+  if (!result.ok) {
+    throw new RuntimeClientError('invalid_argument', result.error)
+  }
+  printOut(json, { ...result, project: project.name, goal: goal.goal }, result.message)
 }
 
 async function toggleGoalPause(
@@ -61,6 +85,7 @@ async function toggleGoalPause(
 
 export const XOS_GOALS_HANDLERS: Record<string, CommandHandler> = {
   ...XOS_GOALS_BOARD_HANDLERS,
+  ...XOS_GOALS_OPS_HANDLERS,
 
   'goals show': async ({ flags, cwd, json }) => {
     const { project, goal } = await resolveBoardAndGoal(flags, cwd)
@@ -72,27 +97,21 @@ export const XOS_GOALS_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'goals run': async ({ flags, cwd, json }) => {
+  'goals run': async ({ flags, client, cwd, json }) => {
     const { project, goal } = await resolveBoardAndGoal(flags, cwd)
-    const res = runGoalFromCli({
-      project,
-      goal,
-      rawMode: getOptionalStringFlag(flags, 'mode'),
-      sidecar: getOptionalStringFlag(flags, 'sidecar'),
+    const parsed = parseRunMode(
+      getOptionalStringFlag(flags, 'mode'),
+      getOptionalStringFlag(flags, 'sidecar')
+    )
+    if ('error' in parsed) {
+      throw new RuntimeClientError('invalid_argument', parsed.error)
+    }
+    await launchGoalRun(client, json, project, goal, {
+      ...parsed,
       message: getOptionalStringFlag(flags, 'message'),
       agent: getOptionalStringFlag(flags, 'agent'),
-      bypassQueueGate: true
+      force: flags.get('force') === true
     })
-    if (!res.ok && !res.skipped) {
-      throw new RuntimeClientError('invalid_argument', res.error)
-    }
-    printOut(
-      json,
-      res,
-      res.ok
-        ? `Prepared ${res.mode} run for ${res.project}/${res.goal} (${res.agent}) -> ${res.promptPath}`
-        : `Skipped ${project.name}/${goal.goal}: ${res.error}`
-    )
   },
 
   'goals pause': async ({ flags, cwd, json }) => toggleGoalPause(flags, cwd, json, false),
@@ -231,44 +250,41 @@ export const XOS_GOALS_HANDLERS: Record<string, CommandHandler> = {
     )
   },
 
-  'goals message': async ({ flags, cwd, json }) => {
+  'goals message': async ({ flags, client, cwd, json }) => {
     const { project, goal } = await resolveBoardAndGoal(flags, cwd)
     const msg = sendGoalInboxMessage({
       projectRoot: project.root,
       projectName: project.name,
-      goalsDir: project.goalsDir,
       goal: goal.goal,
       body: getRequiredStringFlag(flags, 'body'),
+      from: getOptionalStringFlag(flags, 'from'),
       attachments: getRepeatedStringFlag(flags, 'attach'),
       cwd
     })
-    const runResult =
-      flags.get('run-now') === true ? runGoalFromCli({ project, goal, rawMode: 'reply' }) : null
+    const run =
+      flags.get('run-now') === true
+        ? await client.call<XosActionResult>('xos.goal.run', {
+            repoRoot: project.root,
+            goal: goal.goal,
+            mode: 'reply'
+          })
+        : null
     printOut(
       json,
-      { ok: true, project: project.name, goal: goal.goal, message: msg, run: runResult },
+      { ok: true, project: project.name, goal: goal.goal, message: msg, run: run?.result ?? null },
       `Sent message ${msg.id} to ${project.name}/${goal.goal}`
     )
+    if (run && !run.result.ok) {
+      throw new RuntimeClientError('invalid_argument', run.result.error)
+    }
   },
 
-  'goals reply': async ({ flags, cwd, json }) => {
+  'goals reply': async ({ flags, client, cwd, json }) => {
     const { project, goal } = await resolveBoardAndGoal(flags, cwd)
-    const res = runGoalFromCli({
-      project,
-      goal,
-      rawMode: 'reply',
+    await launchGoalRun(client, json, project, goal, {
+      mode: 'reply',
       agent: getOptionalStringFlag(flags, 'agent')
     })
-    if (!res.ok && !res.skipped) {
-      throw new RuntimeClientError('invalid_argument', res.error)
-    }
-    printOut(
-      json,
-      res,
-      res.ok
-        ? `Prepared reply run for ${res.project}/${res.goal} -> ${res.promptPath}`
-        : `Skipped reply run for ${project.name}/${goal.goal}: ${res.error}`
-    )
   },
 
   'goals history': async ({ flags, cwd, json }) => {

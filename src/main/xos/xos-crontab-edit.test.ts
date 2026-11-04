@@ -88,6 +88,7 @@ describe('crontab edits', () => {
 
   it('edits a paused line and keeps it paused', async () => {
     const result = await editCronLine({
+      adopt: true,
       id: lineFor(CRONTAB, 'artisan').id,
       schedule: '45 5 * * *',
       command: 'cd /srv/dj && php artisan sync',
@@ -113,6 +114,7 @@ describe('crontab edits', () => {
     expect(afterAdd).toBe(`${CRONTAB}${MANAGED_COMMENT}: dj festival-curator\n0 9 * * * echo run\n`)
 
     const removed = await removeCronLines({
+      adopt: true,
       ids: new Set([lineFor(afterAdd, 'echo run').id]),
       expectedHash: hashCrontab(afterAdd),
       reason: 'test'
@@ -123,6 +125,7 @@ describe('crontab edits', () => {
 
   it('refuses edits against a stale hash', async () => {
     const result = await removeCronLines({
+      adopt: true,
       ids: new Set([lineFor(CRONTAB, 'run-goal').id]),
       expectedHash: hashCrontab('older'),
       reason: 'test'

@@ -93,3 +93,36 @@ describe('readItemSummary', () => {
     expect(byTitle['three words'].ready).toBeNull()
   })
 })
+
+describe('moveWorkItem guards (M14)', () => {
+  it('refuses a claimed item and a name already in the target stage', async () => {
+    const { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { moveWorkItem } = await import('./xos-work-items-crud')
+    const repo = mkdtempSync(join(tmpdir(), 'xos-move-'))
+    process.env.ORCA_XOS_HOME = join(repo, '.home')
+    try {
+      const planned = join(repo, 'docs', 'features', 'planned')
+      const done = join(repo, 'docs', 'features', 'completed')
+      mkdirSync(planned, { recursive: true })
+      mkdirSync(done, { recursive: true })
+      const item = join(planned, 'spec.md')
+      const claimed = `---\ntitle: S\nclaimed_by: run-1\nclaimed_at: ${new Date().toISOString()}\n---\n`
+      writeFileSync(item, claimed)
+      const move = (force?: boolean) =>
+        moveWorkItem({ roots: [repo], pathOrQuery: item, toStageId: 'completed', force })
+      expect(move()).toMatchObject({ ok: false, error: expect.stringContaining('run-1') })
+
+      writeFileSync(join(done, 'spec.md'), 'the finished one\n')
+      expect(move(true)).toMatchObject({ ok: false, error: expect.stringContaining('already has') })
+      expect(readFileSync(join(done, 'spec.md'), 'utf8')).toBe('the finished one\n')
+
+      rmSync(join(done, 'spec.md'))
+      expect(move(true).ok).toBe(true)
+    } finally {
+      delete process.env.ORCA_XOS_HOME
+      rmSync(repo, { recursive: true, force: true })
+    }
+  })
+})

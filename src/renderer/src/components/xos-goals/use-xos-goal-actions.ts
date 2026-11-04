@@ -9,6 +9,7 @@ import type {
   XosGoalMutation,
   XosProject
 } from '../../../../shared/xos-goals-types'
+import { XOS_NOT_ADOPTED_PREFIX } from '../../../../shared/xos-goals-types'
 import type { XosGoalActions } from './XosGoalViewerParts'
 
 export function useXosGoalActions(
@@ -57,12 +58,24 @@ export function useXosGoalActions(
 
   return useMemo<XosGoalActions>(() => {
     const hash = board?.crontabHash ?? ''
-    const cron: XosGoalActions['cron'] = (mutation, busyKey) =>
-      api
-        ? report(busyKey ?? mutation.kind, () =>
-            api.mutateCron({ ...mutation, crontabHash: hash } as XosCronMutation)
-          )
-        : Promise.resolve(false)
+    const cron: XosGoalActions['cron'] = async (mutation, busyKey) => {
+      if (!api) {
+        return false
+      }
+      const send = (adopt: boolean): Promise<XosActionResult> =>
+        api.mutateCron({ ...mutation, crontabHash: hash, adopt } as XosCronMutation)
+      const result = await send(false)
+      if (!result.ok && result.error.startsWith(XOS_NOT_ADOPTED_PREFIX)) {
+        toast.warning(result.error, {
+          action: {
+            label: 'Adopt and continue',
+            onClick: () => void report(busyKey ?? mutation.kind, () => send(true))
+          }
+        })
+        return false
+      }
+      return report(busyKey ?? mutation.kind, () => Promise.resolve(result))
+    }
     return {
       busy,
       cron,

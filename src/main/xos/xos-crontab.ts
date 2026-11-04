@@ -3,26 +3,20 @@
 // backup, refused when the crontab changed since the board read it, and recorded in the audit log.
 import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { parseCrontab, type CrontabEntry } from '../automations/external-crontab-jobs'
 import { nextAutomationOccurrenceAfter } from '../../shared/automation-schedule-occurrences'
 import type { XosCronJob } from '../../shared/xos-goals-types'
+import { guardCronWrite } from './xos-crontab-adoption'
+import { xosHome } from './xos-home'
+
+export { xosHome }
 
 export const PAUSED_MARKER = '#orca-xos-paused# '
+/** Lines the operator paused by hand for the migration; visible, never bulk-resumed (C2). */
+const MIGRATION_PAUSE = /^#\s*PAUSED FOR ORCA MIGRATION [\d-]+:\s*/
 const BACKUP_KEEP = 50
-
-export function xosHome(): string {
-  if (process.env.ORCA_XOS_HOME) {
-    return process.env.ORCA_XOS_HOME
-  }
-  // Upstream tests drive the dispatch hooks too; they must never write to the real ~/.orca-xos.
-  if (process.env.VITEST) {
-    return join(tmpdir(), `orca-xos-vitest-${process.pid}`)
-  }
-  return join(homedir(), '.orca-xos')
-}
 
 async function run(
   program: string,
@@ -43,19 +37,37 @@ async function run(
   }
 }
 
+/** Throws when unreadable: an unread table must never look like an empty one (M13). */
 export async function readCrontabText(): Promise<string> {
   const result = await run('crontab', ['-l'])
+  if (result.code === 0) {
+    return result.stdout
+  }
   // `crontab -l` exits non-zero with "no crontab for <user>" when none is installed.
-  return result.code === 0 ? result.stdout : ''
+  if (/no crontab for/i.test(result.stderr)) {
+    return ''
+  }
+  throw new Error(`Could not read the crontab: ${result.stderr.trim() || `exit ${result.code}`}`)
 }
 
 export function hashCrontab(text: string): string {
   return createHash('sha256').update(text).digest('hex')
 }
 
+export type XosCronPausedBy = 'orca' | 'migration'
+
 export type ParsedCronLine = CrontabEntry & {
   paused: boolean
+  pausedBy: XosCronPausedBy | null
   lineIndex: number
+}
+
+function pauseOf(line: string): { by: XosCronPausedBy; body: string } | null {
+  if (line.startsWith(PAUSED_MARKER)) {
+    return { by: 'orca', body: line.slice(PAUSED_MARKER.length) }
+  }
+  const migration = MIGRATION_PAUSE.exec(line)
+  return migration ? { by: 'migration', body: line.slice(migration[0].length) } : null
 }
 
 /** Parses active and XOS-paused lines; ids are the same in both states. */
@@ -63,14 +75,14 @@ export function parseCrontabWithPaused(text: string): ParsedCronLine[] {
   const lines = text.split('\n')
   const out: ParsedCronLine[] = []
   lines.forEach((line, lineIndex) => {
-    const paused = line.startsWith(PAUSED_MARKER)
-    const body = paused ? line.slice(PAUSED_MARKER.length) : line
+    const pause = pauseOf(line)
+    const body = pause?.body ?? line
     if (!body.trim() || body.trim().startsWith('#')) {
       return
     }
     const [entry] = parseCrontab(body)
     if (entry) {
-      out.push({ ...entry, paused, lineIndex })
+      out.push({ ...entry, paused: pause !== null, pausedBy: pause?.by ?? null, lineIndex })
     }
   })
   // Section labels come from comments above a line; keep parseCrontab's for active lines.
@@ -128,6 +140,7 @@ export function toCronJob(
     goal,
     runner,
     paused: entry.paused,
+    pausedBy: entry.pausedBy,
     nextRunAt: entry.paused ? null : nextRunAt(entry, now)
   }
 }
@@ -172,7 +185,12 @@ export async function rewriteCrontab(args: {
   edit: (text: string) => { next: string; changed: string[] } | { error: string }
   audit: Record<string, unknown>
 }): Promise<CrontabWriteResult> {
-  const text = await readCrontabText()
+  let text: string
+  try {
+    text = await readCrontabText()
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
   if (hashCrontab(text) !== args.expectedHash) {
     return {
       ok: false,
@@ -208,6 +226,10 @@ export function setCronLinesPaused(args: {
   paused: boolean
   expectedHash: string
   reason: string
+  /** The operator adopts unmanaged lines by doing this. */
+  adopt?: boolean
+  /** Only a resume aimed at one line may undo a manual migration pause (C2). */
+  includeMigrationPaused?: boolean
 }): Promise<CrontabWriteResult> {
   return rewriteCrontab({
     expectedHash: args.expectedHash,
@@ -215,15 +237,35 @@ export function setCronLinesPaused(args: {
     edit: (text) => {
       const lines = text.split('\n')
       const targets = parseCrontabWithPaused(text).filter(
-        (entry) => args.ids.has(entry.id) && entry.paused !== args.paused
+        (entry) =>
+          args.ids.has(entry.id) &&
+          entry.paused !== args.paused &&
+          (entry.pausedBy !== 'migration' || args.includeMigrationPaused === true)
       )
+      const refused = guardCronWrite({ lines, targets, adopt: args.adopt === true })
+      if (refused) {
+        return { error: refused }
+      }
       for (const entry of targets) {
         const line = lines[entry.lineIndex]
         lines[entry.lineIndex] = args.paused
           ? `${PAUSED_MARKER}${line}`
-          : line.slice(PAUSED_MARKER.length)
+          : (pauseOf(line)?.body ?? line)
+      }
+      if (targets.some((entry) => entry.pausedBy === 'migration')) {
+        restoreMigrationEnvLines(lines)
       }
       return { next: lines.join('\n'), changed: targets.map((entry) => entry.command) }
+    }
+  })
+}
+
+/** A job back from a migration pause needs the CRON_TZ-style lines paused with it. */
+function restoreMigrationEnvLines(lines: string[]): void {
+  lines.forEach((line, index) => {
+    const pause = pauseOf(line)
+    if (pause?.by === 'migration' && /^[A-Za-z_][A-Za-z0-9_]*=/.test(pause.body.trim())) {
+      lines[index] = pause.body
     }
   })
 }

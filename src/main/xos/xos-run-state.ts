@@ -267,6 +267,26 @@ async function wakeWaiters(): Promise<void> {
   syncSweepTimer()
 }
 
+/** `orca goals stop`, for a goal running through its automation. */
+export async function xosStopGoalAutomationRun(repoRoot: string, goal: string): Promise<boolean> {
+  const match = Array.from(held).find(
+    ([, entry]) => entry.goal?.repoRoot === repoRoot && entry.goal.goal === goal
+  )
+  const run = match && host?.findRun(match[1].automationId, match[0])
+  if (!match || !host || !run) {
+    return false
+  }
+  await host.closeRunTerminal(run).catch((error) => {
+    console.warn('[xos] could not close a stopped run terminal', error)
+  })
+  await host.markDispatchResult({
+    runId: match[0],
+    status: 'dispatch_failed',
+    error: 'Stopped by the operator.'
+  })
+  return true
+}
+
 async function timeOut(automationId: string, runId: string, minutes: number): Promise<void> {
   const run = host?.findRun(automationId, runId)
   if (!host || !run || isFinalAutomationRunStatus(run.status)) {

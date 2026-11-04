@@ -1,7 +1,12 @@
 // XOS fork: Stage B declared queue parser (`queues:` frontmatter in GOAL.md + legacy queue map fallback, §3g.1).
 import { basename, join } from 'node:path'
 import { isDirectory } from './xos-goal-files'
-import { projectHomeDir, projectItemsDir, resolveStageDirs } from './xos-project-home'
+import {
+  projectHomeDir,
+  projectItemsDir,
+  resolveGoalDir,
+  resolveStageDirs
+} from './xos-project-home'
 import { LEGACY_ITEM_TYPES } from './xos-queue-map'
 
 export type XosDeclaredQueueIn = {
@@ -13,6 +18,8 @@ export type XosDeclaredQueueIn = {
   readyValue?: string
   matchKey?: string
   matchValue?: string
+  /** `ready_when: count >= N`: below this the queue doesn't count as having work. */
+  minCount?: number
 }
 
 export type XosDeclaredQueueOut = {
@@ -20,6 +27,9 @@ export type XosDeclaredQueueOut = {
   paths: string[]
   typeId?: string
   stageId?: string
+  /** Only these items count toward the floor and ceiling (`match: builder.ready == true`). */
+  matchKey?: string
+  matchValue?: string
   floor?: number
   ceiling?: number
   hardCap?: number
@@ -32,24 +42,41 @@ export type XosDeclaredQueues = {
   maxRunsPerDay: number | null
 }
 
+/** `a.b == true` (the plan), `a.b: true`, or a bare `a.b`. */
 function parseKeyExpr(expr: unknown): { key?: string; value?: string } {
   if (typeof expr !== 'string' || !expr.trim()) {
     return {}
   }
-  const idx = expr.indexOf(':')
-  return idx === -1
-    ? { key: expr.trim(), value: 'true' }
-    : {
-        key: expr.slice(0, idx).trim(),
-        value: expr
-          .slice(idx + 1)
-          .trim()
-          .replace(/^["']|["']$/g, '')
-      }
+  const match = /^([^:=\s]+)\s*(?:==|:)\s*(.+)$/.exec(expr.trim())
+  return match
+    ? { key: match[1], value: match[2].trim().replace(/^["']|["']$/g, '') }
+    : { key: expr.trim(), value: 'true' }
+}
+
+/** `count >= 3`: a queue-level threshold, not a test on each item. */
+function parseMinCount(expr: unknown): number | undefined {
+  const match = typeof expr === 'string' ? /^count\s*>=\s*(\d+)$/.exec(expr.trim()) : null
+  return match ? Number(match[1]) : undefined
+}
+
+/** `inbox/{a,b}/` is the plan's shorthand for two buckets. */
+function expandRejects(value: unknown): string[] {
+  const entries = Array.isArray(value) ? value : [value]
+  return entries.flatMap((entry) => {
+    const path = typeof entry === 'string' ? entry : isRecord(entry) ? entry.path : null
+    if (typeof path !== 'string' || !path) {
+      return []
+    }
+    const brace = /^(.*)\{([^}]+)\}(.*)$/.exec(path)
+    return brace
+      ? brace[2].split(',').map((name) => `${brace[1]}${name.trim()}${brace[3]}`)
+      : [path]
+  })
 }
 
 function resolveCustomQueueDirs(
   repoRoot: string,
+  goal: string,
   entry: { path?: string; paths?: string[]; typeId?: string; stageId?: string }
 ): string[] {
   if (entry.typeId && entry.stageId) {
@@ -66,10 +93,11 @@ function resolveCustomQueueDirs(
   const rawPaths = entry.paths ?? (entry.path ? [entry.path] : [])
   return rawPaths
     .map((rel) => {
-      const inHome = join(projectHomeDir(repoRoot), rel)
-      return isDirectory(inHome) ? inHome : join(repoRoot, rel)
+      // Goal-private folders first (§3g.1), then the project home, then the repo during migration.
+      const bases = [resolveGoalDir(repoRoot, goal), projectHomeDir(repoRoot), repoRoot]
+      return bases.map((base) => join(base, rel.replace(/\/+$/, ''))).find(isDirectory)
     })
-    .filter(isDirectory)
+    .filter((dir): dir is string => dir !== undefined)
 }
 
 function asObjList(value: unknown): Record<string, unknown>[] {
@@ -95,14 +123,17 @@ export function resolveGoalDeclaredQueues(
       const pathStr = typeof item.path === 'string' ? item.path : ''
       const typeId = typeof item.type === 'string' ? item.type : undefined
       const stageId = typeof item.stage === 'string' ? item.stage : undefined
-      const ready = parseKeyExpr(item.ready_when ?? item.readyKey)
+      const readyExpr = item.ready_when ?? item.readyKey
+      const minCount = parseMinCount(readyExpr)
+      const ready = minCount === undefined ? parseKeyExpr(readyExpr) : {}
       const match = parseKeyExpr(item.match)
       return {
         label:
           (typeof item.label === 'string' && item.label) || stageId || basename(pathStr) || 'input',
-        paths: resolveCustomQueueDirs(repoRoot, { path: pathStr, typeId, stageId }),
+        paths: resolveCustomQueueDirs(repoRoot, goal, { path: pathStr, typeId, stageId }),
         typeId,
         stageId,
+        ...(minCount !== undefined ? { minCount } : {}),
         readyKey: ready.key,
         readyValue: ready.value,
         matchKey: match.key,
@@ -116,25 +147,24 @@ export function resolveGoalDeclaredQueues(
       const ceiling = Number(item.ceiling)
       const hardCap = Number(item.hard_cap ?? item.hardCap)
       const floor = Number(item.floor)
+      const match = parseKeyExpr(item.match)
       return {
         label:
           (typeof item.label === 'string' && item.label) ||
           stageId ||
           basename(pathStr) ||
           'output',
-        paths: resolveCustomQueueDirs(repoRoot, { path: pathStr, typeId, stageId }),
+        paths: resolveCustomQueueDirs(repoRoot, goal, { path: pathStr, typeId, stageId }),
         typeId,
         stageId,
+        matchKey: match.key,
+        matchValue: match.value,
         ...(Number.isFinite(floor) && floor > 0 ? { floor } : {}),
         ...(Number.isFinite(ceiling) && ceiling > 0 ? { ceiling } : {}),
         ...(Number.isFinite(hardCap) && hardCap > 0 ? { hardCap } : {})
       }
     })
-    const rejects = (Array.isArray(rawQueues.rejects) ? rawQueues.rejects : [])
-      .map((r) =>
-        typeof r === 'string' ? r : isRecord(r) && typeof r.path === 'string' ? r.path : ''
-      )
-      .filter(Boolean)
+    const rejects = expandRejects(rawQueues.rejects)
     return {
       in: inQueues,
       out: outQueues,

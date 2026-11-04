@@ -82,6 +82,7 @@ describe('setCronLinesPaused', () => {
       entry.command.includes('run-goal-cron')
     )!
     const paused = await setCronLinesPaused({
+      adopt: true,
       ids: new Set([goal.id]),
       paused: true,
       expectedHash: hashCrontab(CRONTAB),
@@ -93,6 +94,7 @@ describe('setCronLinesPaused', () => {
     expect(afterPause).toContain('CRON_TZ=America/Vancouver\n# content loop\n')
 
     const resumed = await setCronLinesPaused({
+      adopt: true,
       ids: new Set([goal.id]),
       paused: false,
       expectedHash: hashCrontab(afterPause),
@@ -109,6 +111,7 @@ describe('setCronLinesPaused', () => {
 
   it('refuses to write when the crontab changed since it was read', async () => {
     const result = await setCronLinesPaused({
+      adopt: true,
       ids: new Set(parseCrontabWithPaused(CRONTAB).map((entry) => entry.id)),
       paused: true,
       expectedHash: hashCrontab('something older'),
@@ -116,5 +119,97 @@ describe('setCronLinesPaused', () => {
     })
     expect(result.ok).toBe(false)
     expect(await readCrontabText()).toBe(CRONTAB)
+  })
+
+  it('refuses unmanaged lines until the operator adopts them, then remembers (M13)', async () => {
+    const goal = parseCrontabWithPaused(CRONTAB).find((entry) =>
+      entry.command.includes('run-goal-cron')
+    )!
+    const refused = await setCronLinesPaused({
+      ids: new Set([goal.id]),
+      paused: true,
+      expectedHash: hashCrontab(CRONTAB),
+      reason: 'test'
+    })
+    expect(refused).toMatchObject({ ok: false, error: expect.stringMatching(/^Not adopted:/) })
+    expect(await readCrontabText()).toBe(CRONTAB)
+
+    await setCronLinesPaused({
+      ids: new Set([goal.id]),
+      paused: true,
+      expectedHash: hashCrontab(CRONTAB),
+      reason: 'test',
+      adopt: true
+    })
+    const again = await setCronLinesPaused({
+      ids: new Set([goal.id]),
+      paused: false,
+      expectedHash: hashCrontab(await readCrontabText()),
+      reason: 'test'
+    })
+    expect(again.ok).toBe(true)
+  })
+
+  it('never treats an unreadable crontab as empty (M13)', async () => {
+    writeFileSync(join(dir, 'crontab'), '#!/bin/sh\necho "cron daemon gone" >&2\nexit 1\n')
+    await expect(readCrontabText()).rejects.toThrow(/cron daemon gone/)
+    const result = await setCronLinesPaused({
+      ids: new Set(['x']),
+      paused: true,
+      expectedHash: hashCrontab(''),
+      reason: 'test',
+      adopt: true
+    })
+    expect(result).toMatchObject({ ok: false, error: expect.stringContaining('cron daemon gone') })
+    writeFileSync(join(dir, 'crontab'), '#!/bin/sh\necho "no crontab for me" >&2\nexit 1\n')
+    expect(await readCrontabText()).toBe('')
+  })
+
+  describe('a manual migration pause (C2)', () => {
+    const MARK = '# PAUSED FOR ORCA MIGRATION 2026-11-04: '
+    const table = [
+      `${MARK}CRON_TZ=America/Vancouver`,
+      `${MARK}15 2 * * * cd /repo && ./backup.sh`,
+      `${MARK}30 3 * * * cd /repo && ./automations/bin/run-goal-cron.sh writer codex`,
+      ''
+    ].join('\n')
+
+    beforeEach(() => writeFileSync(join(dir, 'table'), table))
+
+    it('shows the jobs as paused, and the directive as no job', () => {
+      const lines = parseCrontabWithPaused(table)
+      expect(lines).toHaveLength(2)
+      expect(lines.every((line) => line.paused && line.pausedBy === 'migration')).toBe(true)
+    })
+
+    it('survives a bulk resume untouched', async () => {
+      const ids = new Set(parseCrontabWithPaused(table).map((line) => line.id))
+      const result = await setCronLinesPaused({
+        ids,
+        paused: false,
+        expectedHash: hashCrontab(table),
+        reason: 'test',
+        adopt: true
+      })
+      expect(result).toEqual({ ok: true, changed: 0 })
+      expect(await readCrontabText()).toBe(table)
+    })
+
+    it('restores one line, with its timezone, on an explicit resume', async () => {
+      const [backup] = parseCrontabWithPaused(table)
+      const result = await setCronLinesPaused({
+        ids: new Set([backup.id]),
+        paused: false,
+        expectedHash: hashCrontab(table),
+        reason: 'test',
+        adopt: true,
+        includeMigrationPaused: true
+      })
+      expect(result).toEqual({ ok: true, changed: 1 })
+      const after = await readCrontabText()
+      expect(after).toContain('\n15 2 * * * cd /repo && ./backup.sh\n')
+      expect(after.startsWith('CRON_TZ=America/Vancouver\n')).toBe(true)
+      expect(after).toContain(`${MARK}30 3 * * *`)
+    })
   })
 })

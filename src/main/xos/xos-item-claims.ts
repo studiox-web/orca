@@ -207,6 +207,9 @@ export function transitionWorkItem(args: {
   })
   mkdirSync(args.toDir, { recursive: true })
   const destPath = join(args.toDir, basename(args.filePath))
+  if (destPath !== args.filePath && existsSync(destPath)) {
+    throw new Error(`${basename(args.toDir)} already has ${basename(destPath)}.`)
+  }
   writeFileSync(args.filePath, nextText, 'utf8')
   if (destPath !== args.filePath) {
     renameSync(args.filePath, destPath)

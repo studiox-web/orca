@@ -39,6 +39,7 @@ export {
   registerXosAutomationHost,
   xosGrantInheritedLane,
   xosReleaseRun,
+  xosStopGoalAutomationRun,
   type XosAutomationHost
 } from './xos-run-state'
 

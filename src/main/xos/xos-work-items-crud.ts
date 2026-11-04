@@ -6,6 +6,7 @@ import type { XosItemActionResult } from '../../shared/xos-items-types'
 import { audit } from './xos-crontab'
 import { isDirectory, parseFrontmatter } from './xos-goal-files'
 import {
+  isItemClaimActive,
   patchMarkdownFrontmatter,
   recordTransitionEvent,
   transitionWorkItem
@@ -173,11 +174,17 @@ export function moveWorkItem(args: {
   toStageId: string
   bucket?: string | null
   goal?: string
+  /** Move even though a run or session has claimed it. */
+  force?: boolean
   nowMs?: number
 }): XosItemActionResult {
   const located = locateWorkItem(args.roots, args.pathOrQuery)
   if (!located) {
     return { ok: false, error: `Work item not found: ${args.pathOrQuery}` }
+  }
+  const claim = parseFrontmatter(readFileSync(located.item.path, 'utf8'))
+  if (!args.force && isItemClaimActive(claim, args.nowMs ?? Date.now())) {
+    return { ok: false, error: `Claimed by ${String(claim.claimed_by)}; it can't move yet.` }
   }
   const toStage = located.type.stages.find((s) => s.id === args.toStageId)
   if (!toStage) {
@@ -189,6 +196,10 @@ export function moveWorkItem(args: {
   const bucket =
     args.bucket ?? (toStage.kind === 'rejected' && toStage.paths.length > 1 ? 'not-now' : null)
   const toDir = resolveStageTargetDir(located.repoRoot, located.type, toStage, bucket)
+  const destination = join(toDir, basename(located.item.path))
+  if (destination !== located.item.path && existsSync(destination)) {
+    return { ok: false, error: `${toStage.label} already has ${basename(destination)}.` }
+  }
   if (bucket && toStage.kind === 'rejected') {
     const raw = readFileSync(located.item.path, 'utf8')
     writeFileSync(

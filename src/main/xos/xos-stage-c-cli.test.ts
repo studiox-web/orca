@@ -6,13 +6,17 @@ import { XOS_GOALS_HANDLERS } from '../../cli/handlers/xos-goals'
 import { XOS_ITEMS_HANDLERS } from '../../cli/handlers/xos-items'
 import type { CommandHandler, HandlerContext } from '../../cli/dispatch'
 
+const runtimeCall = vi.fn(async (_method: string, _params?: unknown) => ({
+  result: { ok: true, message: 'Started.' }
+}))
+
 function makeCtx(cwd: string, flagObj: Record<string, string | boolean> = {}): HandlerContext {
   return {
     cwd,
     json: true,
     flags: new Map(Object.entries(flagObj)),
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: local XOS CLI handlers do not use the RPC client.
-    client: {} as HandlerContext['client']
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handlers only use call().
+    client: { call: runtimeCall } as unknown as HandlerContext['client']
   }
 }
 
@@ -137,22 +141,28 @@ describe('Stage C CLI handlers (orca goals, items, usage, models)', () => {
     expect(shown.goal).toBe('seo-blog-post')
     expect(shown.inbox).toHaveLength(1)
 
-    const replyRun = await runCliJson<{ ok: boolean; mode: string; openInboxCount: number }>(
+    // Runs belong to the Orca that owns locks and receipts: the CLI asks it, and writes nothing.
+    const replyRun = await runCliJson<{ ok: boolean; goal: string }>(
       XOS_GOALS_HANDLERS['goals reply'],
       repoRoot,
       { goal: 'seo-blog-post' }
     )
-    expect(replyRun.ok).toBe(true)
-    expect(replyRun.mode).toBe('reply')
-    expect(replyRun.openInboxCount).toBe(1)
-
-    const normalRun = await runCliJson<{ ok: boolean; mode: string }>(
-      XOS_GOALS_HANDLERS['goals run'],
-      repoRoot,
-      { goal: 'seo-blog-post', message: 'Focus on beginners' }
+    expect(replyRun).toMatchObject({ ok: true, goal: 'seo-blog-post' })
+    expect(runtimeCall).toHaveBeenLastCalledWith(
+      'xos.goal.run',
+      expect.objectContaining({ repoRoot, goal: 'seo-blog-post', mode: 'reply' })
     )
-    expect(normalRun.ok).toBe(true)
-    expect(normalRun.mode).toBe('normal')
+    expect(shown.inbox.every((message) => message.status === 'open')).toBe(true)
+
+    await runCliJson(XOS_GOALS_HANDLERS['goals run'], repoRoot, {
+      goal: 'seo-blog-post',
+      message: 'Focus on beginners',
+      force: true
+    })
+    expect(runtimeCall).toHaveBeenLastCalledWith(
+      'xos.goal.run',
+      expect.objectContaining({ mode: 'normal', message: 'Focus on beginners', force: true })
+    )
 
     const archived = await runCliJson<{ ok: boolean; archived: boolean }>(
       XOS_GOALS_HANDLERS['goals archive'],

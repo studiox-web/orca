@@ -265,9 +265,11 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
   'automations run': async ({ flags, client, json }) => {
     const id = getRequiredStringFlag(flags, 'id')
     const { owner: expectedOwner } = await resolveAutomationMutationState(client, id)
+    const inheritedLane = process.env.CASCADE_ACTIVE_LOCK_LANE
     const result = await client.call<{ run: AutomationRun }>('automation.runNow', {
       id,
-      ...(expectedOwner ? { expectedOwner } : {})
+      ...(expectedOwner ? { expectedOwner } : {}),
+      ...(inheritedLane ? { inheritedLane } : {})
     })
     const environment = getOptionalStringFlag(flags, 'environment') ?? process.env.ORCA_ENVIRONMENT
     const preserveConnectionSettings = Boolean(

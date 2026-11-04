@@ -149,7 +149,8 @@ export const XOS_ITEMS_HANDLERS: Record<string, CommandHandler> = {
       pathOrQuery: located?.item.path ?? id,
       toStageId,
       bucket: getOptionalStringFlag(flags, 'reason'),
-      goal: getOptionalStringFlag(flags, 'goal')
+      goal: getOptionalStringFlag(flags, 'goal'),
+      force: flags.get('force') === true
     })
     if (!res.ok) {
       throw new RuntimeClientError('invalid_argument', res.error)
@@ -193,6 +194,17 @@ export const XOS_ITEMS_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', res.error)
     }
     printOut(json, { ...res, id: basename(res.path, '.md') }, res.message)
+  },
+
+  'usage limits': async ({ client, json }) => {
+    const { result } = await client.call<
+      { agent: string; known: boolean; exhausted: boolean; note: string }[]
+    >('xos.usage.limits', {})
+    printOut(
+      json,
+      { limits: result },
+      result.map((row) => `${row.agent}: ${row.known ? row.note : 'unknown'}`).join('\n')
+    )
   },
 
   'usage summary': async ({ flags, cwd, json }) => {

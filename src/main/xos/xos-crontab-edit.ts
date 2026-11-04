@@ -8,8 +8,10 @@ import {
   rewriteCrontab,
   type CrontabWriteResult
 } from './xos-crontab'
+import { guardCronWrite, MANAGED_COMMENT } from './xos-crontab-adoption'
 
-export const MANAGED_COMMENT = '# orca-xos managed'
+export { MANAGED_COMMENT }
+
 const GOAL_LINE =
   /run-goal(?:-cron)?\.sh\s+[A-Za-z0-9_-]+(?:\s+(?:codex|claude|gemini|opencode|agy))?/
 const RUNNERS = new Set(['codex', 'claude', 'gemini', 'opencode', 'agy'])
@@ -54,6 +56,7 @@ export function editCronLine(args: {
   command: string
   expectedHash: string
   reason: string
+  adopt?: boolean
 }): Promise<CrontabWriteResult> {
   const line = validateCronLine(args.schedule, args.command)
   if (typeof line !== 'string') {
@@ -68,6 +71,10 @@ export function editCronLine(args: {
         return { error: 'That crontab line no longer exists. Refresh the board.' }
       }
       const lines = text.split('\n')
+      const refused = guardCronWrite({ lines, targets: [entry], adopt: args.adopt === true })
+      if (refused) {
+        return { error: refused }
+      }
       const before = lines[entry.lineIndex]
       // A paused line stays paused after an edit.
       const after = entry.paused ? `${PAUSED_MARKER}${line}` : line
@@ -85,6 +92,7 @@ export function removeCronLines(args: {
   ids: ReadonlySet<string>
   expectedHash: string
   reason: string
+  adopt?: boolean
 }): Promise<CrontabWriteResult> {
   return rewriteCrontab({
     expectedHash: args.expectedHash,
@@ -92,6 +100,10 @@ export function removeCronLines(args: {
     edit: (text) => {
       const lines = text.split('\n')
       const targets = parseCrontabWithPaused(text).filter((entry) => args.ids.has(entry.id))
+      const refused = guardCronWrite({ lines, targets, adopt: args.adopt === true })
+      if (refused) {
+        return { error: refused }
+      }
       const drop = new Set<number>()
       for (const entry of targets) {
         drop.add(entry.lineIndex)

@@ -38,7 +38,7 @@ export const XOS_ITEMS_COMMAND_SPECS: CommandSpec[] = [
       'Move a work item to another stage (or reject into a reason bucket) and log transition',
     usage:
       'orca items move <id> --to-stage <stage> [--reason <bucket>] [--goal <goal>] [--project <project>] [--type <type>] [--stage <stage>] [--json]',
-    allowedFlags: [...ITEM_SCOPE_FLAGS, 'id', 'to-stage', 'reason', 'goal'],
+    allowedFlags: [...ITEM_SCOPE_FLAGS, 'id', 'to-stage', 'reason', 'goal', 'force'],
     positionalArgs: ['id'],
     examples: [
       'orca items move 2026-04-19-harmonic-filter --to-stage specs --json',
@@ -64,6 +64,13 @@ export const XOS_ITEMS_COMMAND_SPECS: CommandSpec[] = [
       'orca usage summary --days 7 --json',
       'orca usage summary --project djvibe.com --goal seo-blog-post --days 30 --json'
     ]
+  },
+  {
+    path: ['usage', 'limits'],
+    summary: 'Show live quota standing per agent, as Auto mode sees it',
+    usage: 'orca usage limits [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS],
+    examples: ['orca usage limits --json']
   },
   {
     path: ['models', 'list'],

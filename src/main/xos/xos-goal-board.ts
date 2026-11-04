@@ -78,14 +78,19 @@ function discoverProjects(repos: XosRepoSource, cronLines: ParsedCronLine[]): Pr
 
 /** Goal projects (repos with automations/goals), without building the board. */
 export async function listGoalProjects(repos: XosRepoSource): Promise<ProjectCandidate[]> {
-  return discoverProjects(repos, parseCrontabWithPaused(await readCrontabText()))
+  const text = await readCrontabText().catch(() => '')
+  return discoverProjects(repos, parseCrontabWithPaused(text))
 }
 
 export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBoard> {
   const now = Date.now()
   const warnings: string[] = []
-  const crontabText = await readCrontabText()
-  const cronLines = parseCrontabWithPaused(crontabText)
+  // Unreadable is not empty: the hash stays unmatchable, so every crontab write refuses.
+  const crontabText = await readCrontabText().catch((error: unknown) => {
+    warnings.push(error instanceof Error ? error.message : String(error))
+    return null
+  })
+  const cronLines = parseCrontabWithPaused(crontabText ?? '')
   const running = await runningGoalJobs()
   const claimed = new Set<string>()
   const projects: XosProject[] = []
@@ -156,7 +161,7 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
 
   return {
     generatedAt: new Date(now).toISOString(),
-    crontabHash: hashCrontab(crontabText),
+    crontabHash: crontabText === null ? 'unreadable' : hashCrontab(crontabText),
     projects,
     otherJobs: cronLines
       .filter((line) => !claimed.has(line.id))

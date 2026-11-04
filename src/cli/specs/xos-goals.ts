@@ -1,5 +1,6 @@
 import type { CommandSpec } from '../args'
 import { LOCAL_COMMAND_FLAGS } from '../args'
+import { XOS_GOALS_OPS_COMMAND_SPECS } from './xos-goals-ops'
 
 const GOAL_SCOPE_FLAGS = [...LOCAL_COMMAND_FLAGS, 'project', 'area']
 
@@ -38,7 +39,7 @@ export const XOS_GOALS_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Assemble and trigger a manual, reply, or sidecar run for a goal',
     usage:
       'orca goals run <goal> [--mode normal|reply|sidecar:<name>] [--sidecar <name>] [--message <text>] [--agent <agent>] [--project <project>] [--area <area>] [--json]',
-    allowedFlags: [...GOAL_SCOPE_FLAGS, 'goal', 'mode', 'sidecar', 'message', 'agent'],
+    allowedFlags: [...GOAL_SCOPE_FLAGS, 'goal', 'mode', 'sidecar', 'message', 'agent', 'force'],
     positionalArgs: ['goal'],
     examples: [
       'orca goals run seo-blog-post --json',
@@ -126,7 +127,7 @@ export const XOS_GOALS_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Post an operator message into a goal’s inbox and optionally trigger a reply run',
     usage:
       'orca goals message <goal> --body <text> [--attach <path>...] [--run-now] [--project <project>] [--area <area>] [--json]',
-    allowedFlags: [...GOAL_SCOPE_FLAGS, 'goal', 'body', 'attach', 'run-now'],
+    allowedFlags: [...GOAL_SCOPE_FLAGS, 'goal', 'body', 'attach', 'run-now', 'from'],
     repeatableFlags: ['attach'],
     positionalArgs: ['goal'],
     examples: [
@@ -150,5 +151,6 @@ export const XOS_GOALS_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GOAL_SCOPE_FLAGS, 'goal', 'limit'],
     positionalArgs: ['goal'],
     examples: ['orca goals history seo-blog-post --limit 20 --json', 'orca goals history --json']
-  }
+  },
+  ...XOS_GOALS_OPS_COMMAND_SPECS
 ]

@@ -104,3 +104,16 @@ export function assessQuota(
     note: `${agent} ${long ? name : '5h'} ${Math.round(window.usedPercent)}% used${resetText(window, now)}`
   }
 }
+
+/** `orca usage limits`: each agent's standing as Auto mode sees it. */
+export function listAgentQuotas(): {
+  agent: string
+  known: boolean
+  exhausted: boolean
+  note: string
+}[] {
+  return Object.keys(PROVIDER).map((agent) => {
+    const { known, exhausted, note } = assessQuota(agent, null, 0)
+    return { agent, known, exhausted, note }
+  })
+}
