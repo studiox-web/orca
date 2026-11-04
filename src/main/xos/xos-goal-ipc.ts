@@ -16,6 +16,7 @@ import type {
 } from '../../shared/xos-goals-types'
 import { allJobs, buildXosGoalBoard, findProject, type XosRepoSource } from './xos-goal-board'
 import { registerXosGoalCrudHandlers } from './xos-goal-crud-ipc'
+import { registerXosStudioHandlers } from './xos-studio-ipc'
 import { registerXosWorkItemHandlers } from './xos-work-items-ipc'
 import { registerXosRuntimeHandlers } from './xos-runtime-ipc'
 import { registerXosTakeoverHandlers } from './xos-takeover-ipc'
@@ -157,6 +158,7 @@ async function runGoalNow(
 export function registerXosGoalHandlers(repos: XosRepoSource, runtime: OrcaRuntimeService): void {
   ipcMain.handle('xos:goals:getBoard', () => buildXosGoalBoard(repos))
   registerXosGoalCrudHandlers(repos)
+  registerXosStudioHandlers(repos)
   registerXosWorkItemHandlers(repos)
   registerXosRuntimeHandlers()
   registerXosTakeoverHandlers(repos, runtime)

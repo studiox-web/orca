@@ -23,5 +23,10 @@ export const xosGoalsApi: XosGoalsApi = {
   previewAuto: (args) => ipcRenderer.invoke('xos:runtime:previewAuto', args),
   liveTail: (args) => ipcRenderer.invoke('xos:goals:liveTail', args),
   continueOn: (args) => ipcRenderer.invoke('xos:goals:continueOn', args),
-  nextItem: (args) => ipcRenderer.invoke('xos:goals:nextItem', args)
+  nextItem: (args) => ipcRenderer.invoke('xos:goals:nextItem', args),
+  getPersonaStudio: (args) => ipcRenderer.invoke('xos:persona:studio', args),
+  mutatePersona: (args) => ipcRenderer.invoke('xos:persona:mutate', args),
+  personaImage: (args) => ipcRenderer.invoke('xos:persona:image', args),
+  getRollup: () => ipcRenderer.invoke('xos:portfolio:rollup'),
+  mutatePortfolio: (mutation) => ipcRenderer.invoke('xos:portfolio:mutate', mutation)
 }

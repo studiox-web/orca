@@ -3,6 +3,7 @@ import React, { useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
+  FileText,
   MessageSquare,
   Pause,
   Pencil,
@@ -267,5 +268,63 @@ export function GoalRunBar({
         {sidecar !== '__normal__' ? `Run ${sidecar}` : 'Send & run'}
       </Button>
     </form>
+  )
+}
+
+export function GoalLogsCollapsible({
+  item,
+  onOpenFile
+}: {
+  item: XosGoal
+  onOpenFile: (path: string) => void
+}): React.JSX.Element {
+  return (
+    <Collapsible title="Goal logs" summary={`${item.logs.length} recent`}>
+      <div className="grid gap-2 md:grid-cols-2">
+        {item.logs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No logs available.</p>
+        ) : (
+          item.logs.map((entry) => (
+            <button
+              key={entry.filename}
+              type="button"
+              onClick={() => onOpenFile(entry.path)}
+              className="flex w-full items-start gap-2 rounded-md border bg-muted/30 p-3 text-left text-sm transition-colors hover:bg-muted/60"
+            >
+              <FileText className="mt-0.5 size-4 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium">{entry.filename}</span>
+                <span className="block truncate text-muted-foreground">{entry.first_line}</span>
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    </Collapsible>
+  )
+}
+
+export function GoalContractCollapsible({ item }: { item: XosGoal }): React.JSX.Element {
+  return (
+    <Collapsible
+      title="Contract"
+      summary={item.viewer.lockLane ? `lane ${item.viewer.lockLane}` : 'no lane'}
+    >
+      <dl className="grid gap-2 text-sm md:grid-cols-2">
+        {[
+          ['Agents', item.viewer.agents.join(', ') || 'Unspecified'],
+          ['Lock lane', item.viewer.lockLane ?? 'None'],
+          ['Estimated runtime', item.viewer.estimatedRuntime ?? 'Unspecified'],
+          ['Status updated', formatTimestamp(item.viewer.statusUpdatedAt) ?? 'Unavailable'],
+          ['30-day models', item.viewer.usage30d.models.join(', ') || 'No token usage recorded'],
+          ['Goal folder', item.viewer.goalPath.replace(/\/GOAL\.md$/, '')]
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-md border bg-background/60 p-2">
+            <dt className="text-xs font-semibold text-muted-foreground">{label}</dt>
+            <dd className="break-words">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </Collapsible>
   )
 }

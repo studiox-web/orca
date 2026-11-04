@@ -6,7 +6,7 @@ import { FolderKanban } from 'lucide-react'
 import { XosGoalViewer } from './XosGoalViewer'
 import { XosOrgChartHeader } from './XosOrgChartHeader'
 import { XosOrgProjectBoard } from './XosOrgProjectBoard'
-import { PortfolioTiles, RunningStrip } from './XosPortfolio'
+import { PortfolioTiles, RunningStrip, XosPortfolioRollupView } from './XosPortfolio'
 import { PREFS_KEY, readPrefs, type Prefs } from './xos-org-prefs'
 import { useXosGoalActions } from './use-xos-goal-actions'
 import { useXosGoalBoard } from './use-xos-goal-board'
@@ -74,7 +74,10 @@ export function XosOrgChartPage({ onShowList }: { onShowList: () => void }): Rea
               crontab.
             </section>
           ) : (
-            <PortfolioTiles board={board} onSelect={selectProject} />
+            <>
+              <PortfolioTiles board={board} onSelect={selectProject} />
+              <XosPortfolioRollupView onSelect={selectProject} />
+            </>
           )
         ) : selected ? (
           <XosGoalViewer
