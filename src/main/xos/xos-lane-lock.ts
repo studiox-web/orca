@@ -3,10 +3,10 @@
 // same locks, so an Orca run and a crontab run in one lane never overlap during the migration.
 // Node has no flock, so each held lock is a small `flock … sh` helper in its own process group.
 // The helper also exits by itself when Orca's process is gone, so a crash never strands a lane.
-import { spawn, type ChildProcess } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import { xosHome } from './xos-crontab'
 
 /** flock's exit code when the lock is taken (`-E`), distinct from real errors. */
@@ -48,9 +48,11 @@ export function tryLock(file: string, waitSeconds = 0): Promise<HeldLock | null>
   const watch = `echo locked; while kill -0 ${process.pid} 2>/dev/null; do sleep 5; done`
   const mode = waitSeconds > 0 ? ['-w', String(waitSeconds)] : ['-n']
   return new Promise((resolve, reject) => {
-    let child: ChildProcess
+    let child: ReturnType<typeof spawnProcess>
     try {
-      child = spawn('flock', [...mode, '-E', String(BUSY_EXIT), file, 'sh', '-c', watch], {
+      child = spawnProcess({
+        program: 'flock',
+        args: [...mode, '-E', String(BUSY_EXIT), file, 'sh', '-c', watch],
         detached: true,
         stdio: ['ignore', 'pipe', 'ignore']
       })
@@ -101,14 +103,18 @@ export function tryLock(file: string, waitSeconds = 0): Promise<HeldLock | null>
 }
 
 /** Whether nobody holds the lock right now (a probe; it does not take the lock). */
-export function isLockFree(file: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (!existsSync(file)) {
-      resolve(true)
-      return
-    }
-    const child = spawn('flock', ['-n', '-E', String(BUSY_EXIT), file, 'true'], { stdio: 'ignore' })
-    child.on('error', () => resolve(false))
-    child.on('exit', (code) => resolve(code === 0))
-  })
+export async function isLockFree(file: string): Promise<boolean> {
+  if (!existsSync(file)) {
+    return true
+  }
+  try {
+    const result = await runProcess({
+      program: 'flock',
+      args: ['-n', '-E', String(BUSY_EXIT), file, 'true'],
+      stdio: 'ignore'
+    })
+    return result.code === 0
+  } catch {
+    return false
+  }
 }

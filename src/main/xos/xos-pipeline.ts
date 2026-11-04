@@ -235,11 +235,10 @@ function scanQueuePaths(paths: string[], readyKey?: string, readyValue?: string)
         }
         if (readyKey) {
           let cur: unknown = parseFrontmatter(readHead(full, ITEM_HEAD_BYTES))
-          for (const part of readyKey.split('.')) {
-            cur =
-              typeof cur === 'object' && cur !== null
-                ? (cur as Record<string, unknown>)[part]
-                : undefined
+          for (const p of readyKey.split('.')) {
+            const isRec = typeof cur === 'object' && cur !== null
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: safe record traversal
+            cur = isRec ? (cur as Record<string, unknown>)[p] : undefined
           }
           const ok =
             !readyValue || readyValue.toLowerCase() === 'true'

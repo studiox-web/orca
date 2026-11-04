@@ -1,6 +1,5 @@
 // XOS fork: the live model catalog for the automation editor's Model picker (plan §3.1). Reads the
 // same catalog service as the chat model picker, so new models appear when the CLI ships them.
-import { ipcMain } from 'electron'
 import type { XosModelList } from '../../shared/xos-runtime-types'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
@@ -45,12 +44,4 @@ export async function listXosModels(agent: string): Promise<XosModelList> {
       message: error instanceof Error ? error.message : String(error)
     }
   }
-}
-
-export function registerXosModelCatalogHandlers(): void {
-  ipcMain.handle('xos:models:list', (_event, args: { agent: string }) =>
-    typeof args?.agent === 'string'
-      ? listXosModels(args.agent)
-      : { status: 'unavailable', message: 'No agent given.' }
-  )
 }

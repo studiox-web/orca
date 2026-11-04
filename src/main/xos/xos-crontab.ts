@@ -1,11 +1,11 @@
 // XOS fork: legacy crontab lines as goal schedules, with guarded pause/resume.
 // Pausing comments a line out with a marker (never deletes it), every write is preceded by a
 // backup, refused when the crontab changed since the board read it, and recorded in the audit log.
-import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { appendFileSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { runProcess } from '@orca/process-host'
 import { parseCrontab, type CrontabEntry } from '../automations/external-crontab-jobs'
 import { nextAutomationOccurrenceAfter } from '../../shared/automation-schedule-occurrences'
 import type { XosCronJob } from '../../shared/xos-goals-types'
@@ -24,25 +24,23 @@ export function xosHome(): string {
   return join(homedir(), '.orca-xos')
 }
 
-function run(
+async function run(
   program: string,
   args: string[],
   input?: string
 ): Promise<{ code: number; stdout: string; stderr: string }> {
-  return new Promise((resolve) => {
-    const child = execFile(
+  try {
+    const result = await runProcess({
       program,
       args,
-      { timeout: 10_000, maxBuffer: 4 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        const code = error ? (typeof error.code === 'number' ? error.code : 1) : 0
-        resolve({ code, stdout: String(stdout), stderr: String(stderr) })
-      }
-    )
-    if (input !== undefined) {
-      child.stdin?.end(input)
-    }
-  })
+      input,
+      timeoutMs: 10_000,
+      maxOutputBytes: 4 * 1024 * 1024
+    })
+    return { code: result.code ?? 1, stdout: result.stdout, stderr: result.stderr }
+  } catch (error) {
+    return { code: 1, stdout: '', stderr: String(error) }
+  }
 }
 
 export async function readCrontabText(): Promise<string> {

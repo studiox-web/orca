@@ -71,7 +71,7 @@ describe('AutomationsPage external manager probes', () => {
 
     const sshProbes = probedOwners().filter((owner) => owner.selector.kind === 'ssh')
     expect(sshProbes).toEqual([])
-    expect(probedOwners()).toEqual([DESKTOP_SELF_OWNER])
+    expect([...new Set(probedOwners())]).toEqual([DESKTOP_SELF_OWNER])
   })
 
   it('asks the external-manager client to retain only the selected host', async () => {

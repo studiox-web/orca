@@ -1,7 +1,7 @@
 // XOS fork: Stage E GitHub Issues intake sync & completion closure (§3h.4).
 // Classifies external GitHub issues into local project-home items with `source: github#<number>`
 // and closes linked GitHub issues when their item reaches `completed/` (or `fixed/`).
-import { execFileSync } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { parseFrontmatter } from './xos-goal-files'
@@ -273,12 +273,10 @@ export function closeCompletedGitHubIssues(args: {
 }) {
   const nowIso = args.nowIso ?? new Date().toISOString()
   const itemsRoot = projectItemsDir(args.repoRoot)
-  const completedDirs = [
-    join(itemsRoot, 'feature', 'completed'),
-    join(itemsRoot, 'bug', 'fixed'),
-    join(args.repoRoot, 'docs', 'features', 'completed'),
-    join(args.repoRoot, 'docs', 'bugs', 'fixed')
-  ]
+  const completedDirs = ['feature/completed', 'bug/fixed'].flatMap((sub) => [
+    join(itemsRoot, sub),
+    join(args.repoRoot, 'docs', sub)
+  ])
   const closed: { issueNumber: number; item: string; path: string }[] = []
   const skipped: { issueNumber: number; path: string; reason: string }[] = []
   const closedSet = new Set<number>()
@@ -306,10 +304,11 @@ export function closeCompletedGitHubIssues(args: {
             args.closeIssue(issueNumber, file)
           } else {
             const msg = `Completed in ${basename(file, '.md')}.`
-            execFileSync('gh', ['issue', 'close', String(issueNumber), '--comment', msg], {
-              cwd: args.repoRoot,
-              stdio: 'ignore'
-            })
+            void runProcess({
+              program: 'gh',
+              args: ['issue', 'close', String(issueNumber), '--comment', msg],
+              cwd: args.repoRoot
+            }).catch(() => {})
           }
           const updated = raw.replace(/^---\n/, `---\ngithub_closed_at: ${nowIso}\n`)
           if (updated !== raw) {

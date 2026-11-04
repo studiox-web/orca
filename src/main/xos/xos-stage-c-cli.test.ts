@@ -40,6 +40,8 @@ describe('Stage C CLI handlers (orca goals, items, usage, models)', () => {
   const prevXosHome = process.env.ORCA_XOS_HOME
 
   beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-16T12:00:00.000Z'))
     root = mkdtempSync(join(tmpdir(), 'xos-stage-c-cli-'))
     process.env.ORCA_XOS_HOME = join(root, '.orca-xos')
     repoRoot = join(root, 'sample-app')
@@ -65,7 +67,7 @@ describe('Stage C CLI handlers (orca goals, items, usage, models)', () => {
     writeFileSync(
       join(repoRoot, 'automations/logs/token-usage.jsonl'),
       `${JSON.stringify({
-        ts: new Date().toISOString(),
+        ts: '2026-04-15T12:00:00.000Z',
         feature: 'seo-blog-post',
         model: 'claude-sonnet-4-6',
         actual_tokens: 12500,
@@ -76,6 +78,7 @@ describe('Stage C CLI handlers (orca goals, items, usage, models)', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     if (prevXosHome === undefined) {
       delete process.env.ORCA_XOS_HOME
     } else {

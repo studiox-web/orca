@@ -12,6 +12,7 @@ import {
   AUTOMATION_ORPHAN_ISSUES,
   type AutomationListParams
 } from '../../../../shared/automation-list-scope'
+import { EXTERNAL_AUTOMATION_PROVIDERS } from '../../../../shared/external-automation-scope'
 import {
   api,
   DESKTOP_SELF_OWNER,
@@ -124,7 +125,9 @@ describe('AutomationsPage list rendering', () => {
       owner: DESKTOP_SELF_OWNER,
       provider: 'openclaw'
     })
-    expect(api.automations.listExternalManagerForOwner).toHaveBeenCalledTimes(1)
+    expect(api.automations.listExternalManagerForOwner).toHaveBeenCalledTimes(
+      EXTERNAL_AUTOMATION_PROVIDERS.length
+    )
     expect(rows(container, 'external-row')).toEqual(['OpenClaw job'])
   })
 

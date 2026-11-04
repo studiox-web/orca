@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as crontabModule from './xos-crontab'
 import type * as goalProcessesModule from './xos-goal-processes'
 import { buildPortfolioRollup, DECK_PACKS } from './xos-portfolio-rollup'
@@ -113,7 +113,12 @@ function makeRollupRepo(): string {
   return repo
 }
 
+beforeEach(() => {
+  vi.setSystemTime(new Date('2026-04-15T12:00:00Z'))
+})
+
 afterEach(() => {
+  vi.useRealTimers()
   while (tempDirs.length > 0) {
     rmSync(tempDirs.pop()!, { recursive: true, force: true })
   }

@@ -1,11 +1,11 @@
 // XOS fork: Help → Check for Updates builds and installs the fork from the local `xos` checkout,
 // so updating needs no shell. Build runs xos/build.sh in the background; install quits Orca and a
 // detached helper runs xos/switch-to-fork.sh once every Orca window process has exited.
-import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, openSync, closeSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, Notification } from 'electron'
+import { runProcess, spawnProcess } from '@orca/process-host'
 import { xosHome } from './xos-crontab'
 import { XosUpdateWindow } from './xos-update-window'
 
@@ -27,12 +27,17 @@ function stateDir(): string {
   return dir
 }
 
-function git(args: string[]): Promise<string | null> {
-  return new Promise((resolve) => {
-    execFile('git', ['-C', repoDir(), ...args], { timeout: 15_000 }, (error, stdout) =>
-      resolve(error ? null : String(stdout).trim())
-    )
-  })
+async function git(args: string[]): Promise<string | null> {
+  try {
+    const res = await runProcess({
+      program: 'git',
+      args: ['-C', repoDir(), ...args],
+      timeoutMs: 15_000
+    })
+    return res.code === 0 ? res.stdout.trim() : null
+  } catch {
+    return null
+  }
 }
 
 /** The commit this build was made from, from the `<release>+xos.<sha>` version stamp. */
@@ -71,7 +76,9 @@ function runBuild(sha: string, logPath: string): Promise<{ ok: boolean; logPath:
   const startedAt = Date.now()
   const fd = openSync(logPath, 'a')
   return new Promise((resolve) => {
-    const child = spawn('/bin/bash', [join(repoDir(), 'xos', 'build.sh')], {
+    const child = spawnProcess({
+      program: '/bin/bash',
+      args: [join(repoDir(), 'xos', 'build.sh')],
       cwd: repoDir(),
       stdio: ['ignore', fd, fd]
     })
@@ -105,7 +112,9 @@ sleep 1
 exec "$1"
 `
   const fd = openSync(logPath, 'a')
-  const child = spawn('/bin/bash', ['-c', helper, 'xos-install', script], {
+  const child = spawnProcess({
+    program: '/bin/bash',
+    args: ['-c', helper, 'xos-install', script],
     detached: true,
     stdio: ['ignore', fd, fd]
   })

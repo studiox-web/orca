@@ -1,19 +1,24 @@
 // XOS fork: find goal runner processes (run-goal(-cron).sh) and which project checkout they run in.
-import { execFile } from 'node:child_process'
 import { readlinkSync } from 'node:fs'
 import { sep } from 'node:path'
+import { runProcess } from '@orca/process-host'
 import type { XosRunningJob } from '../../shared/xos-goals-types'
 
 export function within(path: string, root: string): boolean {
   return path === root || path.startsWith(root.endsWith(sep) ? root : `${root}${sep}`)
 }
 
-function listProcesses(): Promise<string> {
-  return new Promise((resolveOutput) => {
-    execFile('ps', ['-eo', 'pid=,etimes=,args='], { maxBuffer: 8 * 1024 * 1024 }, (error, stdout) =>
-      resolveOutput(error ? '' : String(stdout))
-    )
-  })
+async function listProcesses(): Promise<string> {
+  try {
+    const result = await runProcess({
+      program: 'ps',
+      args: ['-eo', 'pid=,etimes=,args='],
+      maxOutputBytes: 8 * 1024 * 1024
+    })
+    return result.stdout
+  } catch {
+    return ''
+  }
 }
 
 const RUNNING_SCRIPT =

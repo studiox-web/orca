@@ -236,5 +236,3883 @@
     "text": "This build does not support WebCodecs H.264 decoding.",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/automations/AutomationsPage.tsx",
+    "kind": "jsx-text",
+    "text": "Org chart",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "Feature Funnel Conversion",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "Inbox → Accepted → Ready → Completed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "in queue ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "cumulative (",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "% step ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "% total)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "Weekly Velocity &amp; Rejections",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "Last 4 weeks",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "F ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "B ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "Rejection Buckets",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "No rejected items recorded.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "Time in Queue &amp; Stuck-Item Alerts (&gt;",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "h)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "stuck",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "avg",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "h · med",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "h · max",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "No active queue items stuck past",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "h.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "h old (",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "Special Projects &amp; Pending Decisions (GD6 / OV5)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "DECISIONS.md",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "No pending human decisions or escalations queued.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-expression",
+    "text": "open inbox msg",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "Goal Token Efficiency (30d)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "runs ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAnalyticsSection.tsx",
+    "kind": "jsx-text",
+    "text": "% ok ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaControls.tsx",
+    "kind": "object-property:title",
+    "text": "everything in",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaControls.tsx",
+    "kind": "object-property:description",
+    "text": "crontab line",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaControls.tsx",
+    "kind": "object-property:description",
+    "text": ". A backup is taken first.",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaControls.tsx",
+    "kind": "jsx-text",
+    "text": "Pause",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaControls.tsx",
+    "kind": "jsx-expression",
+    "text": "area",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaControls.tsx",
+    "kind": "jsx-expression",
+    "text": "project",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaControls.tsx",
+    "kind": "jsx-text",
+    "text": "Resume",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaControls.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Edit",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Edit",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "New area",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Areas group goals under a manager on the org chart. Saved in this project&apos;s org.json; the previous version is kept in org-history/.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Title",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-text",
+    "text": "id:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Description",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Manager goal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Manager goal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-text",
+    "text": "No manager",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Click again: goals become unassigned",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Remove area",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Cancel",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Save",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAreaDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Create area",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAuditSheet.tsx",
+    "kind": "jsx-text",
+    "text": "History",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAuditSheet.tsx",
+    "kind": "jsx-text",
+    "text": "Board history",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAuditSheet.tsx",
+    "kind": "jsx-text",
+    "text": "Every change made from the board: schedules, goals and areas. Crontab and org.json writes list the backup taken before the change.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAuditSheet.tsx",
+    "kind": "jsx-text",
+    "text": "Loading…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAuditSheet.tsx",
+    "kind": "jsx-text",
+    "text": "No changes recorded yet.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAuditSheet.tsx",
+    "kind": "jsx-text",
+    "text": "Backup:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoCommitSection.tsx",
+    "kind": "jsx-text",
+    "text": "Commit changes after each run",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoCommitSection.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Copy paths from a legacy goal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoCommitSection.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "Copy owned paths from a crontab goal…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoCommitSection.tsx",
+    "kind": "jsx-text",
+    "text": "Owned paths (one per line, relative to the repo)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoCommitSection.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "automations/goals/content-writer content/drafts",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoCommitSection.tsx",
+    "kind": "jsx-text",
+    "text": "Commit message",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoCommitSection.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "chore(automation):",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoCommitSection.tsx",
+    "kind": "jsx-text",
+    "text": "Push",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoCommitSection.tsx",
+    "kind": "jsx-text",
+    "text": "After a finished run, only changes under these paths are committed, one commit at a time per project (shared with crontab goals). Other changes are left alone.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoCommitSection.tsx",
+    "kind": "jsx-expression",
+    "text": "This automation makes a new worktree per run, so nothing is committed for it.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "Edit tier map",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "No model lists yet.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "unassigned",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Tier of",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "not used",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "Auto: pick the model with the most quota left",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "Tier",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Tier",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "Effort",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Effort",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "Model default",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "Weekly reserve %",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Allowed agents",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "What would Auto pick now?",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutoModeSection.tsx",
+    "kind": "jsx-text",
+    "text": "Each run uses the allowed model of this tier whose quota has the most left before it resets; agents earlier in the list win ties. The rest of the ranking, then the fallbacks above, are tried on a usage limit.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Fallback agent",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-text",
+    "text": "Add fallback",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-text",
+    "text": "Models, fallbacks and limits",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-text",
+    "text": "Also on manual runs",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-text",
+    "text": "Fallback works for terminal runs. Chat runs keep using their agent&apos;s chat model.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-expression",
+    "text": "Auto ·",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-expression",
+    "text": "tier",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-text",
+    "text": "primary",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Move up",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Move down",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Remove fallback",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-text",
+    "text": "Add fallback model",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationFallbacks.tsx",
+    "kind": "jsx-text",
+    "text": "When a run stops on a usage limit, overload, sign-in problem or missing agent, Orca starts it again on the next model. Other failures never fall back.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "object-property:message",
+    "text": "Not available in this build.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-text",
+    "text": "Model",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-text",
+    "text": "This agent always runs its own default model.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Refresh the model list",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-text",
+    "text": "Fix the extra agent arguments below to pick a model here.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Model",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-text",
+    "text": "Agent default",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-expression",
+    "text": "(default)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-text",
+    "text": "Other model id…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "Model id, e.g. opus or gpt-5.5",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Reasoning effort",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-text",
+    "text": "Default effort",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationModelField.tsx",
+    "kind": "jsx-text",
+    "text": "You can still type a model id.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationRunLimits.tsx",
+    "kind": "jsx-text",
+    "text": "Lock lane",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationRunLimits.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "none",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationRunLimits.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Wait for lane (min)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationRunLimits.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "0 = skip",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationRunLimits.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Timeout (min)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationRunLimits.tsx",
+    "kind": "jsx-text",
+    "text": "Runs in one lane of a project never overlap, also with crontab goals in that lane (for example",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationRunLimits.tsx",
+    "kind": "jsx-text",
+    "text": "repo-mutating",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationRunLimits.tsx",
+    "kind": "jsx-text",
+    "text": "or",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationRunLimits.tsx",
+    "kind": "jsx-text",
+    "text": "content",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosAutomationRunLimits.tsx",
+    "kind": "jsx-text",
+    "text": "). A busy lane skips the run, or queues it when a wait is set. A run still going at its timeout is stopped.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosConfirmDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Type",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosConfirmDialog.tsx",
+    "kind": "jsx-text",
+    "text": "to confirm",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosConfirmDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Cancel",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "object-property:title",
+    "text": "Continue on…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "object-property:description",
+    "text": "Start a new session primed with the goal contract and the previous run context. Review the draft prompt and press Enter.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "object-property:title",
+    "text": "Work on it myself",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "object-property:description",
+    "text": "Claim the next ready item and open an interactive agent session on it, with the goal prompt prefilled.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "object-property:title",
+    "text": "Build now",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "object-property:description",
+    "text": "Claim the next ready item and run the goal on it autonomously in a fresh worktree, with live output below.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "object-property:message",
+    "text": "Not available in this build.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Agent",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Agent",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Model",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Model",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Agent default",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "(default)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Reasoning effort",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Reasoning effort",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Default",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Include the latest run (",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "unknown start",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-text",
+    "text": ") as takeover context",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-text",
+    "text": "No eligible ready item in the input queues right now.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "Extra instruction for this session (optional)…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Operator message",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosContinueOnDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Cancel",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Adds a crontab line (marked \"orca-xos managed\") that runs this goal like its siblings.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Saves straight to your crontab. A backup is taken first, and the save is refused if the crontab changed since the board loaded.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Schedule",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Command",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Runner",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Runner",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Click again to remove the line",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Remove line",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Cancel",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Add schedule",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosCronJobDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Save",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalCard.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "View",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalCard.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "goal:",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalCard.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Schedule paused",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalCard.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Schedule paused",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalCard.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "open inbox message",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalCard.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Running (pid",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalDrillIn.tsx",
+    "kind": "jsx-text",
+    "text": "Manager command",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalDrillIn.tsx",
+    "kind": "jsx-text",
+    "text": "The manager recommends this next move; run it with one click.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalDrillIn.tsx",
+    "kind": "jsx-text",
+    "text": "Run",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalDrillIn.tsx",
+    "kind": "jsx-text",
+    "text": "Drill in",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalDrillIn.tsx",
+    "kind": "jsx-text",
+    "text": "Continue on…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalDrillIn.tsx",
+    "kind": "jsx-text",
+    "text": "Work on it myself",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalDrillIn.tsx",
+    "kind": "jsx-text",
+    "text": "Build now",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalManage.tsx",
+    "kind": "object-property:title",
+    "text": "Archive",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalManage.tsx",
+    "kind": "object-property:description",
+    "text": "Moves automations/goals/",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalManage.tsx",
+    "kind": "object-property:description",
+    "text": "to goals/_archive and pauses its schedule. Its files and run history stay; restore it any time from Archived goals.",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalManage.tsx",
+    "kind": "jsx-text",
+    "text": "Business area",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalManage.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Business area",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalManage.tsx",
+    "kind": "jsx-text",
+    "text": "Unassigned",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalManage.tsx",
+    "kind": "jsx-text",
+    "text": "Add schedule",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalManage.tsx",
+    "kind": "jsx-text",
+    "text": "Import to ~/.orca-xos",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalManage.tsx",
+    "kind": "jsx-text",
+    "text": "Archive",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalManage.tsx",
+    "kind": "jsx-text",
+    "text": "This project uses the built-in areas. Changing an area writes them to ~/.orca-xos/projects/…/org.json first.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-text",
+    "text": "Recent runs",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-text",
+    "text": "No run receipts available.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-expression",
+    "text": "Unknown start",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Continue on from the run of",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-text",
+    "text": "Continue on…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-expression",
+    "text": "Run log unavailable",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-expression",
+    "text": "runner?",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-expression",
+    "text": "Unknown model",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-expression",
+    "text": "No reasoning level",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-expression",
+    "text": "No duration",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-expression",
+    "text": "· exit",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalRunList.tsx",
+    "kind": "jsx-expression",
+    "text": "· operator at the helm",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-text",
+    "text": "Org chart",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-text",
+    "text": "Persona studio",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-expression",
+    "text": "Running",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-expression",
+    "text": "Run now",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-text",
+    "text": "Reply inbox (",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-expression",
+    "text": "Resume schedule",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-expression",
+    "text": "Pause schedule",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Contract status",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Runner",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Exit code",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "30-day cost",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Subagents",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Last run",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Next run",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Model",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Reasoning",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Duration",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-text",
+    "text": "Admin summary",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-expression",
+    "text": "No summary in the latest log.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-text",
+    "text": "Recommended action",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-text",
+    "text": "Schedules",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-text",
+    "text": "crontab line",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-text",
+    "text": "No crontab schedule. Run now still works.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Queues",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewer.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Status fields",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-expression",
+    "text": "Unavailable",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-text",
+    "text": "Paused",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-text",
+    "text": "Next",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-text",
+    "text": "Run now",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-expression",
+    "text": "Resume",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-expression",
+    "text": "Pause",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Edit",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-text",
+    "text": "Edit",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "Tell",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "what to focus on in this run (optional)…",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Operator message for run",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Contract mode",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-text",
+    "text": "Standard GOAL.md",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-text",
+    "text": "Sidecar:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-expression",
+    "text": "Run",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-expression",
+    "text": "Send & run",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Goal logs",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-text",
+    "text": "No logs available.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Contract",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalsSourceButton.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Goals: work items from your automation queues",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalsSourceButton.tsx",
+    "kind": "jsx-text",
+    "text": "Goals: work items from your automation queues",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "object-property:label",
+    "text": "Not now",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "object-property:label",
+    "text": "Too big",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "object-property:label",
+    "text": "Off brand",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "object-property:label",
+    "text": "Wrong direction",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "object-property:label",
+    "text": "Duplicate",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "object-property:label",
+    "text": "Not interested",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "object-property:label",
+    "text": "Other",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-expression",
+    "text": "· updated",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "Open in editor",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-expression",
+    "text": "Ready (unset)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-expression",
+    "text": "Mark ready",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "Stage:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Move stage",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "Priority:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Priority",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "None",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "Size:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Size",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "Reject into bucket:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Reject reason",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "Reject",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "field (e.g. risk)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "value (empty clears)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "Set field",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Put here by",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Picked up by",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "Loading…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "This file could not be read. It may have moved to another stage; refresh the board.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemDrawer.tsx",
+    "kind": "jsx-text",
+    "text": "Showing the first 256 KB. Open the file in the editor for the rest.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemTimeline.tsx",
+    "kind": "jsx-text",
+    "text": "Transition timeline",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemTimeline.tsx",
+    "kind": "jsx-text",
+    "text": "event(s)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemTimeline.tsx",
+    "kind": "jsx-text",
+    "text": "by",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsBoard.tsx",
+    "kind": "jsx-text",
+    "text": "ready",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsBoard.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Show",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Empty",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsBoard.tsx",
+    "kind": "jsx-text",
+    "text": "older not shown",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Title",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Stage",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Details",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Project",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Updated",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsBoard.tsx",
+    "kind": "jsx-text",
+    "text": "No items of this type.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "object-property:label",
+    "text": "Recently updated",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "object-property:label",
+    "text": "Newest",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "object-property:label",
+    "text": "Priority",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "object-property:label",
+    "text": "Title",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "user-visible-call",
+    "text": "Select a project first.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Project",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "All projects",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Item type",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "New item",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Sort",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Board",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "List",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Refresh",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "Work item title…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Initial stage",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Initial priority",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "No priority",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "critical",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "high",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "medium",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "low",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "Ready",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "Create",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "Work items your goals move through their queues. Drag cards between stages or click an item to edit fields and view its transition timeline.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "Loading items…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosItemsPage.tsx",
+    "kind": "jsx-text",
+    "text": "No work-item folders found. Goal projects with docs/features, docs/bugs or content/ queues show up here.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosLiveRunTail.tsx",
+    "kind": "object-property:label",
+    "text": "Running",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosLiveRunTail.tsx",
+    "kind": "object-property:label",
+    "text": "Success",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosLiveRunTail.tsx",
+    "kind": "object-property:label",
+    "text": "Failed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosLiveRunTail.tsx",
+    "kind": "object-property:label",
+    "text": "Usage limit",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosLiveRunTail.tsx",
+    "kind": "object-property:label",
+    "text": "Operator at the helm",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosLiveRunTail.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "— stage",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosLiveRunTail.tsx",
+    "kind": "jsx-expression",
+    "text": "took over",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosLiveRunTail.tsx",
+    "kind": "jsx-text",
+    "text": "Tail",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosLiveRunTail.tsx",
+    "kind": "jsx-text",
+    "text": "Log",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-text",
+    "text": "New goal in",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Creates the goal folder from automations/_template/goal.md and opens GOAL.md. It has no schedule until you add one.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Title",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "Festival Curator",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Folder name",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "A goal with this name already exists (or is archived).",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-expression",
+    "text": "Use lowercase letters, digits and dashes.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Agent",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Agent",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Business area",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Business area",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Unassigned",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Cancel",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosNewGoalDialog.tsx",
+    "kind": "jsx-text",
+    "text": "Create goal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Breadcrumb",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Automations",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "All projects",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-expression",
+    "text": "org chart",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-expression",
+    "text": "All projects",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-expression",
+    "text": "Updated",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-expression",
+    "text": "Loading…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-expression",
+    "text": "· areas from the built-in defaults (add org.json to customize)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Project",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Project",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Theme",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Card theme",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Cyberpunk noir",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Corporate",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Yoga retreat",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Festival",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Images",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Card image mode",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Dark",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Light",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Refresh",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartHeader.tsx",
+    "kind": "jsx-text",
+    "text": "Automations list",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartPage.tsx",
+    "kind": "jsx-text",
+    "text": "Could not load the board:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartPage.tsx",
+    "kind": "jsx-text",
+    "text": "No project with an",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartPage.tsx",
+    "kind": "jsx-text",
+    "text": "automations/goals",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartPage.tsx",
+    "kind": "jsx-text",
+    "text": "folder was found in Orca or the crontab.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartViews.tsx",
+    "kind": "jsx-expression",
+    "text": "Leadership",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartViews.tsx",
+    "kind": "jsx-text",
+    "text": "goals report up here ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartViews.tsx",
+    "kind": "jsx-text",
+    "text": "need attention",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartViews.tsx",
+    "kind": "jsx-expression",
+    "text": "Manager:",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartViews.tsx",
+    "kind": "jsx-expression",
+    "text": "No manager goal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartViews.tsx",
+    "kind": "jsx-text",
+    "text": "goal",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartViews.tsx",
+    "kind": "jsx-text",
+    "text": "attention",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgChartViews.tsx",
+    "kind": "jsx-text",
+    "text": "Manager process:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Layout",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Board layout",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Org chart",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Business areas",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Pipeline",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Analytics",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Filter",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-attribute:aria-label",
+    "text": "Goal filter",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Showing",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "of",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "goals",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "No goals match this filter.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Reset filter",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Scheduled scripts",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "Crontab jobs in",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosOrgProjectBoard.tsx",
+    "kind": "jsx-text",
+    "text": "that are not goal runs (backups, syncs, deploys).",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Reference images (",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Upload",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Remove",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "No references yet. Upload a photo or promote a reviewed photoshoot shot.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Photoshoot gallery (",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Accept",
+    "dynamic": false,
+    "count": 3
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Reject",
+    "dynamic": false,
+    "count": 4
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Use as ref",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "No photoshoot images yet. Run a photoshoot sidecar.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Video gallery (",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-expression",
+    "text": "· reviewed",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Open",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "No videos yet.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Photo journal (",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Prev",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Page",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "of",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Next",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "No journal images yet.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "Reason (e.g. face drifts from references)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Cancel",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleries.tsx",
+    "kind": "jsx-text",
+    "text": "Reject image",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleryCards.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Reason:",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleryCards.tsx",
+    "kind": "jsx-expression",
+    "text": "· has note",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaGalleryCards.tsx",
+    "kind": "jsx-text",
+    "text": "legacy",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "user-visible-call",
+    "text": "Pick a sidecar contract first.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "Goal viewer",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-expression",
+    "text": "pending review",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-expression",
+    "text": "Loading studio…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "SOUL.md",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "Art prompt:",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "Persona voice (SOUL.md)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "Edit voice",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "Save voice",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "No SOUL.md yet. The voice shapes how this persona writes, replies and poses.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "Generation sidecar (EM6)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "Pick a sidecar…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "Run sidecar",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "user-visible-call",
+    "text": "Prompt copied.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "Copy prompt",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPersonaStudio.tsx",
+    "kind": "jsx-text",
+    "text": "No sidecars/&lt;name&gt;.md contracts yet. Add one to the goal folder to enable generation runs.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "oldest",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-expression",
+    "text": "h stuck)",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Open stage in Tasks",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "object-property:label",
+    "text": "Features",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "healthy",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "starved",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "backed up",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "stuck &gt;72h",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "Goal &amp; Queue Flow Strip",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "Clear pipe focus (",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "No declared queue pipes for this item type.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "Queue Board",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "Filter queue items...",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "Recently updated",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "Newest",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "Priority",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "Title",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPipelineView.tsx",
+    "kind": "jsx-text",
+    "text": "Ready only",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolio.tsx",
+    "kind": "jsx-text",
+    "text": "Running now",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolio.tsx",
+    "kind": "jsx-expression",
+    "text": "Next goal run",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolio.tsx",
+    "kind": "jsx-expression",
+    "text": "No goal runs scheduled",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolio.tsx",
+    "kind": "jsx-text",
+    "text": "· 30-day goal cost $",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolio.tsx",
+    "kind": "jsx-text",
+    "text": "script job",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Cross-project health & cost",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "PF3 · Focus sprint",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "reserve",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-expression",
+    "text": "Update sprint",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-expression",
+    "text": "Start sprint",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "End sprint",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "PF4 · Token budgets",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "7d",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "· 30d",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-attribute:placeholder",
+    "text": "no limit",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "/wk",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "Save",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "% used",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "PF6 · Versioned definitions",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-expression",
+    "text": "imported",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-expression",
+    "text": "legacy",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-expression",
+    "text": "no commit",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "goals",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "Every run receipt carries the definition hash of the contract it ran.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "PF7 · Cutover safety",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "legacy cron lines active",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioCards.tsx",
+    "kind": "jsx-text",
+    "text": "The legacy owner stays paused until the Orca replacement matches a week of receipts.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "Loading portfolio rollup…",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "PF1 · Control plane",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Health",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Goals",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Attention",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Active",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Queued",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:label",
+    "text": "Running",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "tokens /",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "7d ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "30d",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "PF2 · Modes & pause",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "paused",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "PF5 · Approvals",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "pending ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "accepted ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "rejected",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "Nothing waiting on you.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Top bottleneck queues",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "No active queues with work.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-expression",
+    "text": "ready)",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "oldest",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-attribute:title",
+    "text": "Deck packs & template readiness",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "Pack",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "Install preview ·",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "Installing creates the missing goals with the queue wiring of the pack. Preview only — the installer lands with the Cards view.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-expression",
+    "text": "installed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-expression",
+    "text": "would create",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosPortfolioRollup.tsx",
+    "kind": "jsx-text",
+    "text": "Close",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "jsx-text",
+    "text": "New goal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "jsx-text",
+    "text": "New area",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "jsx-text",
+    "text": "Archived goals",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "jsx-text",
+    "text": "In automations/goals/_archive. Their schedules are paused; restoring keeps them paused.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "jsx-expression",
+    "text": "· archived",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "jsx-expression",
+    "text": "paused crontab line",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "jsx-text",
+    "text": "Restore",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "object-property:title",
+    "text": "Delete",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "object-property:title",
+    "text": "for good?",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "object-property:description",
+    "text": "Deletes the archived folder and removes its crontab lines. Git keeps the folder history if it was committed.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosProjectManage.tsx",
+    "kind": "jsx-text",
+    "text": "Delete",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosQueuePipes.tsx",
+    "kind": "jsx-expression",
+    "text": "· oldest",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosQueuePipes.tsx",
+    "kind": "jsx-text",
+    "text": "Open in Tasks",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosQueuePipes.tsx",
+    "kind": "jsx-text",
+    "text": "This goal has no known work queues. Queues become editable in GOAL.md in a later stage.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosRunHistory.tsx",
+    "kind": "jsx-expression",
+    "text": "running",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosRunHistory.tsx",
+    "kind": "jsx-text",
+    "text": "Recent runs",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-card-identities-themes.ts",
+    "kind": "object-property:description",
+    "text": "Travels light, shoots fast, and comes back with sauna-room light, beach-road details, and the small moments that make a place feel alive.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-card-identities-themes.ts",
+    "kind": "object-property:description",
+    "text": "Works the photo pit and the crew corridors alike, coming back with the stage light, the crowd energy, and the small backstage moments that make the night feel real.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-card-identities-themes.ts",
+    "kind": "object-property:description",
+    "text": "Scouts sauna rooms, beach roads, and retreat corners with a camera, a towel, and a sharp eye for light.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-card-identities-themes.ts",
+    "kind": "object-property:description",
+    "text": "Runs its assigned loop, records the signal, and keeps the machine warm.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-goal-card-logic.ts",
+    "kind": "object-property:label",
+    "text": "Model strength",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-goal-card-logic.ts",
+    "kind": "object-property:label",
+    "text": "/10 from",
+    "dynamic": true,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-goal-card-logic.ts",
+    "kind": "object-property:label",
+    "text": "); reasoning depth",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-goal-card-logic.ts",
+    "kind": "object-property:label",
+    "text": "Run",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Opus 5 / Fable",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "GPT-5.4+",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Sonnet 5",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Gemini 3",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Opus 4.7",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Opus 4.6",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Opus 4.5",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Opus 4.1",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "GPT-5 Codex",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "GPT-5.1 Codex",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "GPT-5.1",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "GPT-5",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Sonnet 4.6",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Sonnet 4.5",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Sonnet 4",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "OpenAI o4",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "OpenAI o3",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "GPT-4.1",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "GPT-4o",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "GPT-4 family",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Opus",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Sonnet",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Claude Haiku",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Mini model family",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Codex model family",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-model-strength.ts",
+    "kind": "object-property:label",
+    "text": "Unknown model",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-org-hierarchy.ts",
+    "kind": "object-property:label",
+    "text": "All",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-org-hierarchy.ts",
+    "kind": "object-property:label",
+    "text": "Needs attention",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-org-hierarchy.ts",
+    "kind": "object-property:label",
+    "text": "Issues",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-org-hierarchy.ts",
+    "kind": "object-property:label",
+    "text": "Warnings",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-org-hierarchy.ts",
+    "kind": "object-property:subtitle",
+    "text": "Org chart",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-org-hierarchy.ts",
+    "kind": "object-property:label",
+    "text": "Action Needed",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-org-hierarchy.ts",
+    "kind": "object-property:label",
+    "text": "Watch",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-org-hierarchy.ts",
+    "kind": "object-property:label",
+    "text": "Healthy",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-org-hierarchy.ts",
+    "kind": "object-property:label",
+    "text": "No Signal",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-card-identities-themes.ts",
+    "kind": "object-property:description",
+    "text": "Coordinates",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-card-identities-themes.ts",
+    "kind": "object-property:description",
+    "text": "operations for",
+    "dynamic": true,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/xos-card-identities-themes.ts",
+    "kind": "object-property:description",
+    "text": ", keeping deliverables moving and cross-functional teams aligned.",
+    "dynamic": true,
+    "count": 1
   }
 ]

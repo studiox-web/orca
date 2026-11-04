@@ -4,7 +4,6 @@
 //   never changed, so upstream's "automation changed" fence is unaffected.
 // - xosObserveFinishedRun (service.markDispatchResult): classifies the final screen; on a usage
 //   limit it queues the next model in the chain and starts a linked manual run.
-import { Notification } from 'electron'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { XosModelChoice } from '../../shared/xos-runtime-types'
@@ -173,8 +172,16 @@ export async function xosLaunchAutomation(
 
 export function notify(body: string): void {
   try {
-    if (Notification.isSupported()) {
-      new Notification({ title: 'Orca automation', body }).show()
+    const mod = 'electron'
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dynamic optional require for electron Notification in plain-Node runtime
+    const electron = require(mod) as {
+      Notification?: {
+        isSupported?: () => boolean
+        new (opts: { title: string; body: string }): { show: () => void }
+      }
+    }
+    if (electron.Notification?.isSupported?.()) {
+      new electron.Notification({ title: 'Orca automation', body }).show()
     }
   } catch {
     // Headless orcad may have no notification service; the ledger still records the hop.

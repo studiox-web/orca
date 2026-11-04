@@ -63,17 +63,19 @@ function fakeAgents(base: string, script: string): void {
   process.env.BASH_ENV = bashEnv
 }
 
-const waitFor = async (check: () => boolean, ms = 8000): Promise<void> => {
-  const deadline = Date.now() + ms
-  while (!check()) {
-    if (Date.now() > deadline) {
-      throw new Error('Timed out waiting for a native run to finish')
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50))
-  }
+const waitFor = async (check: () => boolean, timeout = 8000): Promise<void> => {
+  await vi.waitFor(
+    () => {
+      if (!check()) {
+        throw new Error('Condition not met')
+      }
+    },
+    { timeout, interval: 50 }
+  )
 }
 
 beforeEach(() => {
+  vi.setSystemTime(new Date('2026-04-15T12:00:00Z'))
   savedHome = process.env.ORCA_XOS_HOME
   savedBashEnv = process.env.BASH_ENV
   process.env.ORCA_XOS_HOME = mkdtempSync(join(tmpdir(), 'xos-home-'))
@@ -81,6 +83,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   if (savedHome === undefined) {
     delete process.env.ORCA_XOS_HOME
   } else {

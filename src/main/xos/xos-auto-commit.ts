@@ -2,9 +2,9 @@
 // After a finished run it commits only the changes under the automation's owned paths, under the
 // repo's global git-commit.lock (shared with crontab runs), and optionally pushes to the upstream.
 // Changes outside the owned paths, and anything the person staged elsewhere, are left alone.
-import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { runProcess } from '@orca/process-host'
 import type {
   XosAutoCommitConfig,
   XosLegacyCommitPolicy,
@@ -18,34 +18,29 @@ const PUSH_TIMEOUT_MS = 2 * 60_000
 
 type GitResult = { code: number; stdout: string; stderr: string }
 
-function git(
+async function git(
   cwd: string,
   args: string[],
   options: { input?: string; literal?: boolean; timeout?: number } = {}
 ): Promise<GitResult> {
-  return new Promise((done) => {
-    const child = execFile(
-      'git',
+  try {
+    const result = await runProcess({
+      program: 'git',
       args,
-      {
-        cwd,
-        timeout: options.timeout ?? GIT_TIMEOUT_MS,
-        maxBuffer: 32 * 1024 * 1024,
-        env: {
-          ...process.env,
-          GIT_TERMINAL_PROMPT: '0',
-          ...(options.literal ? { GIT_LITERAL_PATHSPECS: '1' } : {})
-        }
-      },
-      (error, stdout, stderr) => {
-        const code = error ? (typeof error.code === 'number' ? error.code : 1) : 0
-        done({ code, stdout: String(stdout), stderr: String(stderr || error?.message || '') })
+      cwd,
+      timeoutMs: options.timeout ?? GIT_TIMEOUT_MS,
+      input: options.input,
+      maxOutputBytes: 32 * 1024 * 1024,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: '0',
+        ...(options.literal ? { GIT_LITERAL_PATHSPECS: '1' } : {})
       }
-    )
-    if (options.input !== undefined) {
-      child.stdin?.end(options.input)
-    }
-  })
+    })
+    return { code: result.code ?? 1, stdout: result.stdout, stderr: result.stderr }
+  } catch (error) {
+    return { code: 1, stdout: '', stderr: String(error) }
+  }
 }
 
 function tail(text: string): string {

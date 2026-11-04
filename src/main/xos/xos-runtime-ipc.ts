@@ -9,7 +9,7 @@ import type {
 import { readLegacyCommitPolicies } from './xos-auto-commit'
 import { xosPreviewAuto, xosTierModels } from './xos-auto-mode'
 import { tierKey } from './xos-model-tier'
-import { registerXosModelCatalogHandlers } from './xos-model-catalog'
+import { listXosModels } from './xos-model-catalog'
 import {
   cleanRunConfig,
   readRunAttempts,
@@ -22,7 +22,11 @@ const strings = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
 
 export function registerXosRuntimeHandlers(): void {
-  registerXosModelCatalogHandlers()
+  ipcMain.handle('xos:models:list', (_event, args: { agent: string }) =>
+    typeof args?.agent === 'string'
+      ? listXosModels(args.agent)
+      : { status: 'unavailable', message: 'No agent given.' }
+  )
   ipcMain.handle('xos:runtime:getRunConfig', (_event, args: { automationId: string }) =>
     readRunConfig(String(args?.automationId ?? ''))
   )

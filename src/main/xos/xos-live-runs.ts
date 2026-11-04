@@ -4,10 +4,10 @@
 // the stage A limit classifier for the outcome. Output streams to a log file plus an in-memory
 // tail (xos-live-tail.ts reads it); receipts land in ~/.orca-xos/runs/<slug>.jsonl
 // (xos-native-receipts.ts) so the §3c board adapter reads them like the legacy rows.
-import { spawn } from 'node:child_process'
 import type { Readable } from 'node:stream'
 import { closeSync, existsSync, mkdirSync, openSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
+import { spawnProcess } from '@orca/process-host'
 import type { XosGoalRunMode } from '../../shared/xos-goals-types'
 import { readLegacyCommitPolicies, xosAutoCommit } from './xos-auto-commit'
 import { readHead } from './xos-goal-files'
@@ -37,7 +37,6 @@ const liveRuns = mutableLiveRuns()
 
 function safeNotify(body: string): void {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Notification } = require('electron')
     if (Notification?.isSupported?.()) {
       new Notification({ title: 'Orca automation', body }).show()
@@ -228,7 +227,9 @@ export async function startNativeGoalRun(
       outcome: null,
       failureReason: null
     }
-    const child = spawn('/bin/bash', ['-lc', command], {
+    const child = spawnProcess({
+      program: '/bin/bash',
+      args: ['-lc', command],
       cwd,
       detached: true,
       env: {
