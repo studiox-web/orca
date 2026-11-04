@@ -90,6 +90,12 @@ Tests failing identically on `5716fed3b9`, unrelated to this work: `automation-w
 
 The UI strings added here are in the localization allowlist, like the rest of the XOS UI.
 
+## Verification limit
+
+`ORCA_CODE_QUALITY_BASE=5716fed3b9 pnpm check:changed --maxWorkers=2` has **no passing exit code**. At `c10162e9ca`, 29 of 30 checks passed and none failed, but `unit tests` (the broad Vitest `related` run) never finished: stopped after 900+ seconds, with its workers in `futex_do_wait` at 1 to 2 seconds of CPU. Two earlier runs stalled at the same step. The hanging test file was not identified, so whether it comes from this work or was already there is unknown.
+
+In its place, at `c10162e9ca`: XOS and adjacent focused suites 198 of 198; `src/main/automations`, automation RPC and contract suites 466 passed and 18 failed, plus 1 file that doesn't load. All 19 reproduce on untouched `5716fed3b9` (the 18 `automation-worker-durability` failures; `orca-runtime-automations.spec.ts` reports "No test suite found" under plain Vitest). Typecheck clean.
+
 ## Counts
 
 Findings: 36 total: 33 fixed, 3 partial, 0 disproven, 0 deferred, 0 open. Broader plan items: 9 total: 2 fixed, 3 partial, 4 open. User decisions: 3.
