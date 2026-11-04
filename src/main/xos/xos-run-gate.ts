@@ -26,6 +26,7 @@ import {
   HANDOFF_TTL_MS,
   held,
   journal,
+  stopRunAgent,
   syncSweepTimer,
   takeLocks,
   xosReleaseRun,
@@ -271,13 +272,13 @@ export async function xosStopGoalAutomationRun(repoRoot: string, goal: string): 
   if (!match || !host || !run) {
     return false
   }
-  await host.closeRunTerminal(run).catch((error) => {
-    console.warn('[xos] could not close a stopped run terminal', error)
-  })
+  const stopFailure = await stopRunAgent(host, run)
   await host.markDispatchResult({
     runId: match[0],
     status: 'dispatch_failed',
-    error: 'Stopped by the operator.'
+    error: stopFailure
+      ? `Stop requested, but the agent may still be running: ${stopFailure}`
+      : 'Stopped by the operator.'
   })
   return true
 }

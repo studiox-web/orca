@@ -243,6 +243,24 @@ describe('lane hand-offs (L2, L3, L4)', () => {
     }
   })
 
+  it('says so when a timed-out agent could not be stopped (H9)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      host.closeRunTerminal.mockRejectedValueOnce(new Error('The chat refused to stop'))
+      writeRunConfig('a', { timeoutMinutes: 5 })
+      await gate.xosBeforeLaunch(automation('a'), run('t3', 'a'), target())
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(host.markDispatchResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runId: 't3',
+          error: expect.stringContaining('may still be running: The chat refused to stop')
+        })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps the lane across a fallback retry, so a waiter cannot slip in (L3)', async () => {
     const limited: AutomationRun = {
       ...run('l1', 'a'),

@@ -638,7 +638,7 @@ Stage A as built (all fork code in `src/main/xos/` and `src/renderer/src/compone
 
 Upstream hooks (keep minimal when rebasing): `automation-dispatch-request.ts` (`xosBeforeLaunch`), `automations/service.ts markDispatchResult` (`xosAfterRunFinished`), `runtime-automation-service.ts` (`registerXosAutomationHost`), `provider-account-services.ts` (`registerXosQuotaSource`), `AutomationEditorSettingsSidebar.tsx` and `AutomationDetail.tsx` (UI mounts).
 
-Known gaps: Auto picks across agents, not across accounts of one agent; antigravity has no model flags; native runs support claude and codex only; Build now commits on its branch but opens no PR (pushing is an operator step); a chat run's timeout closes its surface but cannot interrupt a provider turn that has no pane.
+Known gaps: Auto picks across agents, not across accounts of one agent; antigravity has no model flags; native runs support claude and codex only; Build now commits on its branch but opens no PR (pushing is an operator step); a stopped chat run is interrupted through the session host, not yet exercised against a live provider.
 
 ### 4b. Stage B implementation (`djvibe/xos-stage-b-goal-entity`)
 

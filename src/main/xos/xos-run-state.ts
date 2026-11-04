@@ -37,7 +37,7 @@ export type XosAutomationHost = {
   findAutomation: (automationId: string) => Automation | null
   runNow: (automationId: string, trigger?: AutomationRun['trigger']) => Promise<unknown>
   markDispatchResult: (result: AutomationDispatchResult) => Promise<unknown>
-  /** Closes the run's terminal, when it still has one. */
+  /** Stops the run's agent: closes its terminal, or interrupts its chat turn. Throws if it can't. */
   closeRunTerminal: (run: AutomationRun) => Promise<void>
 }
 
@@ -270,6 +270,20 @@ async function wakeWaiters(): Promise<void> {
   syncSweepTimer()
 }
 
+/** The reason the agent couldn't be stopped, or null once it was. */
+export async function stopRunAgent(
+  host: XosAutomationHost,
+  run: AutomationRun
+): Promise<string | null> {
+  try {
+    await host.closeRunTerminal(run)
+    return null
+  } catch (error) {
+    console.warn('[xos] could not stop a run agent', error)
+    return error instanceof Error ? error.message : String(error)
+  }
+}
+
 async function timeOut(automationId: string, runId: string, minutes: number): Promise<void> {
   const run = host?.findRun(automationId, runId)
   if (!host || !run || isFinalAutomationRunStatus(run.status)) {
@@ -278,13 +292,13 @@ async function timeOut(automationId: string, runId: string, minutes: number): Pr
   }
   // L2: stop the agent before anything reads the lane as free.
   stopScriptRun(runId)
-  await host.closeRunTerminal(run).catch((error) => {
-    console.warn('[xos] could not close a timed-out run terminal', error)
-  })
+  const stopFailure = await stopRunAgent(host, run)
   await host.markDispatchResult({
     runId,
     status: 'dispatch_failed',
-    error: `Stopped after the ${minutes}-minute timeout.`
+    error: stopFailure
+      ? `Timed out after ${minutes} minutes, but the agent may still be running: ${stopFailure}`
+      : `Stopped after the ${minutes}-minute timeout.`
   })
   xosReleaseRun(runId)
 }

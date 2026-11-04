@@ -21,6 +21,7 @@ import {
 } from './runtime-terminal-run-observer'
 import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
 import { registerXosAutomationHost } from '../xos/xos-run-gate'
+import { cancelAutomationChatRun } from './automation-chat-run-cancel'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -188,6 +189,10 @@ export function createRuntimeAutomationService(input: {
     runNow: (automationId, trigger) => service.runNow(automationId, trigger),
     markDispatchResult: (result) => service.markDispatchResult(result),
     closeRunTerminal: async (run) => {
+      if (run.sessionKind === 'chat') {
+        await cancelAutomationChatRun(runtime, run)
+        return
+      }
       const paneKey = run.terminalPaneKey
       const handle = paneKey
         ? (launchedHandles.get(paneKey) ?? runtime.getTerminalHandleForPaneKey(paneKey))
