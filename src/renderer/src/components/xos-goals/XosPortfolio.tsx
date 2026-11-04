@@ -1,4 +1,6 @@
-// XOS fork: "All projects" portfolio tiles and the cross-project "Running now" strip.
+// XOS fork: "All projects" portfolio: tiles + the cross-project "Running now" strip, plus the
+// stage G PF1-PF7 rollup cards (XosPortfolioRollup).
+export { XosPortfolioRollupView } from './XosPortfolioRollup'
 import React from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { XosGoal, XosGoalBoard, XosProject } from '../../../../shared/xos-goals-types'

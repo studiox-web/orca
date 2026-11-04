@@ -20,5 +20,10 @@ export const xosGoalsApi: XosGoalsApi = {
   getLegacyCommitPolicies: (args) => ipcRenderer.invoke('xos:runtime:legacyCommitPolicies', args),
   getTierModels: (args) => ipcRenderer.invoke('xos:runtime:tierModels', args),
   setModelTier: (args) => ipcRenderer.invoke('xos:runtime:setModelTier', args),
-  previewAuto: (args) => ipcRenderer.invoke('xos:runtime:previewAuto', args)
+  previewAuto: (args) => ipcRenderer.invoke('xos:runtime:previewAuto', args),
+  getPersonaStudio: (args) => ipcRenderer.invoke('xos:persona:studio', args),
+  mutatePersona: (args) => ipcRenderer.invoke('xos:persona:mutate', args),
+  personaImage: (args) => ipcRenderer.invoke('xos:persona:image', args),
+  getRollup: () => ipcRenderer.invoke('xos:portfolio:rollup'),
+  mutatePortfolio: (mutation) => ipcRenderer.invoke('xos:portfolio:mutate', mutation)
 }

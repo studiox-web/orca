@@ -1,11 +1,23 @@
 // XOS fork: the Goal Viewer, ported from DJVibe's GoalDetailPanel (overview tab). Laravel links
 // became Orca actions: Run now opens a terminal, Pause/Resume edit crontab, files open in Orca.
-import React from 'react'
-import { ArrowLeft, Clock3, Cpu, FileText, Mail, Pause, Play, RefreshCw, Timer } from 'lucide-react'
+import React, { useState } from 'react'
+import {
+  ArrowLeft,
+  Clock3,
+  Cpu,
+  FileText,
+  Mail,
+  Pause,
+  Play,
+  RefreshCw,
+  Sparkles,
+  Timer
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { XosGoal, XosProject } from '../../../../shared/xos-goals-types'
 import { XosGoalManage } from './XosGoalManage'
+import { XosPersonaStudio } from './XosPersonaStudio'
 import { queueSummary, XosGoalQueueList } from './XosQueuePipes'
 import { goalIdentity, OpsCastingCostPips, RunBattleMeter, useCardArt } from './XosGoalCard'
 import {
@@ -66,6 +78,19 @@ export function XosGoalViewer({
   )
   const busy = actions.busy === item.goal
   const recommended = item.status.recommended_command?.replace(/^`|`$/g, '') ?? null
+  const [showStudio, setShowStudio] = useState(false)
+
+  if (showStudio) {
+    return (
+      <XosPersonaStudio
+        item={item}
+        project={project}
+        cardTheme={cardTheme}
+        actions={actions}
+        onBack={() => setShowStudio(false)}
+      />
+    )
+  }
 
   return (
     <div className="space-y-5">
@@ -75,6 +100,10 @@ export function XosGoalViewer({
           Org chart
         </Button>
         <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => setShowStudio(true)}>
+            <Sparkles className="size-4" />
+            Persona studio
+          </Button>
           <Button
             type="button"
             size="sm"
