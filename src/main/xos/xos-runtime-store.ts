@@ -78,24 +78,29 @@ export function cleanRunConfig(
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 function cleanGoalBinding(value: unknown): XosGoalBinding | null {
-  const row = value as Partial<XosGoalBinding> | null | undefined
-  return typeof row?.repoRoot === 'string' && typeof row.goal === 'string' && row.goal
-    ? { repoRoot: row.repoRoot, goal: row.goal }
-    : null
+  if (!isRecord(value) || typeof value.repoRoot !== 'string' || typeof value.goal !== 'string') {
+    return null
+  }
+  return value.goal ? { repoRoot: value.repoRoot, goal: value.goal } : null
 }
 
 function cleanScriptBinding(value: unknown): XosScriptBinding | null {
-  const row = value as Partial<XosScriptBinding> | null | undefined
-  if (typeof row?.command !== 'string' || !row.command.trim() || typeof row.cwd !== 'string') {
+  if (!isRecord(value) || typeof value.command !== 'string' || typeof value.cwd !== 'string') {
     return null
   }
-  const replaces = row.replacesCronCommand
-  return {
-    command: row.command,
-    cwd: row.cwd,
-    replacesCronCommand: typeof replaces === 'string' && replaces ? replaces : null
-  }
+  const replaces = value.replacesCronCommand
+  return value.command.trim()
+    ? {
+        command: value.command,
+        cwd: value.cwd,
+        replacesCronCommand: typeof replaces === 'string' && replaces ? replaces : null
+      }
+    : null
 }
 
 /** Repo-relative, inside the repo: no absolute paths and no `..` segments. */

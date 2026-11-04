@@ -62,8 +62,10 @@ export function useXosGoalActions(
       if (!api) {
         return false
       }
-      const send = (adopt: boolean): Promise<XosActionResult> =>
-        api.mutateCron({ ...mutation, crontabHash: hash, adopt } as XosCronMutation)
+      const send = (adopt: boolean): Promise<XosActionResult> => {
+        const request: XosCronMutation = { ...mutation, crontabHash: hash, adopt }
+        return api.mutateCron(request)
+      }
       const result = await send(false)
       if (!result.ok && result.error.startsWith(XOS_NOT_ADOPTED_PREFIX)) {
         toast.warning(result.error, {

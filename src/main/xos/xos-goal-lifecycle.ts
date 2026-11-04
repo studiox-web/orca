@@ -12,7 +12,7 @@ import {
   readHead,
   safeReaddir
 } from './xos-goal-files'
-import { projectHomeDir } from './xos-project-home'
+import { projectGoalsDir, projectHomeDir } from './xos-project-home'
 
 export const ARCHIVE_DIR = '_archive'
 export const GOAL_SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/
@@ -37,6 +37,33 @@ export function listArchivedGoals(goalsDir: string): XosArchivedGoal[] {
       }
     })
     .sort((a, b) => (b.archivedAt ?? '').localeCompare(a.archivedAt ?? ''))
+}
+
+/** A goal archives inside the home it lived in, so a project can have an archive in each (H5). */
+function goalHomes(repoRoot: string): string[] {
+  return [projectGoalsDir(repoRoot), join(repoRoot, 'automations', 'goals')].filter(isDirectory)
+}
+
+/** Archived goals across both homes; the central copy wins a shared name. */
+export function listProjectArchivedGoals(repoRoot: string): XosArchivedGoal[] {
+  const byName = new Map<string, XosArchivedGoal>()
+  for (const home of goalHomes(repoRoot)) {
+    for (const entry of listArchivedGoals(home)) {
+      if (!byName.has(entry.goal)) {
+        byName.set(entry.goal, entry)
+      }
+    }
+  }
+  return [...byName.values()].sort((a, b) => (b.archivedAt ?? '').localeCompare(a.archivedAt ?? ''))
+}
+
+/** The home holding this archived goal, so restore and delete act where it actually is. */
+export function archivedGoalHome(repoRoot: string, archivedName: string): string {
+  const home = goalHomes(repoRoot).find((dir) => isDirectory(join(dir, ARCHIVE_DIR, archivedName)))
+  if (!home) {
+    throw new Error(`Archived goal ${archivedName} was not found.`)
+  }
+  return home
 }
 
 /** GOAL.md for a new goal: the fenced template inside `automations/_template/goal.md`, if any. */

@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { XosLiveRun } from './xos-live-runs-types'
+import { removeTempDir } from './xos-temp-dir.test-fixture'
 
 const order: string[] = []
 vi.mock('./xos-auto-commit', () => ({
@@ -33,7 +34,7 @@ function liveRun(overrides: Partial<XosLiveRun> = {}): XosLiveRun {
     trigger: 'manual',
     parentRunId: null,
     pid: 1,
-    startedAt: new Date().toISOString(),
+    startedAt: '2026-11-04T12:00:00.000Z',
     deadlineAtMs: null,
     leasePath: join(base, 'lease'),
     itemPath: null,
@@ -72,9 +73,9 @@ beforeEach(() => {
   process.env.ORCA_XOS_HOME = join(base, 'home')
 })
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.ORCA_XOS_HOME
-  rmSync(base, { recursive: true, force: true })
+  await removeTempDir(base)
 })
 
 describe('finalizeNativeRun', () => {

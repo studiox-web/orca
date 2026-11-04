@@ -1,17 +1,10 @@
 // XOS fork: goals and scripts on Orca's scheduler (C1, C2 guards), policy and authority (M10, M15).
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
+import { removeTempDir } from './xos-temp-dir.test-fixture'
 
 vi.mock('electron', () => ({ Notification: { isSupported: () => false } }))
 
@@ -24,6 +17,8 @@ const { confirmGoalAuthority, goalAuthority, isGoalAuthorityConfirmed } =
   await import('./xos-goal-authority')
 const { listRunJournal } = await import('./xos-run-journal')
 const { startNativeGoalRun } = await import('./xos-live-runs')
+
+const FIXED_ISO = '2026-11-04T12:00:00.000Z'
 
 let base: string
 let repo: string
@@ -38,6 +33,7 @@ const host = {
 }
 
 function automation(id: string): Automation {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only these fields.
   return {
     id,
     name: id,
@@ -49,6 +45,7 @@ function automation(id: string): Automation {
 }
 
 function run(id: string, automationId: string, trigger: AutomationRun['trigger'] = 'scheduled') {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only these fields.
   const value = {
     id,
     automationId,
@@ -111,10 +108,10 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-afterEach(() => {
+afterEach(async () => {
   process.env.PATH = savedPath
   delete process.env.ORCA_XOS_HOME
-  rmSync(base, { recursive: true, force: true })
+  await removeTempDir(base)
 })
 
 describe('a goal bound to an automation (C1)', () => {
@@ -195,7 +192,7 @@ describe('a goal bound to an automation (C1)', () => {
       kind: 'automation',
       runId: 'gone',
       automationId: 'a',
-      startedAt: new Date().toISOString(),
+      startedAt: FIXED_ISO,
       deadlineAtMs: null,
       locks: [],
       leasePath: join(base, 'lease'),
@@ -272,7 +269,7 @@ describe('dispatch policy (M10)', () => {
       kind: 'set-sprint',
       sprint: {
         projectKey: '/elsewhere',
-        startedAt: new Date().toISOString(),
+        startedAt: FIXED_ISO,
         capacity: 'focused',
         reservePercent: 20
       }
@@ -287,17 +284,16 @@ describe('dispatch policy (M10)', () => {
     mkdirSync(join(repo, 'automations', 'logs'), { recursive: true })
     writeFileSync(
       join(repo, 'automations', 'logs', 'token-usage.jsonl'),
-      `${JSON.stringify({ ts: new Date().toISOString(), feature: 'writer', actual_tokens: 900, estimated_cost_usd: 4 })}\n`
+      `${JSON.stringify({ ts: FIXED_ISO, feature: 'writer', actual_tokens: 900, estimated_cost_usd: 4 })}\n`
     )
     applyPortfolioMutation({
       kind: 'set-budget',
       projectKey: repo,
       budget: { weeklyTokens: 800, weeklyCostUsd: null }
     })
-    expect(checkDispatchPolicy({ repoRoot: repo, source: 'schedule' })).toMatchObject({
-      allowed: false,
-      reason: expect.stringContaining('token budget')
-    })
+    expect(
+      checkDispatchPolicy({ repoRoot: repo, source: 'schedule', nowMs: Date.parse(FIXED_ISO) })
+    ).toMatchObject({ allowed: false, reason: expect.stringContaining('token budget') })
   })
 })
 

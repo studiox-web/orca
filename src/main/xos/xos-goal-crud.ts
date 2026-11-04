@@ -13,6 +13,7 @@ import { setCronLinesPaused } from './xos-crontab'
 import { removeCronLines } from './xos-crontab-edit'
 import { plural } from './xos-goal-cron-crud'
 import {
+  archivedGoalHome,
   archiveGoalFolder,
   createGoalFolder,
   deleteArchivedFolder,
@@ -85,7 +86,10 @@ export async function applyGoalMutation(
       })
     case 'restore':
       return attempt(() => {
-        const goal = restoreGoalFolder(project.goalsDir, mutation.archived)
+        const goal = restoreGoalFolder(
+          archivedGoalHome(project.root, mutation.archived),
+          mutation.archived
+        )
         void commitProjectHome(project.root, `xos: restore goal ${goal}`)
         return {
           ok: true,
@@ -143,7 +147,7 @@ export async function applyGoalMutation(
         }
       }
       return attempt(() => {
-        deleteArchivedFolder(project.goalsDir, entry.goal)
+        deleteArchivedFolder(archivedGoalHome(project.root, entry.goal), entry.goal)
         if (project.orgSource === 'org.json') {
           setGoalArea(orgName, entry.goal, null)
         }

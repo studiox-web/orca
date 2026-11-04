@@ -1,10 +1,11 @@
 // XOS fork: Stage D native goal runs (plan §4 row D): prompt assembly + item claim + lane locks +
 // streaming child + receipt + live tail, and the takeover/next-item helpers (§3e, §3h.2). A fake
 // `claude`/`codex` on PATH (via BASH_ENV, which `bash -lc` sources) plays the agent.
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTempDir } from './xos-temp-dir.test-fixture'
 
 vi.mock('electron', () => ({ Notification: { isSupported: () => false } }))
 
@@ -82,7 +83,7 @@ beforeEach(() => {
   tempDirs.push(process.env.ORCA_XOS_HOME)
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
   if (savedHome === undefined) {
     delete process.env.ORCA_XOS_HOME
@@ -95,7 +96,7 @@ afterEach(() => {
     process.env.BASH_ENV = savedBashEnv
   }
   while (tempDirs.length > 0) {
-    rmSync(tempDirs.pop()!, { recursive: true, force: true })
+    await removeTempDir(tempDirs.pop()!)
   }
 })
 

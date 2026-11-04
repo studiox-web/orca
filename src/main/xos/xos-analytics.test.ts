@@ -7,6 +7,7 @@ import {
   computeStuckItemAlerts,
   computeTimeInQueue,
   computeTokenBurnForecast,
+  computeRepoAnalytics,
   computeWeeklyVelocity
 } from './xos-analytics'
 import type { XosItemTransitionEvent } from './xos-item-claims'
@@ -172,5 +173,43 @@ describe('xos-analytics', () => {
     })
     expect(forecast.projectedPctAtReset).toBe(90)
     expect(forecast.status).toBe('on-track')
+  })
+})
+
+describe('computeRepoAnalytics (M11)', () => {
+  it('measures dwell and velocity from the transition index, not file times', async () => {
+    const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { recordTransitionEvent } = await import('./xos-item-claims')
+    const base = mkdtempSync(join(tmpdir(), 'xos-analytics-'))
+    process.env.ORCA_XOS_HOME = join(base, 'home')
+    const repo = join(base, 'site')
+    mkdirSync(repo)
+    const now = Date.parse('2026-11-04T12:00:00Z')
+    const event = (hoursAgo: number, fromStage: string, toStage: string) => ({
+      at: new Date(now - hoursAgo * 3_600_000).toISOString(),
+      item: 'share-buttons',
+      fromPath: '',
+      toPath: '',
+      fromStage,
+      toStage,
+      goal: 'builder'
+    })
+    recordTransitionEvent(repo, event(48, 'created', 'planned'))
+    recordTransitionEvent(repo, event(24, 'planned', 'completed'))
+    writeFileSync(join(repo, 'note'), 'x')
+    try {
+      const stats = computeRepoAnalytics(repo, now)
+      expect(stats.timeInQueue).toEqual([
+        expect.objectContaining({ stageId: 'planned', avgHours: 24, sampleCount: 1 })
+      ])
+      expect(stats.velocity.at(-1)?.featuresCompleted).toBe(1)
+      expect(stats.featureCosts.shippedFeatures[0].item).toBe('share-buttons')
+      expect(stats.burn).toEqual([])
+    } finally {
+      delete process.env.ORCA_XOS_HOME
+      rmSync(base, { recursive: true, force: true })
+    }
   })
 })

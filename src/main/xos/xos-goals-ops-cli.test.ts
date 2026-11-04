@@ -1,14 +1,20 @@
 // XOS fork: the agent-facing CLI: runs reach the runtime and refuse honestly (H4), and project
 // discovery, status and cutover reads work from anywhere (M12, C2, §2.3a).
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CommandHandler, HandlerContext } from '../../cli/dispatch'
 import { XOS_GOALS_HANDLERS } from '../../cli/handlers/xos-goals'
+import { buildXosGoalBoard } from './xos-goal-board'
+import { cliRepoSource } from './xos-goal-cli'
+import { applyGoalMutation } from './xos-goal-crud'
+import { resolveGoalDir } from './xos-project-home'
+import { importProjectGoals } from './xos-project-import'
 import { rememberProjects } from './xos-project-registry'
 import { readTriggerProjects } from './xos-trigger-projects'
 import { writeRunConfig } from './xos-runtime-store'
+import { removeTempDir } from './xos-temp-dir.test-fixture'
 
 const runtimeCall = vi.fn()
 let base: string
@@ -70,10 +76,10 @@ beforeEach(() => {
   runtimeCall.mockReset()
 })
 
-afterEach(() => {
+afterEach(async () => {
   process.env.PATH = savedPath
   delete process.env.ORCA_XOS_HOME
-  rmSync(base, { recursive: true, force: true })
+  await removeTempDir(base)
 })
 
 describe('run commands (H4)', () => {
@@ -182,6 +188,53 @@ describe('operations (§2.3a)', () => {
     expect(readTriggerProjects()).toEqual([repo])
     await run(XOS_GOALS_HANDLERS['goals triggers'], repo, { disable: true })
     expect(readTriggerProjects()).toEqual([])
+  })
+})
+
+describe('archive after a partial import (H5)', () => {
+  it('restores and deletes a central goal from the home it lives in', async () => {
+    const editor = join(repo, 'automations', 'goals', 'editor')
+    mkdirSync(editor)
+    writeFileSync(join(editor, 'GOAL.md'), '---\ntitle: Editor\n---\n# Editor\n')
+    await importProjectGoals(repo, { goals: ['writer'] })
+    const central = resolveGoalDir(repo, 'writer')
+    const board = () => buildXosGoalBoard(cliRepoSource(repo))
+    const key = (await board()).projects[0].key
+    const crontabHash = (await board()).crontabHash
+
+    const archived = await applyGoalMutation(await board(), {
+      kind: 'archive',
+      projectKey: key,
+      goal: 'writer',
+      crontabHash
+    })
+    expect(archived.ok).toBe(true)
+    expect((await board()).projects[0].archived.map((entry) => entry.goal)).toEqual(['writer'])
+
+    const restored = await applyGoalMutation(await board(), {
+      kind: 'restore',
+      projectKey: key,
+      archived: 'writer'
+    })
+    expect(restored.ok).toBe(true)
+    expect(existsSync(join(central, 'GOAL.md'))).toBe(true)
+    expect(resolveGoalDir(repo, 'writer')).toBe(central)
+
+    await applyGoalMutation(await board(), {
+      kind: 'archive',
+      projectKey: key,
+      goal: 'writer',
+      crontabHash
+    })
+    const deleted = await applyGoalMutation(await board(), {
+      kind: 'delete',
+      projectKey: key,
+      archived: 'writer',
+      confirm: 'writer',
+      crontabHash
+    })
+    expect(deleted.ok).toBe(true)
+    expect((await board()).projects[0].archived).toEqual([])
   })
 })
 

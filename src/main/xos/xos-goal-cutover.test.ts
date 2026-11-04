@@ -20,6 +20,7 @@ import { isItemClaimActive } from './xos-item-claims'
 import { parseFrontmatter } from './xos-goal-files'
 import { releaseTakeoverSession, startTakeoverSession } from './xos-takeover-session'
 import { activeTakeover, listRunJournal } from './xos-run-journal'
+import { removeTempDir } from './xos-temp-dir.test-fixture'
 
 let base: string
 
@@ -39,9 +40,9 @@ beforeEach(() => {
   process.env.ORCA_XOS_HOME = join(base, 'home')
 })
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.ORCA_XOS_HOME
-  rmSync(base, { recursive: true, force: true })
+  await removeTempDir(base)
 })
 
 describe('per-goal cutover (H5)', () => {
@@ -104,6 +105,7 @@ describe('project home identity', () => {
     expect(execFileSync('git', ['status', '--porcelain'], { cwd: home, encoding: 'utf8' })).toBe('')
   })
 
+  // Real git, through the whole retry backoff.
   it('retries past a lock held by another process and reports a lasting failure (L6)', async () => {
     const repo = repoWith('site', ['writer'])
     await importProjectGoals(repo)
@@ -137,17 +139,19 @@ describe('takeover sessions (M6)', () => {
   it('holds the lane and keeps the claim fresh until released', async () => {
     const repo = repoWith('site', ['writer'])
     const item = itemIn(repo)
+    const nowMs = Date.parse('2026-11-04T12:00:00.000Z')
     const session = await startTakeoverSession({
       repoRoot: repo,
       goal: 'writer',
       agent: 'claude',
-      itemPath: item
+      itemPath: item,
+      nowMs
     })
     expect(session.ok).toBe(true)
     const lane = laneLockFile(repo, 'content')
     expect(await isLockFree(lane)).toBe(false)
     const fm = parseFrontmatter(readFileSync(item, 'utf8'))
-    expect(isItemClaimActive(fm, Date.now() + 2 * 60 * 60_000)).toBe(true)
+    expect(isItemClaimActive(fm, nowMs + 2 * 60 * 60_000)).toBe(true)
 
     const second = await startTakeoverSession({
       repoRoot: repo,

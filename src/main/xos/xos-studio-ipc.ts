@@ -9,6 +9,7 @@ import type { XosPortfolioMutation } from '../../shared/xos-portfolio-types'
 import { listGoalProjects, type XosRepoSource } from './xos-goal-board'
 import { applyPersonaMutation, readPersonaStudio, resolvePersonaImage } from './xos-persona-studio'
 import { buildPortfolioRollup } from './xos-portfolio-rollup'
+import { computeRepoAnalytics } from './xos-analytics'
 import { applyPortfolioMutation } from './xos-portfolio-config'
 
 const IMAGE_MAX_BYTES = 8 * 1024 * 1024
@@ -25,6 +26,11 @@ async function projectRootFor(repos: XosRepoSource, projectKey: string): Promise
 }
 
 export function registerXosStudioHandlers(repos: XosRepoSource): void {
+  ipcMain.handle('xos:analytics:project', async (_event, args: { projectKey: string }) => {
+    const root = await projectRootFor(repos, args?.projectKey)
+    return root ? computeRepoAnalytics(root) : null
+  })
+
   ipcMain.handle(
     'xos:persona:studio',
     async (_event, args: { projectKey: string; goal: string }) => {

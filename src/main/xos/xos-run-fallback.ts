@@ -6,9 +6,8 @@
 //   limit it queues the next model in the chain and starts a linked manual run.
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { TuiAgent } from '../../shared/tui-agent'
-import type { XosModelChoice } from '../../shared/xos-runtime-types'
 import { readXosModelArgs, writeXosModelArgs } from '../../shared/xos-model-args'
-import type { XosAutomationRunConfig } from '../../shared/xos-runtime-types'
+import type { XosAutomationRunConfig, XosModelChoice } from '../../shared/xos-runtime-types'
 import { xosPreviewAuto } from './xos-auto-mode'
 import { effectiveReservePercent } from './xos-dispatch-policy'
 import { classifyRunScreen, describeLimit, type XosRunLimitVerdict } from './xos-limit-classifier'

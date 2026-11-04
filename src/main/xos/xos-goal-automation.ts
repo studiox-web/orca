@@ -35,7 +35,20 @@ export async function activeCronLineForGoal(binding: XosGoalBinding): Promise<st
   return line?.command ?? null
 }
 
+/** A goal that can't be prepared (archived, unreadable crontab) skips: it never runs half-checked. */
 export async function prepareGoalLaunch(
+  automation: Automation,
+  run: AutomationRun,
+  binding: XosGoalBinding
+): Promise<{ skip: string } | XosGoalLaunch> {
+  try {
+    return await assembleGoalLaunch(automation, run, binding)
+  } catch (error) {
+    return { skip: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+async function assembleGoalLaunch(
   automation: Automation,
   run: AutomationRun,
   binding: XosGoalBinding

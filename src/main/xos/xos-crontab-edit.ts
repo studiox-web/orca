@@ -8,6 +8,7 @@ import {
   rewriteCrontab,
   type CrontabWriteResult
 } from './xos-crontab'
+import { shellQuote } from './xos-agent-command'
 import { guardCronWrite, MANAGED_COMMENT } from './xos-crontab-adoption'
 
 export { MANAGED_COMMENT }
@@ -141,7 +142,7 @@ export function goalScheduleCommand(args: {
       .replace(GOAL_LINE, `run-goal-cron.sh ${args.goal} ${args.runner}`)
       .replace(/\s+>>\s*\S+\s+2>&1\s*$/, '')
   }
-  return `cd ${JSON.stringify(args.root)} && ./automations/bin/run-goal-cron.sh ${args.goal} ${args.runner}`
+  return `cd ${shellQuote(args.root)} && ./automations/bin/run-goal-cron.sh ${args.goal} ${args.runner}`
 }
 
 export function appendManagedCronLine(args: {

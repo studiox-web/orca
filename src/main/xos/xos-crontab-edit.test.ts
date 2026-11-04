@@ -46,7 +46,7 @@ describe('goalScheduleCommand', () => {
   it('falls back to the plain runner and rejects bad names', () => {
     expect(
       goalScheduleCommand({ root: '/srv/dj', goal: 'x-y', runner: 'codex', siblingCommands: [] })
-    ).toBe('cd "/srv/dj" && ./automations/bin/run-goal-cron.sh x-y codex')
+    ).toBe("cd '/srv/dj' && ./automations/bin/run-goal-cron.sh x-y codex")
     expect(
       goalScheduleCommand({ root: '/srv/dj', goal: 'a; rm', runner: 'codex', siblingCommands: [] })
     ).toHaveProperty('error')

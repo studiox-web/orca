@@ -29,6 +29,7 @@ import { readRunConfig } from './xos-runtime-store'
 import { adoptScriptRuns, stopScriptRun } from './xos-script-runs'
 
 const SWEEP_MS = 20_000
+const LOCK_RELEASE_SETTLE_MS = 1_000
 export const HANDOFF_TTL_MS = 2 * 60_000
 
 export type XosAutomationHost = {
@@ -244,6 +245,8 @@ export function xosReleaseRun(runId: string): void {
   syncSweepTimer()
   if (entry.locks.length > 0) {
     void wakeWaiters()
+    // The lock helper dies asynchronously; don't leave a waiter for the next sweep over that.
+    setTimeout(() => void wakeWaiters(), LOCK_RELEASE_SETTLE_MS).unref()
   }
 }
 
@@ -265,26 +268,6 @@ async function wakeWaiters(): Promise<void> {
   }
   writeQueuedWaiters(waiters)
   syncSweepTimer()
-}
-
-/** `orca goals stop`, for a goal running through its automation. */
-export async function xosStopGoalAutomationRun(repoRoot: string, goal: string): Promise<boolean> {
-  const match = Array.from(held).find(
-    ([, entry]) => entry.goal?.repoRoot === repoRoot && entry.goal.goal === goal
-  )
-  const run = match && host?.findRun(match[1].automationId, match[0])
-  if (!match || !host || !run) {
-    return false
-  }
-  await host.closeRunTerminal(run).catch((error) => {
-    console.warn('[xos] could not close a stopped run terminal', error)
-  })
-  await host.markDispatchResult({
-    runId: match[0],
-    status: 'dispatch_failed',
-    error: 'Stopped by the operator.'
-  })
-  return true
 }
 
 async function timeOut(automationId: string, runId: string, minutes: number): Promise<void> {

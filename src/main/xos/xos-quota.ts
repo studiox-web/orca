@@ -117,3 +117,12 @@ export function listAgentQuotas(): {
     return { agent, known, exhausted, note }
   })
 }
+
+/** Each agent's long window, for the burn forecast (OV4). */
+export function listAgentWindows(): { agent: string; window: RateLimitWindow }[] {
+  return Object.keys(PROVIDER).flatMap((agent) => {
+    const limits = provider(agent)
+    const window = limits?.weekly ?? limits?.monthly ?? null
+    return window ? [{ agent, window }] : []
+  })
+}

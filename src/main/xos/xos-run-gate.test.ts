@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import type {
+  Automation,
+  AutomationRun,
+  AutomationRunOutputSnapshot
+} from '../../shared/automations-types'
 
 vi.mock('electron', () => ({ Notification: { isSupported: () => false } }))
 
@@ -79,8 +83,10 @@ describe('lane locks', () => {
     expect('refusal' in queued && queued.refusal).toMatch(/Queued/)
 
     gate.xosAfterRunFinished(run('a1', 'a', 'completed'))
-    await flush()
-    expect(host.runNow).toHaveBeenCalledWith('c', 'scheduled')
+    await vi.waitFor(() => expect(host.runNow).toHaveBeenCalledWith('c', 'scheduled'), {
+      timeout: 3000,
+      interval: 50
+    })
     expect(
       'automation' in (await gate.xosBeforeLaunch(automation('b'), run('b2', 'b'), target()))
     ).toBe(true)
@@ -192,5 +198,97 @@ describe('run timeout', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+const LIMIT_SNAPSHOT: AutomationRunOutputSnapshot = {
+  format: 'plain_text',
+  content: "You've hit your limit",
+  capturedAt: 0,
+  truncated: false
+}
+
+describe('lane hand-offs (L2, L3, L4)', () => {
+  it('stops the agent before the timeout frees the lane (L2)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const order: string[] = []
+      host.closeRunTerminal.mockImplementationOnce(async () => {
+        order.push('close')
+      })
+      host.markDispatchResult.mockImplementationOnce(async () => {
+        order.push('mark')
+      })
+      writeRunConfig('a', { timeoutMinutes: 5 })
+      await gate.xosBeforeLaunch(automation('a'), run('t1', 'a'), target())
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(order).toEqual(['close', 'mark'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('applies the timeout to chat runs too (H9)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      writeRunConfig('a', { timeoutMinutes: 5 })
+      const chat: Automation = { ...automation('a'), surface: 'chat' }
+      await gate.xosBeforeLaunch(chat, run('t2', 'a'), target())
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(host.markDispatchResult).toHaveBeenCalledWith(
+        expect.objectContaining({ runId: 't2', status: 'dispatch_failed' })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps the lane across a fallback retry, so a waiter cannot slip in (L3)', async () => {
+    const limited: AutomationRun = {
+      ...run('l1', 'a'),
+      status: 'completed',
+      outputSnapshot: LIMIT_SNAPSHOT
+    }
+    writeRunConfig('a', {
+      lockLane: 'content',
+      fallbacks: [{ agent: 'codex', model: null, effort: null }]
+    })
+    writeRunConfig('w', { lockLane: 'content', lockWaitMinutes: 10 })
+    const parent = {
+      ...host,
+      findAutomation: () => automation('a')
+    }
+    gate.registerXosAutomationHost(parent)
+    await gate.xosBeforeLaunch(automation('a'), runs.get('l1')!, target())
+    await gate.xosBeforeLaunch(automation('w'), run('w1', 'w'), target())
+
+    gate.xosAfterRunFinished(limited)
+    await flush()
+    expect(host.runNow).toHaveBeenCalledWith('a')
+    expect(host.runNow).not.toHaveBeenCalledWith('w', 'scheduled')
+
+    const retry = await gate.xosBeforeLaunch(automation('a'), run('l2', 'a'), target())
+    expect('automation' in retry).toBe(true)
+    gate.xosReleaseRun('l2')
+    // L4: the waiter comes back as a scheduled run, so it gets a scheduled run's precheck.
+    await vi.waitFor(() => expect(host.runNow).toHaveBeenCalledWith('w', 'scheduled'), {
+      timeout: 3000,
+      interval: 50
+    })
+  })
+
+  it('does not commit a run that hit a limit', async () => {
+    writeRunConfig('a', { autoCommit: { paths: ['src'], message: null, push: false } })
+    await gate.xosBeforeLaunch(
+      { ...automation('a'), workspaceMode: 'existing' },
+      run('c1', 'a'),
+      target()
+    )
+    gate.xosAfterRunFinished({
+      ...runs.get('c1')!,
+      status: 'completed',
+      outputSnapshot: LIMIT_SNAPSHOT
+    })
+    expect(gate.xosPendingCommits()).toBe(0)
   })
 })

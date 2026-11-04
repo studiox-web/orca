@@ -13,6 +13,8 @@ type BuildState = { sha: string; builtAt: string; durationMs?: number }
 
 /** Used for the first estimate, before any build has recorded its duration. */
 const DEFAULT_BUILD_MS = 3 * 60_000
+/** The app releases its profile lock within seconds of quitting; past this, the install refuses. */
+const INSTALL_WAIT_SECONDS = 120
 
 let busy = false
 let progress: XosUpdateWindow | null = null
@@ -98,23 +100,15 @@ function runBuild(sha: string, logPath: string): Promise<{ ok: boolean; logPath:
   })
 }
 
-/** Quit, then let a detached helper wait for Orca to exit and run switch-to-fork.sh. */
+/** Quit, then a detached switch-to-fork.sh waits for the profile lock to free and installs. */
 function installAndRestart(): void {
   const logPath = join(stateDir(), 'install.log')
   const script = join(repoDir(), 'xos', 'switch-to-fork.sh')
-  // Same "is Orca still running" test switch-to-fork.sh uses; give up after 30 minutes.
-  const helper = `
-for i in $(seq 1 1800); do
-  pgrep -af '(\\.mount_[^/ ]*/orca-ide|Orca-XOS\\.AppImage|Orca\\.AppImage)' | grep -v -- ' -e ' >/dev/null || break
-  sleep 1
-done
-sleep 1
-exec "$1"
-`
   const fd = openSync(logPath, 'a')
   const child = spawnProcess({
     program: '/bin/bash',
-    args: ['-c', helper, 'xos-install', script],
+    args: [script, `--wait=${INSTALL_WAIT_SECONDS}`],
+    env: { ...process.env, ORCA_USER_DATA_PATH: app.getPath('userData') },
     detached: true,
     stdio: ['ignore', fd, fd]
   })

@@ -39,9 +39,7 @@ export type XosNativeRunArgs = {
 
 export type XosStopReason = 'stopped' | 'timeout'
 
-export type XosLiveRun = Omit<XosNativeJournalEntry, 'kind' | 'locks' | 'mode' | 'trigger'> & {
-  mode: XosGoalRunMode
-  trigger: XosNativeRunTrigger
+export type XosLiveRun = Omit<XosNativeJournalEntry, 'kind' | 'locks'> & {
   locks: HeldLock[]
   finishedAt: string | null
   exitCode: number | null

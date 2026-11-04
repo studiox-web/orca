@@ -1,3 +1,4 @@
+import type { XosProjectAnalytics } from './xos-analytics-types'
 // XOS fork: goal board data shared by main and renderer. Shapes follow the Cascade/DJVibe
 // Command Centre (`types/command-centre.ts`) so the ported card UI needs few changes.
 import type { XosGoalQueues, XosItemsApi } from './xos-items-types'
@@ -319,6 +320,7 @@ export type XosGoalsApi = XosItemsApi &
     liveTail: (args: { projectKey: string; goal: string }) => Promise<XosLiveRunTail | null>
     /** §3e / §3h.2 drill-in: interactive takeover session or autonomous build on an item. */
     continueOn: (args: XosContinueOnRequest) => Promise<XosActionResult>
+    getAnalytics: (args: { projectKey: string }) => Promise<XosProjectAnalytics | null>
     releaseTakeover: (args: {
       projectKey: string
       goal: string

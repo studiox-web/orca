@@ -1,10 +1,12 @@
 // XOS fork: Stage E item-history analytics, funnel conversion, rejection stats, velocity, and
 // cost per shipped feature (OV3, OV4, GD6, OV5, §3g.6).
 import { basename, join } from 'node:path'
+import type { XosProjectAnalytics } from '../../shared/xos-analytics-types'
 import type { XosGoalUsage } from '../../shared/xos-goals-types'
 import { parseFrontmatter, readHead } from './xos-goal-files'
 import { readTokenUsage } from './xos-goal-receipts'
 import { readTransitionEvents, type XosItemTransitionEvent } from './xos-item-claims'
+import { listAgentWindows } from './xos-quota'
 import { scanProjectQueues } from './xos-work-items'
 
 export const DEFAULT_STUCK_THRESHOLD_HOURS = 72
@@ -254,7 +256,10 @@ export function computeTokenBurnForecast(args: {
   return { ...base, ...rates, hoursToTarget, status }
 }
 
-export function computeRepoAnalytics(repoRoot: string, nowMs: number = Date.now()) {
+export function computeRepoAnalytics(
+  repoRoot: string,
+  nowMs: number = Date.now()
+): XosProjectAnalytics {
   const transitions = readTransitionEvents(repoRoot, 500)
   const usageByGoal = readTokenUsage(join(repoRoot, 'automations'))
   const activeItems: XosActiveQueueItem[] = []
@@ -293,14 +298,15 @@ export function computeRepoAnalytics(repoRoot: string, nowMs: number = Date.now(
     funnel,
     rejections: computeRejectionBucketStats(rejectionBuckets),
     velocity: computeWeeklyVelocity(transitions, { nowMs }),
-    featureCosts: computeCostPerShippedFeature({ transitions, usageByGoal })
+    featureCosts: computeCostPerShippedFeature({ transitions, usageByGoal }),
+    burn: listAgentWindows().map(({ agent, window }) => ({
+      agent,
+      ...computeTokenBurnForecast({
+        usedPercent: window.usedPercent,
+        windowMinutes: window.windowMinutes,
+        resetsAtMs: window.resetsAt ?? nowMs + window.windowMinutes * 60_000,
+        nowMs
+      })
+    }))
   }
 }
-
-export type XosStageDwellStat = ReturnType<typeof computeTimeInQueue>[number]
-export type XosStuckItemAlert = ReturnType<typeof computeStuckItemAlerts>[number]
-export type XosFunnelStep = ReturnType<typeof computeFunnelStats>[number]
-export type XosRejectionBucketStat = ReturnType<typeof computeRejectionBucketStats>[number]
-export type XosWeeklyVelocityPoint = ReturnType<typeof computeWeeklyVelocity>[number]
-export type XosFeatureCostSummary = ReturnType<typeof computeCostPerShippedFeature>
-export type XosTokenBurnForecast = ReturnType<typeof computeTokenBurnForecast>

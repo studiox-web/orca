@@ -195,6 +195,11 @@ export function commitProjectHomeDir(homeDir: string, message: string): Promise<
   return next
 }
 
+/** Resolves once background home commits settled, so a caller can delete the home safely. */
+export async function waitForProjectHomeCommits(): Promise<void> {
+  await Promise.all(homeCommits.values())
+}
+
 export async function commitProjectHome(
   nameOrRoot: string,
   message: string

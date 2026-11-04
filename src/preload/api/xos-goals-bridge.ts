@@ -25,6 +25,7 @@ export const xosGoalsApi: XosGoalsApi = {
   liveTail: (args) => ipcRenderer.invoke('xos:goals:liveTail', args),
   continueOn: (args) => ipcRenderer.invoke('xos:goals:continueOn', args),
   releaseTakeover: (args) => ipcRenderer.invoke('xos:goals:releaseTakeover', args),
+  getAnalytics: (args) => ipcRenderer.invoke('xos:analytics:project', args),
   nextItem: (args) => ipcRenderer.invoke('xos:goals:nextItem', args),
   getPersonaStudio: (args) => ipcRenderer.invoke('xos:persona:studio', args),
   mutatePersona: (args) => ipcRenderer.invoke('xos:persona:mutate', args),

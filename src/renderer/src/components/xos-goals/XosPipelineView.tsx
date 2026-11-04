@@ -13,7 +13,10 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import type { XosGoal, XosProject } from '../../../../shared/xos-goals-types'
-import type { XosQueueRef, XosQueueTone } from '../../../../shared/xos-items-types'
+import {
+  computePipelineFromGoals,
+  type XosPipelinePipe
+} from '../../../../shared/xos-pipeline-model'
 import { useXosItems } from './use-xos-items'
 import { relativeTime } from './xos-format'
 import type { CardThemeSelection } from './xos-goal-card-logic'
@@ -34,65 +37,19 @@ import {
 } from './xos-items-model'
 import { openXosItemsInTasks } from './xos-items-source'
 
-const STUCK_HOURS = 72
-
-function computePipeStatus(
-  count: number,
-  floor: number | null,
-  ceiling: number | null
-): { status: 'starved' | 'backed-up' | 'healthy'; tone: XosQueueTone } {
-  if (ceiling !== null && count >= ceiling) {
-    return { status: 'backed-up', tone: 'backed-up' }
-  }
-  if (floor !== null && count < floor) {
-    return { status: 'starved', tone: 'starved' }
-  }
-  return { status: 'healthy', tone: count === 0 ? 'idle' : 'ok' }
-}
-
-function createPipe(ref: XosQueueRef, nowMs: number) {
-  const { status, tone } = computePipeStatus(ref.readyCount ?? ref.count, ref.floor, ref.ceiling)
-  const oldestMs = ref.oldestAt ? Date.parse(ref.oldestAt) : Number.NaN
-  const oldestAgeHours = Number.isFinite(oldestMs)
-    ? Math.max(0, Math.round(((nowMs - oldestMs) / 3_600_000) * 10) / 10)
-    : null
-  const stuck = oldestAgeHours !== null && oldestAgeHours >= STUCK_HOURS && ref.count > 0
-  const meta = { id: `${ref.typeId}:${ref.stageId}`, oldestAgeHours, stuck, status, tone }
-  const fromGoals: string[] = []
-  const toGoals: string[] = []
-  return { ...ref, ...meta, fromGoals, toGoals }
-}
-
-type PipeDescriptor = ReturnType<typeof createPipe>
+type PipeDescriptor = XosPipelinePipe
 
 function buildTypePipes(
   project: XosProject,
   typeId: string,
-  stageOrder: string[],
-  nowMs: number = Date.now()
-) {
-  const byStage = new Map<string, PipeDescriptor>()
-  const ensure = (ref: XosQueueRef): PipeDescriptor => {
-    const existing = byStage.get(ref.stageId) ?? createPipe(ref, nowMs)
-    byStage.set(ref.stageId, existing)
-    return existing
-  }
-  for (const goal of project.goals) {
-    for (const ref of goal.queues.out) {
-      if (ref.typeId === typeId && !ensure(ref).fromGoals.includes(goal.goal)) {
-        ensure(ref).fromGoals.push(goal.goal)
-      }
-    }
-    for (const ref of goal.queues.in) {
-      if (ref.typeId === typeId && !ensure(ref).toGoals.includes(goal.goal)) {
-        ensure(ref).toGoals.push(goal.goal)
-      }
-    }
-  }
-  return [...byStage.values()].sort((a, b) => {
-    const [ia, ib] = [stageOrder.indexOf(a.stageId), stageOrder.indexOf(b.stageId)]
-    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib) || a.label.localeCompare(b.label)
-  })
+  stageOrder: string[]
+): PipeDescriptor[] {
+  return computePipelineFromGoals(project.goals)
+    .pipes.filter((pipe) => pipe.typeId === typeId)
+    .sort((a, b) => {
+      const [ia, ib] = [stageOrder.indexOf(a.stageId), stageOrder.indexOf(b.stageId)]
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib) || a.label.localeCompare(b.label)
+    })
 }
 
 function PipeCard({

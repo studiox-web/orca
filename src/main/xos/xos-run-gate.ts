@@ -39,7 +39,6 @@ export {
   registerXosAutomationHost,
   xosGrantInheritedLane,
   xosReleaseRun,
-  xosStopGoalAutomationRun,
   type XosAutomationHost
 } from './xos-run-state'
 
@@ -144,6 +143,7 @@ export async function xosBeforeLaunch(
     const itemPath = goalLaunch.itemPath
     if (itemPath && !claimWorkItem(itemPath, { runId: run.id }).claimed) {
       entry.locks.forEach((lock) => lock.release())
+      removeRunJournal(run.id, entry.leasePath)
       return { refusal: 'The next work item was claimed by another run.', precheck: true }
     }
     launchPrompt = itemPath
@@ -259,4 +259,25 @@ function finishRun(run: AutomationRun, commit: XosRunCommit | null): void {
     return
   }
   xosReleaseRun(run.id)
+}
+
+/** `orca goals stop`, for a goal running through its automation. */
+export async function xosStopGoalAutomationRun(repoRoot: string, goal: string): Promise<boolean> {
+  const host = automationHost()
+  const match = Array.from(held).find(
+    ([, entry]) => entry.goal?.repoRoot === repoRoot && entry.goal.goal === goal
+  )
+  const run = match && host?.findRun(match[1].automationId, match[0])
+  if (!match || !host || !run) {
+    return false
+  }
+  await host.closeRunTerminal(run).catch((error) => {
+    console.warn('[xos] could not close a stopped run terminal', error)
+  })
+  await host.markDispatchResult({
+    runId: match[0],
+    status: 'dispatch_failed',
+    error: 'Stopped by the operator.'
+  })
+  return true
 }

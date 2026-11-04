@@ -1,18 +1,12 @@
 // XOS fork: native runs as durable, supervised processes (H8, H9, H10, M1, M2, M7, M8). A fake agent
 // on PATH (via BASH_ENV, which `bash -lc` sources) plays claude and codex.
 import { spawn } from 'node:child_process'
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { XosNativeJournalEntry } from './xos-run-journal'
+import { removeTempDir } from './xos-temp-dir.test-fixture'
 
 vi.mock('electron', () => ({ Notification: { isSupported: () => false } }))
 
@@ -73,7 +67,7 @@ beforeEach(() => {
   dirs.push(process.env.ORCA_XOS_HOME)
 })
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.ORCA_XOS_HOME
   if (savedBashEnv === undefined) {
     delete process.env.BASH_ENV
@@ -81,7 +75,7 @@ afterEach(() => {
     process.env.BASH_ENV = savedBashEnv
   }
   while (dirs.length > 0) {
-    rmSync(dirs.pop()!, { recursive: true, force: true })
+    await removeTempDir(dirs.pop()!)
   }
 })
 
@@ -117,7 +111,7 @@ describe('launch', () => {
     })
     expect(existsSync(join(repo, 'ran'))).toBe(false)
     expect(readReceiptLines(repo)[0].status).toBe('skipped_precheck')
-    expect(goalRunsToday(repo, 'writer', Date.now())).toBe(0)
+    expect(goalRunsToday(repo, 'writer', Date.parse(readReceiptLines(repo)[0].started_at!))).toBe(0)
   })
 
   it('leaves nothing behind when the agent cannot start (M3, M8)', async () => {
@@ -259,7 +253,11 @@ describe('timeout, stop and fallback (H9)', () => {
 })
 
 describe('restart (H8)', () => {
-  function journalEntry(repo: string, pid: number | null, exit: string | null) {
+  function journalEntry(
+    repo: string,
+    pid: number | null,
+    exit: string | null
+  ): XosNativeJournalEntry {
     const logPath = join(repo, 'adopted.log')
     const exitPath = join(repo, 'adopted.exit')
     writeFileSync(logPath, 'finished the post\n')
@@ -267,7 +265,7 @@ describe('restart (H8)', () => {
       writeFileSync(exitPath, exit)
     }
     return {
-      kind: 'native' as const,
+      kind: 'native',
       runId: `writer-adopted-${pid}`,
       repoRoot: repo,
       goal: 'writer',
@@ -276,7 +274,7 @@ describe('restart (H8)', () => {
       trigger: 'scheduled',
       parentRunId: null,
       pid,
-      startedAt: new Date().toISOString(),
+      startedAt: '2026-11-04T12:00:00.000Z',
       deadlineAtMs: null,
       locks: [],
       leasePath: join(repo, 'lease'),
@@ -306,6 +304,7 @@ describe('restart (H8)', () => {
     expect(listRunJournal()).toEqual([])
   })
 
+  // A real process, stopped through the adoption poll.
   it('keeps a live run in the registry so it can be stopped after a restart', async () => {
     const { repo } = makeRepo()
     const orphan = spawn('sleep', ['30'], { detached: true, stdio: 'ignore' })
@@ -322,6 +321,7 @@ describe('restart (H8)', () => {
     expect(readReceiptLines(repo)[0].failure_reason).toBe('stopped')
   }, 15_000)
 
+  // The lock helper polls its lease every five seconds.
   it('holds a leased lock after the owner is gone, until the agent exits', async () => {
     const { repo } = makeRepo()
     const file = laneLockFile(repo, 'content')
@@ -332,7 +332,7 @@ describe('restart (H8)', () => {
     const held = await tryLock(
       file,
       0,
-      { path: lease, expiresAtMs: Date.now() + 60_000 },
+      { path: lease, expiresAtMs: Date.parse('2099-01-01T00:00:00Z') },
       2 ** 22 + 1
     )
     expect(held).not.toBeNull()
@@ -349,12 +349,7 @@ describe('readLiveTail (M7)', () => {
   it('shows the newest run and the end of a long log', async () => {
     const { repo } = makeRepo(['agents: [claude]'])
     fakeAgents(repo, 'for i in $(seq 1 6000); do echo "line $i"; done\necho FINAL-FAILURE\nexit 1')
-    await startNativeGoalRun({
-      repoRoot: repo,
-      goal: 'writer',
-      force: true,
-      nowMs: Date.now() - 5000
-    })
+    await startNativeGoalRun({ repoRoot: repo, goal: 'writer', force: true })
     await settled(repo)
     fakeAgents(repo, 'echo second-run\nexit 0')
     await startNativeGoalRun({ repoRoot: repo, goal: 'writer', force: true })

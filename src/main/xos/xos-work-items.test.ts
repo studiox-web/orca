@@ -108,10 +108,11 @@ describe('moveWorkItem guards (M14)', () => {
       mkdirSync(planned, { recursive: true })
       mkdirSync(done, { recursive: true })
       const item = join(planned, 'spec.md')
-      const claimed = `---\ntitle: S\nclaimed_by: run-1\nclaimed_at: ${new Date().toISOString()}\n---\n`
+      const nowMs = Date.parse('2026-11-04T12:00:00.000Z')
+      const claimed = `---\ntitle: S\nclaimed_by: run-1\nclaimed_at: 2026-11-04T11:59:00.000Z\n---\n`
       writeFileSync(item, claimed)
       const move = (force?: boolean) =>
-        moveWorkItem({ roots: [repo], pathOrQuery: item, toStageId: 'completed', force })
+        moveWorkItem({ roots: [repo], pathOrQuery: item, toStageId: 'completed', force, nowMs })
       expect(move()).toMatchObject({ ok: false, error: expect.stringContaining('run-1') })
 
       writeFileSync(join(done, 'spec.md'), 'the finished one\n')

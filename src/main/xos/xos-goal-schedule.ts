@@ -3,10 +3,10 @@
 // legacy crontab line is active (PF7).
 import type { Automation, AutomationCreateInput } from '../../shared/automations-types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { XosAutomationRunConfig } from '../../shared/xos-runtime-types'
-import { audit } from './xos-crontab'
 import { buildMigrationPlan, type XosMigrationEntry } from './xos-cron-migration'
-import { readCrontabText } from './xos-crontab'
+import { audit, readCrontabText } from './xos-crontab'
 import { frontmatterList, parseFrontmatter, readHead } from './xos-goal-files'
 import { resolveGoalDir } from './xos-project-home'
 import { listRunConfigs, readRunConfig, writeRunConfig } from './xos-runtime-store'
@@ -68,12 +68,15 @@ export async function scheduleGoal(
   }
   const fm = parseFrontmatter(readHead(`${resolveGoalDir(args.repoRoot, args.goal)}/GOAL.md`))
   const agent = args.agent ?? frontmatterList(fm, 'agents')[0] ?? 'codex'
+  if (!isTuiAgent(agent)) {
+    return { ok: false, error: `Unknown agent "${agent}".` }
+  }
   return createDisabled(host, {
     repoRoot: args.repoRoot,
     name: `Goal: ${args.goal}`,
     // Replaced at dispatch by the assembled prompt; shown in the automation list.
     prompt: `Run the ${args.goal} goal. Orca assembles the real prompt at dispatch.`,
-    agent: agent as TuiAgent,
+    agent,
     schedule: args.schedule,
     timezone: args.timezone,
     binding: { goal: { repoRoot: args.repoRoot, goal: args.goal } }

@@ -4114,5 +4114,54 @@
     "text": ", keeping deliverables moving and cross-functional teams aligned.",
     "dynamic": true,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/use-xos-goal-actions.ts",
+    "kind": "user-visible-call",
+    "text": "Adopt and continue",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/use-xos-goal-actions.ts",
+    "kind": "user-visible-call",
+    "text": "Run anyway",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalDrillIn.tsx",
+    "kind": "jsx-text",
+    "text": "is at the helm: this goal&apos;s lane is held until you release it.",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalDrillIn.tsx",
+    "kind": "jsx-text",
+    "text": "Done: release to auto",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalDrillIn.tsx",
+    "kind": "jsx-text",
+    "text": "Release without moving the item",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-expression",
+    "text": "Paused for migration",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/xos-goals/XosGoalViewerParts.tsx",
+    "kind": "jsx-expression",
+    "text": "Paused",
+    "dynamic": false,
+    "count": 1
   }
 ]

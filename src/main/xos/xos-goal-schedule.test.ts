@@ -1,5 +1,5 @@
 // XOS fork: replacements are created disabled and never touch the crontab (C1, C2).
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import type { Automation } from '../../shared/automations-types'
 import { replaceCronJob, scheduleGoal } from './xos-goal-schedule'
 import { parseCrontabWithPaused } from './xos-crontab'
 import { readRunConfig } from './xos-runtime-store'
+import { removeTempDir } from './xos-temp-dir.test-fixture'
 
 let base: string
 let repo: string
@@ -54,10 +55,10 @@ beforeEach(() => {
   process.env.PATH = `${bin}${delimiter}${savedPath}`
 })
 
-afterEach(() => {
+afterEach(async () => {
   process.env.PATH = savedPath
   delete process.env.ORCA_XOS_HOME
-  rmSync(base, { recursive: true, force: true })
+  await removeTempDir(base)
 })
 
 describe('scheduleGoal', () => {

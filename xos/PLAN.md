@@ -1,7 +1,7 @@
 # Cascade/XOS Automation Framework → Orca: Gap Analysis & Expansion Plan
 
-Status: plan v3.2 (2026-11-03), interview complete; §3g queues and §3h PM view (Tasks) added. All queues and items live in the Orca project home.
-**Implemented on `xos` (2026-11-03): stage 0 and stage A** — see §4a for what exists, where, and what is left. Next: stage B.
+Status: plan v3.3 (2026-11-04), interview complete; §3g queues and §3h PM view (Tasks) added. All queues and items live in the Orca project home.
+**Implemented on `xos`: see §4a for what exists, what is reachable, and what is left.** Source is verified by unit tests only: nothing after `e73872c0d9` has been built, installed or live-tested. `xos/audit-ledger-5716fed3b9.md` tracks every audit finding.
 Related: the `xos` branch already adds a read-only **crontab external manager** that enriches `run-goal-cron.sh` jobs with JSONL receipts (`src/main/automations/external-crontab-*.ts`), plus fork build and switch scripts.
 
 ## 0. Direction
@@ -499,10 +499,10 @@ max_runs_per_day: 3
   - On success, Orca moves it to the next stage and records the branch, commit, PR and run id in its frontmatter.
   - On failure, the item goes back to its stage, unclaimed, with the error attached.
 - For history on the code side, the builder puts the item id and title in its commit message or PR body (`Item: feature/123-…`).
-- **Migration:** `orca goals import` copies `automations/goals/*`, `docs/features/*`, `docs/bugs/*` and `docs/feedback/*` from each repo into the project home. After a week of matching receipts, those folders are deleted from the repo.
+- **Migration:** `orca goals import [--goal a,b] [--force]` copies `automations/goals/*` (one goal at a time with `--goal`; goals already in the home are kept unless `--force`), `docs/features/*`, `docs/bugs/*` and `docs/feedback/*` from each repo into the project home. After a week of matching receipts, those folders are deleted from the repo.
   - Nothing in the apps reads them at runtime, only the Command Centre, `RefreshDashboardSummary` and `LintFeatureDirectory`, which all retire with the Laravel automation pages.
   - DJVibe also has `docs/projects`, which needs checking before import.
-- Queue paths in GOAL.md are relative to the project home; there is no product-repo prefix.
+- Queue paths in GOAL.md resolve against the goal home, then the project home, then (during migration) the repo.
 
 **5. Claiming.** Lock lanes alone can't stop two runs, or a manual "Continue on…" session (§3e), from picking the same item.
 
@@ -615,15 +615,18 @@ max_runs_per_day: 3
 
 ### 4a. Implementation status
 
-| Stage   | State                                             | Commits                                                               | Notes                                                                                                                                                                |
-| ------- | ------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0**   | Done, in daily use                                | through b136f49ece, 3bb16bb738 (update progress window)               | Org chart board, Goal Viewer, project switcher, §3d CRUD with backups/audit, queue counts (§3g), Tasks → Goals source (§3h), Help → Check for Updates self-build     |
-| **A**   | Code-complete, **not yet live-tested in the app** | a14c8b9c9a (A1), eeb03b08a2 (A2), daff322748 (A3), 3df854c59a (A4/A5) | See below                                                                                                                                                            |
-| **B**   | Code-complete, **not yet live-tested in the app** | Stage B (`djvibe/xos-stage-b-goal-entity` → `xos`)                    | Centralized project home (`orca goals import`), prompt assembly, run modes (`normal`/`reply`/`sidecar`), declared queues, queue gate, claiming, RT13 & chat fallback |
-| **C**   | Completed, merged to `xos`                        | `5b6e332d79` (branch), `1246268050` (merge)                           | CLI commands (`orca goals`, `orca items`, `orca usage`, `orca models`), Queue event/floor triggers & watcher, Tasks item CRUD & drawer                               |
-| **D**   | Completed, merged to `xos`                        | `33160c2864` (branch), `5349f1d40b` (merge)                           | Operations UI live runs, live log tailing, takeover/drill-in dialogs, manager command bar                                                                            |
-| **E**   | Completed, merged to `xos`                        | `973f02fe9a` (branch), `994a101c44` (merge)                           | Pipeline view flow strip, queue analytics (funnel conversion, velocity, stuck-item alerts), GitHub intake sync                                                       |
-| **F/G** | Completed, merged to `xos`                        | `ada16080b2` (branch), `f8acd5438a` (merge)                           | Persona studio, multi-theme avatar & prompt galleries, cross-project portfolio rollup & health aggregations                                                          |
+State below is about source on `xos`. **Installed** means running on this machine; "Code" never implies it.
+
+| Stage | State                                                  | Installed | Reachable from                                     | Still open                                                                                                                                 |
+| ----- | ------------------------------------------------------ | --------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **0** | Code; board and §3d CRUD in use                        | Partly    | Org chart, Tasks → Goals                           | §3b project filter on the list, runs dashboard and `orca automations`. Queue chips and Tasks → Goals are newer than the installed build    |
+| **A** | Code, not live-tested                                  | No        | Automation editor and detail page                  | "Wait for reset"; a `limited` run status on upstream's run row (the ledger records it; the row stays `completed`)                          |
+| **B** | Code, not live-tested                                  | No        | Run now, bound automations, `orca goals run`       | Template/instance split                                                                                                                    |
+| **C** | Code, not live-tested                                  | No        | `orca goals …`, opt-in queue triggers              | `orca runs open/continue/takeover`; bot and mobile alert delivery (`goals notify` only queues)                                             |
+| **D** | Code, not live-tested                                  | No        | Goal Viewer, Orca scheduler via bound automations  | AI TLDR banner (OV1; `goals briefing` is the deterministic rollup), Up next (OV2), run lineage view, "All sessions for this goal"          |
+| **E** | Code, not live-tested                                  | No        | Pipeline and Analytics views, `goals github-sync`  | Queue Board drag and approve/reject on the flow strip; per-run cost in `transitions` (cost per feature still matches usage by time window) |
+| **F** | Code, not live-tested                                  | No        | Goal Viewer                                        | Depth not audited; Maya/photoshoot extraction is outside this repo                                                                         |
+| **G** | Modes, sprint and budgets constrain dispatch; not live | No        | Portfolio, `checkDispatchPolicy` on every dispatch | PF4 reservation (budgets only stop new runs), PF5 approvals beyond media review, PF6 versioned definitions beyond git                      |
 
 Stage A as built (all fork code in `src/main/xos/` and `src/renderer/src/components/xos-goals/`; settings live in `~/.orca-xos/automation-runtime.json`, run events in `~/.orca-xos/automation-runs.jsonl`):
 
@@ -635,7 +638,7 @@ Stage A as built (all fork code in `src/main/xos/` and `src/renderer/src/compone
 
 Upstream hooks (keep minimal when rebasing): `automation-dispatch-request.ts` (`xosBeforeLaunch`), `automations/service.ts markDispatchResult` (`xosAfterRunFinished`), `runtime-automation-service.ts` (`registerXosAutomationHost`), `provider-account-services.ts` (`registerXosQuotaSource`), `AutomationEditorSettingsSidebar.tsx` and `AutomationDetail.tsx` (UI mounts).
 
-Known gaps carried into stage B: chat-surface runs get no model override/fallback (needs typed `AgentSessionUsageLimit`); nested child runs in the same lane (RT13, `CASCADE_ACTIVE_LOCK_LANE`) see the lane busy; Auto picks across agents, not across accounts of one agent; antigravity has no model flags; per-run worktrees are never auto-committed (plan: PR flow). Pre-existing test failures on `xos`, unrelated: `AutomationRunHistory.test.tsx` (date format) and two external-manager probe tests in `AutomationsPage*.test.tsx`.
+Known gaps: Auto picks across agents, not across accounts of one agent; antigravity has no model flags; native runs support claude and codex only; Build now commits on its branch but opens no PR (pushing is an operator step); a chat run's timeout closes its surface but cannot interrupt a provider turn that has no pane.
 
 ### 4b. Stage B implementation (`djvibe/xos-stage-b-goal-entity`)
 
@@ -646,6 +649,15 @@ Stage B is implemented in five slices:
 - **B3 RT16, RT17, §3g.1–3g.6**: Declared `queues:` frontmatter in `GOAL.md` with fallback to `LEGACY_ITEM_TYPES`, pre-run queue gate (`skipped_precheck` on daily cap, empty input queue, or downstream ceiling/hard cap), queue snapshot in prompt, item claiming (`claimed_by`/`claimed_at` with automatic stale-claim expiry), and stage transition index (`transitions.jsonl`) (`src/main/xos/xos-declared-queues.ts`, `src/main/xos/xos-queue-gate.ts`, `src/main/xos/xos-item-claims.ts`).
 - **B4 RT13 + Chat-surface model/fallback**: Nested child runs in the same lane inherit the active lane lock via `CASCADE_ACTIVE_LOCK_LANE` or `xosGrantInheritedLane` while retaining per-automation self-recursion locks (`xos-run-gate.ts`), and chat-surface automation runs forward `sessionOptions` (`model`/`effort`) and classify typed `AgentSessionFailureFact` (`usageLimitReached`, `notSignedIn`, `cliMissing`, `providerRetrying`) for fallback retries (`automation-chat-agent-launch.ts`, `automation-chat-run-observation.ts`, `xos-limit-classifier.ts`, `xos-run-fallback.ts`).
 - **B5 Goal Runner & Viewer UI**: `xos:goals:runNow` supports `normal`, `reply`, `sidecar`, and operator `message` runs; `XosGoalViewer` adds `Reply inbox`, `GoalRunBar` (operator message + sidecar selector), `MEMORY.md`/`SOUL.md`/`LESSONS.md`/`DECISIONS.md` buttons, and `Import to ~/.orca-xos` (`xos-goal-ipc.ts`, `XosGoalViewer.tsx`, `XosGoalViewerParts.tsx`, `XosGoalManage.tsx`).
+
+### 4c. Running goals and replacing cron (`xos` source, not yet installed)
+
+- **Goals on the scheduler (C1).** `orca goals schedule <goal> --schedule "<cron>"` creates an Orca automation bound to the goal, **disabled**. Each dispatch checks portfolio policy, the legacy-cron guard, authority and the queue gate, then swaps in the assembled prompt, claims the item, and settles it after the run. Skips land as `skipped_precheck`.
+- **Replacing cron (C2).** `orca goals migrate plan` maps every crontab job to `legacy-active`, `not-running` or `replacement-ready`, including lines paused by hand with `# PAUSED FOR ORCA MIGRATION <date>:`. `orca goals migrate replace --job <id>` creates the disabled replacement: a goal binding, or a script automation for everything else. A replacement is skipped at dispatch while its crontab line is active, so a job can't double-run. Only a resume of one line undoes a manual migration pause; bulk resume leaves it alone.
+- **Durable runs (H8).** `~/.orca-xos/run-state/` journals every active run. Native and script runs write their own log and exit file, leases keep a lane held while the agent lives, and the next Orca adopts what it finds.
+- **Queue triggers (H1)** are off until `orca goals triggers --enable --project <p>`. GitHub intake runs only through `orca goals github-sync` (schedule it as a script automation if wanted).
+- **Authority (M15).** Native runs stay sandboxed until `orca goals authorize <goal> --confirm <goal>`. A contract change to its authority fields voids that, and a run reading an external inbox message never bypasses the sandbox. Goals on a production lane or with `auto_push` refuse unattended runs until confirmed.
+- **New contract fields:** `owned_paths`, `timeout_minutes`, `fallbacks` (`agent:model`), `fallback_on_manual`, `auto_push`.
 
 Migration happens _during_ B–E, one goal at a time: (1) the goal runs in Orca, (2) remove its crontab line (the `xos` crontab manager shows both, so nothing double-runs), (3) compare receipts for a week. djvibe's live content loop goes first (Cascade goal crons have been off since about July). Cascade and studiox goals get re-enabled selectively after stage C.
 

@@ -3,9 +3,11 @@
 // written atomically and removed when the run is settled. In-memory maps are only caches of this.
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { XosGoalRunMode } from '../../shared/xos-goals-types'
 import type { XosModelChoice } from '../../shared/xos-runtime-types'
 import { xosHome } from './xos-crontab'
 import { safeReaddir } from './xos-goal-files'
+import type { XosNativeRunTrigger } from './xos-live-runs-types'
 
 export type XosJournalLock = { file: string; pid: number | null }
 
@@ -23,8 +25,8 @@ export type XosNativeJournalEntry = JournalBase & {
   repoRoot: string
   goal: string
   agent: string
-  mode: string
-  trigger: string
+  mode: XosGoalRunMode
+  trigger: XosNativeRunTrigger
   parentRunId: string | null
   pid: number | null
   logPath: string

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { xosHome } from './xos-crontab'
+import { removeTempDir } from './xos-temp-dir.test-fixture'
 import { parseFrontmatter } from './xos-goal-files'
 import {
   claimWorkItem,
@@ -22,11 +23,11 @@ function makeTempRepo(name = 'queue-repo'): string {
   return repo
 }
 
-afterEach(() => {
+afterEach(async () => {
   while (tempDirs.length > 0) {
     rmSync(tempDirs.pop()!, { recursive: true, force: true })
   }
-  rmSync(join(xosHome(), 'projects'), { recursive: true, force: true })
+  await removeTempDir(join(xosHome(), 'projects'))
 })
 
 describe('xos-queue-gate & xos-item-claims (RT16, RT17, §3g)', () => {

@@ -1,6 +1,5 @@
 // XOS fork: controlling native runs from outside the launch path: stop, timeout, and adopting what
 // an earlier Orca process started (H8, H9).
-import type { XosGoalRunMode } from '../../shared/xos-goals-types'
 import { adoptLock } from './xos-lane-lock'
 import { mutableLiveRuns } from './xos-live-registry'
 import type { XosLiveRun, XosStopReason } from './xos-live-runs-types'
@@ -79,8 +78,6 @@ export function adoptNativeRuns(settle: (run: XosLiveRun, code: number | null) =
     }
     const run: XosLiveRun = {
       ...entry,
-      mode: entry.mode as XosGoalRunMode,
-      trigger: entry.trigger as XosLiveRun['trigger'],
       locks: entry.locks.map((lock) => adoptLock(lock.file, lock.pid)),
       finishedAt: null,
       exitCode: null,

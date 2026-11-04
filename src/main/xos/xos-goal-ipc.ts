@@ -20,6 +20,7 @@ import { registerXosStudioHandlers } from './xos-studio-ipc'
 import { registerXosWorkItemHandlers } from './xos-work-items-ipc'
 import { registerXosRuntimeHandlers } from './xos-runtime-ipc'
 import { registerXosTakeoverHandlers } from './xos-takeover-ipc'
+import { shellQuote } from './xos-agent-command'
 import { audit, xosHome } from './xos-crontab'
 import { assembleGoalPrompt } from './xos-goal-prompt'
 import { scheduleGoal, replaceCronJob, type XosScheduleHost } from './xos-goal-schedule'
@@ -135,7 +136,7 @@ async function runGoalNow(
       return { ok: false, error: assembled.reason }
     }
     if (mode === 'reply') {
-      const command = `cd ${JSON.stringify(project.root)} && CASCADE_GOAL_INBOX_ONLY=1 ./automations/bin/run-goal-cron.sh ${request.goal} ${assembled.agent}`
+      const command = `cd ${shellQuote(project.root)} && CASCADE_GOAL_INBOX_ONLY=1 ./automations/bin/run-goal-cron.sh ${shellQuote(request.goal)} ${shellQuote(assembled.agent)}`
       audit({ action: 'goal.run_now', project: project.name, goal: goal.goal, mode, command })
       return launch(runtime, project, command, `Reply inbox ${goal.goal}`)
     }
@@ -145,7 +146,7 @@ async function runGoalNow(
     const command =
       cronGoalLine && !request.runner
         ? interactiveCommand(cronGoalLine.command)
-        : `cd ${JSON.stringify(project.root)} && ./automations/bin/run-goal-cron.sh ${request.goal} ${assembled.agent}`
+        : `cd ${shellQuote(project.root)} && ./automations/bin/run-goal-cron.sh ${shellQuote(request.goal)} ${shellQuote(assembled.agent)}`
     audit({ action: 'goal.run_now', project: project.name, goal: goal.goal, mode, command })
     return launch(runtime, project, command, `Run ${goal.goal}`)
   }

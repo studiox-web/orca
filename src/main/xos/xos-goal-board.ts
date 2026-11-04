@@ -15,7 +15,7 @@ import {
 } from './xos-crontab'
 import { goalSortKey, loadOrg } from './xos-goal-org'
 import { buildGoal } from './xos-goal-entry'
-import { listArchivedGoals } from './xos-goal-lifecycle'
+import { listProjectArchivedGoals } from './xos-goal-lifecycle'
 import { runningFor, runningGoalJobs, within } from './xos-goal-processes'
 import { liveRunRegistry } from './xos-live-registry'
 import { nativeRunningFor } from './xos-live-tail'
@@ -136,7 +136,7 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
         const right = goalSortKey(org, b.area, b.goal)
         return left[0] - right[0] || left[1] - right[1] || left[2].localeCompare(right[2])
       })
-    const archived = listArchivedGoals(goalsDir)
+    const archived = listProjectArchivedGoals(candidate.root)
     const archivedNames = new Set(archived.map((entry) => entry.goal))
     for (const job of projectJobs) {
       if (job.goal && !known.has(job.goal) && !archivedNames.has(job.goal)) {

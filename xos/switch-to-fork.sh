@@ -1,41 +1,70 @@
 #!/usr/bin/env bash
 # Switch from the official Orca AppImage to this fork's locally built AppImage.
-# Run with Orca fully closed: it backs up the shared profile, installs the newest
-# dist/ AppImage as ~/Applications/Orca-XOS.AppImage, adds a menu entry, and launches it.
+# Run with Orca fully closed (or with --wait=<seconds> to wait for it): it backs up the shared
+# profile, installs the newest dist/ AppImage as ~/Applications/Orca-XOS.AppImage, adds a menu
+# entry, and launches it. A refused or failed switch leaves the headless service as it found it.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-PROFILE="$HOME/.config/orca"
 BACKUP_DIR="$HOME/orca-profile-backups"
 TARGET="$HOME/Applications/Orca-XOS.AppImage"
 DESKTOP="$HOME/.local/share/applications/orca-xos.desktop"
 
-# The headless service holds the profile while the desktop is closed; stop it so the
-# backup is consistent and it restarts on the new build.
-if systemctl --user is-active --quiet orca-xos-serve.service 2>/dev/null; then
-  echo "Stopping the orca-xos-serve service for the switch..."
-  systemctl --user stop orca-xos-serve.service
-fi
+WAIT_SECONDS=0
+for arg in "$@"; do
+  case "$arg" in
+    --wait=*) WAIT_SECONDS="${arg#--wait=}" ;;
+    *) echo "Unknown option $arg" >&2; exit 2 ;;
+  esac
+done
 
-# The app itself runs as <AppImage mount>/orca-ide with no `-e` script; `-e` processes are
-# short-lived CLI/version helpers (sometimes orphaned) and do not hold the profile.
-running="$(pgrep -af '(\.mount_[^/ ]*/orca-ide|Orca-XOS\.AppImage|Orca\.AppImage)' | grep -v -- ' -e ' || true)"
-if [[ -n "$running" ]]; then
-  echo "Orca is still running. Quit it completely (File > Quit), then run this again:" >&2
-  echo "$running" >&2
+# shellcheck source=xos/profile-lock.sh
+source "$REPO/xos/profile-lock.sh"
+
+# Everything that can refuse happens before the service is touched, so a refused install changes
+# nothing: a running desktop keeps its headless standby.
+if [[ "$WAIT_SECONDS" -gt 0 && "$(profile_lock_role)" == "desktop" ]]; then
+  echo "Waiting up to ${WAIT_SECONDS}s for Orca to close..."
+  for ((i = 0; i < WAIT_SECONDS; i++)); do
+    [[ "$(profile_lock_role)" == "desktop" ]] || break
+    sleep 1
+  done
+fi
+if [[ "$(profile_lock_role)" == "desktop" ]]; then
+  echo "Orca is still running (it holds $ORCA_PROFILE_LOCK). Quit it completely, then run this again." >&2
   exit 1
 fi
 
 BUILT="$(ls -t "$REPO"/dist/*.AppImage 2>/dev/null | head -1 || true)"
 if [[ -z "$BUILT" ]]; then
-  echo "No AppImage in $REPO/dist. Build first: nvm use 24 && pnpm build:linux" >&2
+  echo "No AppImage in $REPO/dist. Build first: xos/build.sh" >&2
+  exit 1
+fi
+
+# The service holds the profile while the desktop is closed; stop it so the backup is consistent
+# and it restarts on the new build. Whatever happens next, it must come back.
+SERVICE_STOPPED=0
+restart_service() {
+  if [[ "$SERVICE_STOPPED" == 1 ]]; then
+    echo "Restarting the $ORCA_SERVE_UNIT service..."
+    systemctl --user start "$ORCA_SERVE_UNIT" || true
+  fi
+}
+trap restart_service EXIT
+if systemctl --user is-active --quiet "$ORCA_SERVE_UNIT" 2>/dev/null; then
+  echo "Stopping the $ORCA_SERVE_UNIT service for the switch..."
+  systemctl --user stop "$ORCA_SERVE_UNIT"
+  SERVICE_STOPPED=1
+fi
+if ! wait_for_free_profile 20; then
+  echo "Something still holds $ORCA_PROFILE_LOCK. Nothing was installed." >&2
   exit 1
 fi
 
 mkdir -p "$BACKUP_DIR" "$(dirname "$TARGET")" "$(dirname "$DESKTOP")"
 STAMP="$(date '+%Y%m%d-%H%M%S')"
-echo "Backing up $PROFILE (re-downloadable runtimes and caches excluded)..."
-tar -czf "$BACKUP_DIR/orca-profile-$STAMP.tar.gz" -C "$HOME/.config" \
+echo "Backing up $ORCA_PROFILE_DIR (re-downloadable runtimes and caches excluded)..."
+tar -czf "$BACKUP_DIR/orca-profile-$STAMP.tar.gz" -C "$(dirname "$ORCA_PROFILE_DIR")" \
   --exclude='orca/agent-runtimes' --exclude='orca/speech-models' \
   --exclude='orca/Cache' --exclude='orca/Code Cache' --exclude='orca/GPUCache' \
   --exclude='orca/DawnGraphiteCache' --exclude='orca/DawnWebGPUCache' \
@@ -61,6 +90,7 @@ echo "Launching $TARGET (built from $(git -C "$REPO" rev-parse --short HEAD) on 
 if [[ -x "$LAUNCHER" ]]; then
   # The service is installed (xos/orcad/install.sh): the launcher restarts it once the app holds the profile.
   sed -i "s|^Exec=.*|Exec=$LAUNCHER %U|" "$DESKTOP"
+  SERVICE_STOPPED=0
   "$LAUNCHER"
 else
   setsid nohup "$TARGET" >/dev/null 2>&1 < /dev/null &

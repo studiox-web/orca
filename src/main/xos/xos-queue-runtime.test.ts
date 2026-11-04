@@ -1,8 +1,9 @@
 // XOS fork: H1 wiring: a queue event starts a real native run, only for opted-in projects (L9).
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTempDir } from './xos-temp-dir.test-fixture'
 
 const startNativeGoalRun = vi.fn(async () => ({ ok: true, runId: 'r', message: 'ok' }))
 vi.mock('./xos-live-runs', () => ({ startNativeGoalRun }))
@@ -30,9 +31,9 @@ beforeEach(() => {
   writeFileSync(join(repo, 'docs', 'features', 'planned', 'a.md'), '---\ntitle: A\n---\n')
 })
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.ORCA_XOS_HOME
-  rmSync(base, { recursive: true, force: true })
+  await removeTempDir(base)
 })
 
 describe('startXosQueueRuntime', () => {

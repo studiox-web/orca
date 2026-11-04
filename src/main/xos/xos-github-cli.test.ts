@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseGhIssues, syncGitHubForProject } from './xos-github-cli'
 import { projectItemsDir } from './xos-project-home'
+import { removeTempDir } from './xos-temp-dir.test-fixture'
 
 let base: string
 let repo: string
@@ -27,9 +28,9 @@ beforeEach(() => {
   mkdirSync(repo)
 })
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.ORCA_XOS_HOME
-  rmSync(base, { recursive: true, force: true })
+  await removeTempDir(base)
 })
 
 describe('syncGitHubForProject (H1, PL4)', () => {
