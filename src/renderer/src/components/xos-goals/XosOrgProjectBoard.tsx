@@ -1,13 +1,15 @@
 // XOS fork: one project's board: layout and filter toolbar, cards, and its scheduled scripts.
 import React, { useMemo, useState } from 'react'
-import { Filter, LayoutGrid, Network } from 'lucide-react'
+import { BarChart3, Filter, GitCompareArrows, LayoutGrid, Network } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import type { XosGoal, XosProject } from '../../../../shared/xos-goals-types'
+import { XosAnalyticsSection } from './XosAnalyticsSection'
 import { filterOptions, goalMatchesFilter, type OrgFilter } from './xos-org-hierarchy'
 import { AreaGroups, filterIcon, OrgChart } from './XosOrgChartViews'
 import { CronJobRow, type XosGoalActions } from './XosGoalViewerParts'
 import type { Prefs } from './xos-org-prefs'
+import { XosPipelineView } from './XosPipelineView'
 import { XosArchivedGoals, XosProjectToolbar } from './XosProjectManage'
 
 export function XosOrgProjectBoard({
@@ -41,7 +43,12 @@ export function XosOrgProjectBoard({
               type="single"
               value={prefs.layout}
               onValueChange={(value) => {
-                if (value === 'chart' || value === 'areas') {
+                if (
+                  value === 'chart' ||
+                  value === 'areas' ||
+                  value === 'pipeline' ||
+                  value === 'analytics'
+                ) {
                   setPrefs((current) => ({ ...current, layout: value }))
                 }
               }}
@@ -56,6 +63,14 @@ export function XosOrgProjectBoard({
               <ToggleGroupItem value="areas">
                 <LayoutGrid className="size-4" />
                 Business areas
+              </ToggleGroupItem>
+              <ToggleGroupItem value="pipeline">
+                <GitCompareArrows className="size-4" />
+                Pipeline
+              </ToggleGroupItem>
+              <ToggleGroupItem value="analytics">
+                <BarChart3 className="size-4" />
+                Analytics
               </ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -93,7 +108,18 @@ export function XosOrgProjectBoard({
           </span>
         </div>
       </section>
-      {visibleGoals.length === 0 ? (
+      {prefs.layout === 'pipeline' ? (
+        <XosPipelineView
+          project={project}
+          cardTheme={prefs.cardTheme}
+          onSelectGoal={(goal) => setSelectedGoal(goal.goal)}
+        />
+      ) : prefs.layout === 'analytics' ? (
+        <XosAnalyticsSection
+          project={project}
+          onSelectGoal={(goal) => setSelectedGoal(goal.goal)}
+        />
+      ) : visibleGoals.length === 0 ? (
         <section className="rounded-lg border border-dashed bg-muted/20 p-6 text-center text-sm">
           <p className="font-semibold text-primary">No goals match this filter.</p>
           <Button type="button" variant="outline" className="mt-4" onClick={() => setFilter('all')}>

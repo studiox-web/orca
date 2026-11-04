@@ -20,6 +20,10 @@ export type XosItemColumn = {
 
 export type XosItemsSort = 'updated' | 'created' | 'priority' | 'title'
 
+export function isXosItemsSort(value: string): value is XosItemsSort {
+  return value === 'updated' || value === 'created' || value === 'priority' || value === 'title'
+}
+
 function mergeStage(left: XosItemStage, right: XosItemStage): XosItemStage {
   const union = (a: string[], b: string[]): string[] => [...new Set([...a, ...b])]
   return {
