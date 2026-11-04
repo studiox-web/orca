@@ -67,13 +67,15 @@ export function XosGoalDrillIn({
   project,
   busy,
   onRun,
-  onContinueOn
+  onContinueOn,
+  onRelease
 }: {
   item: XosGoal
   project: XosProject
   busy: boolean
   onRun: (goal: XosGoal, message?: string) => void
   onContinueOn: (mode: XosDrillInMode, fromRun?: XosGoalRun | null) => void
+  onRelease: (advance: boolean) => void
 }): React.JSX.Element {
   return (
     <>
@@ -110,6 +112,26 @@ export function XosGoalDrillIn({
           Build now
         </Button>
       </div>
+      {item.takeover && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/20 p-3">
+          <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+            {item.takeover.agent} is at the helm: this goal&apos;s lane is held until you release
+            it.
+          </span>
+          <Button type="button" size="sm" disabled={busy} onClick={() => onRelease(true)}>
+            Done: release to auto
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => onRelease(false)}
+          >
+            Release without moving the item
+          </Button>
+        </div>
+      )}
       <ManagerCommandBar item={item} project={project} onRun={onRun} />
     </>
   )

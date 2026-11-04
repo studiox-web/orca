@@ -6,9 +6,9 @@
 import { existsSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import type { XosNextGoalItem } from '../../shared/xos-goals-types'
-import { readHead, parseFrontmatter } from './xos-goal-files'
+import { readHead, readTail, parseFrontmatter } from './xos-goal-files'
 import { assembleGoalPrompt } from './xos-goal-prompt'
-import { resolveProjectGoalsDir, resolveStageDirs } from './xos-project-home'
+import { resolveGoalDir, resolveStageDirs } from './xos-project-home'
 import { evaluateGoalQueueGate } from './xos-queue-gate'
 import { LEGACY_ITEM_TYPES } from './xos-queue-map'
 import { itemTitleFrom, readReceiptLines, appendReceipt } from './xos-native-receipts'
@@ -49,11 +49,11 @@ export function buildTakeoverPrompt(args: {
         )
       : receipts.find((receipt) => receipt.goal === args.goal)
     if (from) {
-      const context = from.log_path ? readHead(from.log_path, RUN_CONTEXT_BYTES) : null
+      const context = from.log_path ? readTail(from.log_path, RUN_CONTEXT_BYTES) : null
       prompt += `\n\n## You Are Taking Over From Run ${from.run_id} (§3e)\n\n- Trigger: ${from.trigger ?? 'unknown'} · Status: ${from.status}${from.failure_reason ? ` (${from.failure_reason})` : ''} · Model: ${from.model ?? 'unknown'}\n- The full transcript is the run log at \`${from.log_path}\`.\n\n### Last screen output of that run\n\n${context ?? '_No log tail available._'}`
     }
     if (args.itemPath) {
-      prompt += `\n\n## Claimed Work Item\n\n- File: ${args.itemPath} (claimed for this session)\n- Move it to the next stage when done; reference "${basename(args.itemPath, '.md')}" in the commit message.\n\n${readHead(args.itemPath, ITEM_PROMPT_BYTES) ?? ''}`
+      prompt += `\n\n## Claimed Work Item\n\n- File: ${args.itemPath} (claimed for this session)\n- Enrich it; Orca moves it when you release the goal as done; reference "${basename(args.itemPath, '.md')}" in the commit message.\n\n${readHead(args.itemPath, ITEM_PROMPT_BYTES) ?? ''}`
     }
     return {
       ok: true,
@@ -121,7 +121,7 @@ export function resolveItemWorkspace(
 
 /** First eligible unclaimed input item of the goal's queue gate, for "Build now" (§3h.2). */
 export function nextEligibleItem(repoRoot: string, goal: string): XosNextGoalItem {
-  const goalDir = join(resolveProjectGoalsDir(repoRoot), goal)
+  const goalDir = resolveGoalDir(repoRoot, goal)
   const fm = parseFrontmatter(readHead(join(goalDir, 'GOAL.md'), 8192))
   const gate = evaluateGoalQueueGate({ repoRoot, goal, fm })
   const path = gate.candidateItemPaths[0]

@@ -12,7 +12,7 @@ import {
 } from './xos-item-claims'
 import {
   commitProjectHome,
-  hasImportedGoals,
+  hasFullImport,
   projectItemsDir,
   resolveStageDirs
 } from './xos-project-home'
@@ -36,7 +36,7 @@ function slugifyTitle(title: string): string {
   )
 }
 
-function resolveStageTargetDir(
+export function resolveStageTargetDir(
   repoRoot: string,
   type: LegacyItemType,
   stage: LegacyStage,
@@ -45,7 +45,7 @@ function resolveStageTargetDir(
   const cleanBucket = bucket?.trim().replace(/[^a-z0-9_-]/gi, '') || null
   const existingDirs = resolveStageDirs(repoRoot, type.id, stage)
   const useCentral =
-    hasImportedGoals(repoRoot) || isDirectory(join(projectItemsDir(repoRoot), type.id))
+    hasFullImport(repoRoot) || isDirectory(join(projectItemsDir(repoRoot), type.id))
   if (cleanBucket) {
     const matchingExisting = existingDirs.find((dir) => basename(dir) === cleanBucket)
     if (matchingExisting) {

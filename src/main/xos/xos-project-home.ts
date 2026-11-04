@@ -1,22 +1,15 @@
 // XOS fork: Stage B centralized project home (~/.orca-xos/projects/<slug>/) and `orca goals import`.
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
-import { basename, join, resolve } from 'node:path'
+import { existsSync, statSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { audit, xosHome } from './xos-crontab'
+import { audit } from './xos-crontab'
 import { isDirectory, safeReaddir } from './xos-goal-files'
-import { loadOrg, orgFilePath, projectSlug } from './xos-goal-org'
-import { LEGACY_ITEM_TYPES, type LegacyStage } from './xos-queue-map'
+import { projectHomeDir, readMetaAt, type XosProjectHomeOwner } from './xos-goal-org'
+import type { LegacyStage } from './xos-queue-map'
 
-export type XosProjectMeta = {
-  repoRoot: string
+export { projectHomeDir }
+
+export type XosProjectMeta = XosProjectHomeOwner & {
   name: string
   slug: string
   importedAt: string
@@ -24,16 +17,8 @@ export type XosProjectMeta = {
   itemsImported: number
   sharedFilesImported: number
   commitSha: string | null
-}
-
-export type XosImportProjectResult = {
-  ok: true
-  homeDir: string
-  meta: XosProjectMeta
-}
-
-export function projectHomeDir(nameOrRoot: string): string {
-  return join(xosHome(), 'projects', projectSlug(basename(nameOrRoot)))
+  /** 'goals' = only chosen goals moved; the rest still run from the repo (absent = whole project). */
+  scope?: 'project' | 'goals'
 }
 
 export function projectGoalsDir(nameOrRoot: string): string {
@@ -57,12 +42,13 @@ export function projectMetaPath(nameOrRoot: string): string {
 }
 
 export function readProjectMeta(nameOrRoot: string): XosProjectMeta | null {
-  try {
-    const raw: XosProjectMeta = JSON.parse(readFileSync(projectMetaPath(nameOrRoot), 'utf8'))
-    return raw && typeof raw.repoRoot === 'string' ? raw : null
-  } catch {
-    return null
-  }
+  return readMetaAt<XosProjectMeta>(projectHomeDir(nameOrRoot))
+}
+
+/** The whole project moved (not just chosen goals), so new goals and items belong in the home. */
+export function hasFullImport(repoRoot: string): boolean {
+  const meta = readProjectMeta(repoRoot)
+  return meta !== null && meta.scope !== 'goals'
 }
 
 export function hasImportedGoals(repoRoot: string): boolean {
@@ -80,12 +66,39 @@ export function hasProjectGoals(repoRoot: string): boolean {
   return hasImportedGoals(repoRoot) || isDirectory(join(repoRoot, 'automations', 'goals'))
 }
 
+/** Where new goals go. Existing ones can live in either home: use resolveGoalDir for those. */
 export function resolveProjectGoalsDir(repoRoot: string): string {
-  if (hasImportedGoals(repoRoot)) {
+  if (hasFullImport(repoRoot)) {
     return projectGoalsDir(repoRoot)
   }
   const legacy = join(repoRoot, 'automations', 'goals')
   return isDirectory(legacy) ? legacy : projectGoalsDir(repoRoot)
+}
+
+/** Goals cut over one at a time (§4b): each resolves to the central home once it was imported. */
+export function isGoalCentral(repoRoot: string, goal: string): boolean {
+  return existsSync(join(projectGoalsDir(repoRoot), goal, 'GOAL.md'))
+}
+
+export function resolveGoalDir(repoRoot: string, goal: string): string {
+  if (isGoalCentral(repoRoot, goal)) {
+    return join(projectGoalsDir(repoRoot), goal)
+  }
+  const legacy = join(repoRoot, 'automations', 'goals', goal)
+  return isDirectory(legacy) ? legacy : join(resolveProjectGoalsDir(repoRoot), goal)
+}
+
+/** Every goal of a project across both homes, sorted, without hidden or `_` folders. */
+export function listProjectGoals(repoRoot: string): string[] {
+  const names = new Set<string>()
+  for (const dir of [projectGoalsDir(repoRoot), join(repoRoot, 'automations', 'goals')]) {
+    for (const name of safeReaddir(dir)) {
+      if (!name.startsWith('_') && !name.startsWith('.') && isDirectory(join(dir, name))) {
+        names.add(name)
+      }
+    }
+  }
+  return [...names].sort()
 }
 
 export function resolveSharedDirs(repoRoot: string): string[] {
@@ -124,37 +137,6 @@ export function resolveStageDirs(repoRoot: string, typeId: string, stage: Legacy
   return stage.paths.map((rel) => join(repoRoot, rel)).filter(isDirectory)
 }
 
-function countMarkdownFiles(dir: string): number {
-  let count = 0
-  for (const entry of safeReaddir(dir)) {
-    const full = join(dir, entry)
-    if (isDirectory(full)) {
-      count += countMarkdownFiles(full)
-    } else if (entry.endsWith('.md') && entry !== 'README.md' && entry !== 'TEMPLATE.md') {
-      count += 1
-    }
-  }
-  return count
-}
-
-function copyDirectMarkdownFiles(srcDir: string, destDir: string): number {
-  if (!isDirectory(srcDir)) {
-    return 0
-  }
-  mkdirSync(destDir, { recursive: true })
-  let copied = 0
-  for (const entry of readdirSync(srcDir, { withFileTypes: true })) {
-    if (entry.name.startsWith('.') || !entry.isFile() || !entry.name.endsWith('.md')) {
-      continue
-    }
-    cpSync(join(srcDir, entry.name), join(destDir, entry.name), { force: true })
-    if (entry.name.toLowerCase() !== 'readme.md' && entry.name.toLowerCase() !== 'template.md') {
-      copied += 1
-    }
-  }
-  return copied
-}
-
 async function runGit(homeDir: string, args: string[]): Promise<string> {
   const result = await runProcess({ program: 'git', args, cwd: homeDir, timeoutMs: 10_000 })
   if (result.code !== 0) {
@@ -163,28 +145,54 @@ async function runGit(homeDir: string, args: string[]): Promise<string> {
   return result.stdout.trim()
 }
 
-async function initAndCommitProjectHome(homeDir: string, message: string): Promise<string | null> {
-  try {
-    if (!existsSync(join(homeDir, '.git'))) {
-      await runGit(homeDir, ['init', '-q'])
-    }
-    await runGit(homeDir, ['add', '-A'])
-    if (await runGit(homeDir, ['status', '--porcelain'])) {
-      await runGit(homeDir, [
-        '-c',
-        'user.email=xos@orca.local',
-        '-c',
-        'user.name=Orca XOS',
-        'commit',
-        '-q',
-        '-m',
-        message
-      ])
-    }
-    return await runGit(homeDir, ['rev-parse', '--short', 'HEAD'])
-  } catch {
-    return null
+const homeCommits = new Map<string, Promise<unknown>>()
+const INDEX_LOCK_RETRIES = 4
+const INDEX_LOCK_BACKOFF_MS = 250
+
+function isIndexLockError(error: unknown): boolean {
+  return /index\.lock|Unable to create .*\.lock/i.test(String(error))
+}
+
+async function commitHomeOnce(homeDir: string, message: string): Promise<string> {
+  if (!existsSync(join(homeDir, '.git'))) {
+    await runGit(homeDir, ['init', '-q'])
   }
+  await runGit(homeDir, ['add', '-A'])
+  if (await runGit(homeDir, ['status', '--porcelain'])) {
+    await runGit(homeDir, [
+      '-c',
+      'user.email=xos@orca.local',
+      '-c',
+      'user.name=Orca XOS',
+      'commit',
+      '-q',
+      '-m',
+      message
+    ])
+  }
+  return runGit(homeDir, ['rev-parse', '--short', 'HEAD'])
+}
+
+/** Serialized per home; a CLI in another process can still hold index.lock, so that retries. */
+export function commitProjectHomeDir(homeDir: string, message: string): Promise<string | null> {
+  const attempt = async (): Promise<string | null> => {
+    for (let tries = 0; ; tries += 1) {
+      try {
+        return await commitHomeOnce(homeDir, message)
+      } catch (error) {
+        if (isIndexLockError(error) && tries < INDEX_LOCK_RETRIES) {
+          await new Promise((done) => setTimeout(done, INDEX_LOCK_BACKOFF_MS * (tries + 1)))
+          continue
+        }
+        audit({ action: 'project.commit_failed', homeDir, message, error: String(error) })
+        console.warn('[xos] project home commit failed', error)
+        return null
+      }
+    }
+  }
+  const next = (homeCommits.get(homeDir) ?? Promise.resolve()).then(attempt, attempt)
+  homeCommits.set(homeDir, next)
+  return next
 }
 
 export async function commitProjectHome(
@@ -192,100 +200,5 @@ export async function commitProjectHome(
   message: string
 ): Promise<string | null> {
   const homeDir = projectHomeDir(nameOrRoot)
-  return isDirectory(homeDir) ? initAndCommitProjectHome(homeDir, message) : null
-}
-
-export async function importProjectGoals(repoPath: string): Promise<XosImportProjectResult> {
-  const repoRoot = resolve(repoPath)
-  if (!isDirectory(repoRoot)) {
-    throw new Error(`Repository folder does not exist: ${repoRoot}`)
-  }
-  const name = basename(repoRoot)
-  const slug = projectSlug(name)
-  const homeDir = projectHomeDir(repoRoot)
-  const destGoalsDir = projectGoalsDir(repoRoot)
-  mkdirSync(destGoalsDir, { recursive: true })
-
-  let goalsImported = 0
-  const srcGoalsDir = join(repoRoot, 'automations', 'goals')
-  if (isDirectory(srcGoalsDir)) {
-    for (const entry of safeReaddir(srcGoalsDir)) {
-      const srcGoal = join(srcGoalsDir, entry)
-      if (entry.startsWith('.') || !isDirectory(srcGoal)) {
-        continue
-      }
-      const destGoal = join(destGoalsDir, entry)
-      cpSync(srcGoal, destGoal, { recursive: true, force: true })
-      if (!entry.startsWith('_')) {
-        for (const sub of ['log', 'inbox', 'assets', 'sidecars']) {
-          mkdirSync(join(destGoal, sub), { recursive: true })
-        }
-        goalsImported += 1
-      }
-    }
-  }
-
-  let sharedFilesImported = 0
-  const srcSharedDir = join(repoRoot, 'automations', 'shared')
-  if (isDirectory(srcSharedDir)) {
-    cpSync(srcSharedDir, projectSharedDir(repoRoot), { recursive: true, force: true })
-    sharedFilesImported = countMarkdownFiles(projectSharedDir(repoRoot))
-  }
-  const srcTemplateDir = join(repoRoot, 'automations', '_template')
-  if (isDirectory(srcTemplateDir)) {
-    cpSync(srcTemplateDir, join(homeDir, '_template'), { recursive: true, force: true })
-  }
-  const srcAgentsMd = join(repoRoot, 'automations', 'AGENTS.md')
-  if (existsSync(srcAgentsMd)) {
-    cpSync(srcAgentsMd, projectAgentsMdPath(repoRoot), { force: true })
-  }
-
-  let itemsImported = 0
-  for (const type of LEGACY_ITEM_TYPES) {
-    if (!type.stages.some((s) => s.paths.some((rel) => isDirectory(join(repoRoot, rel))))) {
-      continue
-    }
-    for (const stage of type.stages) {
-      const destStage = join(projectItemsDir(repoRoot), type.id, stage.id)
-      mkdirSync(destStage, { recursive: true })
-      if (stage.paths.length > 1) {
-        for (const rel of stage.paths) {
-          const bucketDir = join(destStage, basename(rel))
-          mkdirSync(bucketDir, { recursive: true })
-          itemsImported += copyDirectMarkdownFiles(join(repoRoot, rel), bucketDir)
-        }
-      } else if (stage.paths[0]) {
-        itemsImported += copyDirectMarkdownFiles(join(repoRoot, stage.paths[0]), destStage)
-      }
-    }
-  }
-  const projectsDocsDir = join(repoRoot, 'docs', 'projects')
-  if (isDirectory(projectsDocsDir)) {
-    itemsImported += copyDirectMarkdownFiles(
-      projectsDocsDir,
-      join(projectItemsDir(repoRoot), 'project', 'active')
-    )
-  }
-
-  if (!existsSync(orgFilePath(name))) {
-    const org = loadOrg(name)
-    writeFileSync(orgFilePath(name), `${JSON.stringify({ areas: org.areas }, null, 2)}\n`, 'utf8')
-  }
-
-  const meta: XosProjectMeta = {
-    repoRoot,
-    name,
-    slug,
-    importedAt: new Date().toISOString(),
-    goalsImported,
-    itemsImported,
-    sharedFilesImported,
-    commitSha: null
-  }
-  writeFileSync(projectMetaPath(repoRoot), `${JSON.stringify(meta, null, 2)}\n`, 'utf8')
-  meta.commitSha = await initAndCommitProjectHome(homeDir, `xos: import ${name}`)
-  writeFileSync(projectMetaPath(repoRoot), `${JSON.stringify(meta, null, 2)}\n`, 'utf8')
-  await initAndCommitProjectHome(homeDir, `xos: record import metadata for ${name}`)
-  audit({ action: 'project.import', project: name, homeDir, ...meta })
-  return { ok: true, homeDir, meta }
+  return isDirectory(homeDir) ? commitProjectHomeDir(homeDir, message) : null
 }

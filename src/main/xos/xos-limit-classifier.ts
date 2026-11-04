@@ -19,7 +19,13 @@ export type XosRunLimitVerdict = {
 /** How many non-empty lines from the bottom of the screen are inspected. */
 export const LIMIT_TAIL_LINES = 25
 
-const RULES: { kind: XosRunLimitKind; pattern: RegExp }[] = [
+type Rule = {
+  kind: XosRunLimitKind
+  pattern: RegExp
+  /** Generic wording: only as a line's own message, not inside prose. */ lineStart?: boolean
+}
+
+const RULES: Rule[] = [
   // Claude: "You've hit your limit · resets 3pm"; Codex: "You've hit your usage limit. Try again…"
   { kind: 'usage-limit', pattern: /\byou(?:'|’)?ve hit your (?:\w+ )?limit\b/i },
   {
@@ -37,21 +43,33 @@ const RULES: { kind: XosRunLimitKind; pattern: RegExp }[] = [
     kind: 'usage-limit',
     pattern: /\bout of (?:credits|extra usage)\b|\bcredit balance is too low\b/i
   },
+  { kind: 'usage-limit', pattern: /\bexceeded retry limit, last status: 429\b/i },
   {
     kind: 'usage-limit',
-    pattern: /\bexceeded retry limit, last status: 429\b|\b429 too many requests\b/i
-  },
-  {
-    kind: 'usage-limit',
-    pattern: /\bquota exceeded\b|\bRESOURCE_EXHAUSTED\b|\brate limit reached for\b/i
+    pattern:
+      /429 too many requests\b|quota exceeded\b|RESOURCE_EXHAUSTED\b|rate limit reached for\b/i,
+    lineStart: true
   },
   { kind: 'overloaded', pattern: /\bAPI Error: 529\b|\boverloaded_error\b|\b529 Overloaded\b/i },
+  { kind: 'auth', pattern: /\binvalid api key\b|please run \/login\b/i },
   {
     kind: 'auth',
     pattern:
-      /\binvalid api key\b|please run \/login\b|\bfailed to authenticate\b|\b401 invalid authentication credentials\b|\boauth token (?:has )?expired\b|\bnot logged in\b/i
+      /failed to authenticate\b|401 invalid authentication credentials\b|oauth token (?:has )?expired\b|not logged in\b/i,
+    lineStart: true
   }
 ]
+
+/** Log prefixes a banner may carry and still be the line's own message. */
+const LINE_START = /^(?:(?:error|fatal|api error|stream error)\s*:?\s*)*/i
+
+function ruleMatches(rule: Rule, line: string): boolean {
+  const match = rule.pattern.exec(line)
+  if (!match) {
+    return false
+  }
+  return !rule.lineStart || match.index <= (LINE_START.exec(line)?.[0].length ?? 0)
+}
 
 const RESET_HINT = /\b(?:resets?(?: at| in)? [\w:., ]{1,30}|try again (?:at|in) [\w:., ]{1,30})/i
 
@@ -77,23 +95,34 @@ function clean(line: string): string {
     line
       // oxlint-disable-next-line no-control-regex -- terminal snapshots can carry escape codes
       .replace(/\u001b\[[0-9;?]*[A-Za-z]/g, '')
-      .replace(/^[\s│┃|╭╮╰╯─━>⎿●✻*·]+|[\s│┃|╭╮╰╯─━]+$/g, '')
+      .replace(/^[\s│┃|╭╮╰╯─━>⎿●✻*·■⚠]+|[\s│┃|╭╮╰╯─━]+$/g, '')
       .trim()
   )
 }
 
-export function classifyRunScreen(screen: string | null | undefined): XosRunLimitVerdict | null {
+/**
+ * RT4. `exitCode` 0 means the agent says it succeeded, so only a screen that is nothing but a banner
+ * counts; non-zero or unknown (terminal runs have no exit code) reads the bottom of the screen.
+ */
+export function classifyRunScreen(
+  screen: string | null | undefined,
+  options: { exitCode?: number | null } = {}
+): XosRunLimitVerdict | null {
   if (!screen) {
     return null
   }
-  const lines = screen.split('\n').map(clean).filter(Boolean).slice(-LIMIT_TAIL_LINES)
+  const all = screen.split('\n').map(clean).filter(Boolean)
+  if (options.exitCode === 0 && all.length > LIMIT_TAIL_LINES) {
+    return null
+  }
+  const lines = all.slice(-LIMIT_TAIL_LINES)
   // Bottom-up: the most recent banner wins over anything earlier in the tail.
   for (const line of lines.toReversed()) {
     if (missingBinary(line)) {
       return { kind: 'missing-binary', evidence: line.slice(0, 240), resetHint: null }
     }
     for (const rule of RULES) {
-      if (rule.pattern.test(line)) {
+      if (ruleMatches(rule, line)) {
         return {
           kind: rule.kind,
           evidence: line.slice(0, 240),

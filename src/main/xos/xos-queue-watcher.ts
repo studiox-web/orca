@@ -4,8 +4,8 @@
 import { watch, type FSWatcher } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { audit } from './xos-crontab'
-import { isDirectory, parseFrontmatter, readHead, safeReaddir } from './xos-goal-files'
-import { resolveProjectGoalsDir } from './xos-project-home'
+import { isDirectory, parseFrontmatter, readHead } from './xos-goal-files'
+import { listProjectGoals, resolveGoalDir } from './xos-project-home'
 import { isMarkdownItem, resolveGoalDeclaredQueues } from './xos-queue-gate'
 import { evaluateProjectQueueTriggers, type XosQueueTriggerEvent } from './xos-queue-triggers'
 
@@ -99,12 +99,8 @@ export function createXosQueueWatcher(options: XosQueueWatcherOptions) {
   const start = async (): Promise<void> => {
     for (const rawRoot of await options.getProjectRoots()) {
       const repoRoot = resolve(rawRoot)
-      const goalsDir = resolveProjectGoalsDir(repoRoot)
-      for (const goal of safeReaddir(goalsDir)) {
-        const goalDir = join(goalsDir, goal)
-        if (goal.startsWith('_') || goal.startsWith('.') || !isDirectory(goalDir)) {
-          continue
-        }
+      for (const goal of listProjectGoals(repoRoot)) {
+        const goalDir = resolveGoalDir(repoRoot, goal)
         const fm = parseFrontmatter(readHead(join(goalDir, 'GOAL.md'), 16 * 1024))
         const declared = resolveGoalDeclaredQueues(repoRoot, goal, fm)
         const dirs = [

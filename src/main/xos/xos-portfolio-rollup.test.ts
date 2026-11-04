@@ -6,7 +6,7 @@ import * as crontabModule from './xos-crontab'
 import type * as goalProcessesModule from './xos-goal-processes'
 import { buildPortfolioRollup, DECK_PACKS } from './xos-portfolio-rollup'
 import { applyPortfolioMutation, readPortfolioConfig } from './xos-portfolio-config'
-import { importProjectGoals } from './xos-project-home'
+import { importProjectGoals } from './xos-project-import'
 
 vi.mock('./xos-crontab', async (importOriginal) => {
   const actual = await importOriginal<typeof crontabModule>()

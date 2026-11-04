@@ -163,9 +163,16 @@ export async function requestAutomationDispatch(
   if ('refusal' in gate) {
     return ctx.runs.updateRun({
       runId: run.id,
-      status: 'skipped_unavailable',
+      status: gate.precheck ? 'skipped_precheck' : 'skipped_unavailable',
       workspaceId: automation.workspaceId,
       error: gate.refusal
+    })
+  }
+  if ('script' in gate) {
+    return ctx.runs.updateRun({
+      runId: run.id,
+      status: 'dispatched',
+      workspaceId: automation.workspaceId
     })
   }
   const launchAutomation = gate.automation

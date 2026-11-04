@@ -18,10 +18,12 @@ import type {
   XosAutoCommitConfig,
   XosAutoModeConfig,
   XosAutomationRunConfig,
+  XosGoalBinding,
   XosModelChoice,
   XosModelTier,
   XosRunAttempt,
-  XosRunCommit
+  XosRunCommit,
+  XosScriptBinding
 } from '../../shared/xos-runtime-types'
 import { xosHome } from './xos-crontab'
 
@@ -45,7 +47,9 @@ export const EMPTY_RUN_CONFIG: XosAutomationRunConfig = {
   lockWaitMinutes: 0,
   timeoutMinutes: null,
   autoCommit: null,
-  auto: null
+  auto: null,
+  goal: null,
+  script: null
 }
 
 const LANE = /^[a-z0-9][a-z0-9-]{0,40}$/
@@ -68,7 +72,29 @@ export function cleanRunConfig(
     lockWaitMinutes: minutes(value?.lockWaitMinutes, 240),
     timeoutMinutes: timeout > 0 ? timeout : null,
     autoCommit: cleanAutoCommit(value?.autoCommit),
-    auto: cleanAuto(value?.auto)
+    auto: cleanAuto(value?.auto),
+    goal: cleanGoalBinding(value?.goal),
+    script: cleanScriptBinding(value?.script)
+  }
+}
+
+function cleanGoalBinding(value: unknown): XosGoalBinding | null {
+  const row = value as Partial<XosGoalBinding> | null | undefined
+  return typeof row?.repoRoot === 'string' && typeof row.goal === 'string' && row.goal
+    ? { repoRoot: row.repoRoot, goal: row.goal }
+    : null
+}
+
+function cleanScriptBinding(value: unknown): XosScriptBinding | null {
+  const row = value as Partial<XosScriptBinding> | null | undefined
+  if (typeof row?.command !== 'string' || !row.command.trim() || typeof row.cwd !== 'string') {
+    return null
+  }
+  const replaces = row.replacesCronCommand
+  return {
+    command: row.command,
+    cwd: row.cwd,
+    replacesCronCommand: typeof replaces === 'string' && replaces ? replaces : null
   }
 }
 
@@ -124,8 +150,15 @@ function isEmpty(config: XosAutomationRunConfig): boolean {
     config.lockLane === null &&
     config.timeoutMinutes === null &&
     config.autoCommit === null &&
-    config.auto === null
+    config.auto === null &&
+    config.goal === null &&
+    config.script === null
   )
+}
+
+/** Every automation bound to a goal or a script: the cutover view of what replaced what. */
+export function listRunConfigs(): Record<string, XosAutomationRunConfig> {
+  return readConfigFile().automations
 }
 
 function configPath(): string {

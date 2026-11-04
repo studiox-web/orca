@@ -3,16 +3,10 @@
 // open inbox replies), capped by the daily run limit and the lock lane. Pure evaluation — the
 // fs watchers and debounce live in xos-queue-watcher.ts.
 import { join, resolve, sep } from 'node:path'
-import {
-  frontmatterString,
-  isDirectory,
-  parseFrontmatter,
-  readHead,
-  safeReaddir
-} from './xos-goal-files'
+import { frontmatterString, parseFrontmatter, readHead } from './xos-goal-files'
 import { readRunReceipts } from './xos-goal-receipts'
 import { automationLockFile, isLockFree, laneLockFile } from './xos-lane-lock'
-import { resolveProjectGoalsDir } from './xos-project-home'
+import { listProjectGoals, resolveGoalDir } from './xos-project-home'
 import {
   countDownstreamFloorItems,
   countOpenReplyMessages,
@@ -75,10 +69,7 @@ export async function evaluateProjectQueueTriggers(
 ): Promise<XosQueueTriggerEvent[]> {
   const nowMs = args.nowMs ?? Date.now()
   const maxRunsPerTick = args.maxRunsPerTick ?? 5
-  const goalsDir = resolveProjectGoalsDir(args.repoRoot)
-  const goalNames = safeReaddir(goalsDir)
-    .filter((n) => !n.startsWith('_') && !n.startsWith('.') && isDirectory(join(goalsDir, n)))
-    .sort()
+  const goalNames = listProjectGoals(args.repoRoot)
   const events: XosQueueTriggerEvent[] = []
   const busy = new Set<string>()
 
@@ -106,7 +97,7 @@ export async function evaluateProjectQueueTriggers(
     if (events.length >= maxRunsPerTick) {
       break
     }
-    const goalDir = join(goalsDir, goal)
+    const goalDir = resolveGoalDir(args.repoRoot, goal)
     const goalText = readHead(join(goalDir, 'GOAL.md'), 16 * 1024)
     if (!goalText) {
       continue

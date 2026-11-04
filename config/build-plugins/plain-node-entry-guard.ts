@@ -25,7 +25,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
   'startup/http1-compatibility-marker',
-  ...'xos-project-home,xos-goal-board,xos-live-registry,xos-goal-crud,xos-goal-cli,xos-usage-models-cli,xos-work-items,xos-work-items-crud,xos-item-claims'
+  ...'xos-project-home,xos-project-import,xos-goal-board,xos-live-registry,xos-goal-crud,xos-goal-cli,xos-usage-models-cli,xos-work-items,xos-work-items-crud,xos-item-claims'
     .split(',')
     .map((m) => `xos/${m}`)
 ] as const

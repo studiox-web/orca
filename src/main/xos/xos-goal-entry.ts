@@ -23,11 +23,17 @@ import {
 } from './xos-goal-files'
 import type { XosGoalQueues } from '../../shared/xos-items-types'
 import { areaForGoal, type XosOrg } from './xos-goal-org'
-import { resolveProjectGoalsDir } from './xos-project-home'
+import { resolveGoalDir } from './xos-project-home'
+import { activeTakeover } from './xos-run-journal'
 
 const DAY_MS = 86_400_000
 
-export type GoalProject = { root: string; goalsDir?: string }
+export type GoalProject = { root: string }
+
+function takeoverOf(repoRoot: string, goal: string): XosGoal['takeover'] {
+  const session = activeTakeover(repoRoot, goal)
+  return session ? { agent: session.agent, startedAt: session.startedAt } : null
+}
 
 function optionalDocPath(goalDir: string, filename: string): string | null {
   const full = join(goalDir, filename)
@@ -118,7 +124,7 @@ export function buildGoal(args: {
   now: number
 }): XosGoal {
   const { project, goal, org, runs, usage, cronJobs, running, queues, now } = args
-  const goalDir = join(project.goalsDir ?? resolveProjectGoalsDir(project.root), goal)
+  const goalDir = resolveGoalDir(project.root, goal)
   const goalPath = join(goalDir, 'GOAL.md')
   const statusPath = join(goalDir, 'STATUS.md')
   const sidecars = safeReaddir(join(goalDir, 'sidecars'))
@@ -158,6 +164,7 @@ export function buildGoal(args: {
     adminSummary: adminSummaryFromLog(latestText),
     paused: cronJobs.length > 0 && activeJobs.length === 0,
     running,
+    takeover: takeoverOf(project.root, goal),
     viewer: {
       slug: goal,
       goalPath,

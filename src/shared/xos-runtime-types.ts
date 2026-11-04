@@ -35,6 +35,19 @@ export type XosAutomationRunConfig = {
   autoCommit: XosAutoCommitConfig | null
   /** Plan §3.3: pick the model at dispatch from a tier, by remaining quota. */
   auto: XosAutoModeConfig | null
+  /** C1: this automation is the schedule of a goal; each run assembles the goal's prompt. */
+  goal: XosGoalBinding | null
+  /** §7: this automation runs a shell command instead of an agent. */
+  script: XosScriptBinding | null
+}
+
+export type XosGoalBinding = { repoRoot: string; goal: string }
+
+export type XosScriptBinding = {
+  command: string
+  cwd: string
+  /** PF7: the crontab line this replaces; the run is skipped while that line is active. */
+  replacesCronCommand: string | null
 }
 
 export type XosAutoCommitConfig = {

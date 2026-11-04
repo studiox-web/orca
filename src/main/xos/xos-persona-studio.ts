@@ -25,7 +25,7 @@ import {
   scanLegacyJournal,
   scanVideos
 } from './xos-persona-media'
-import { commitProjectHome, resolveProjectGoalsDir } from './xos-project-home'
+import { commitProjectHome, resolveGoalDir } from './xos-project-home'
 import { audit } from './xos-crontab'
 
 const SOUL_MAX_BYTES = 64 * 1024
@@ -53,8 +53,7 @@ function soulTraits(soul: string | null): XosPersonaStudio['traits'] {
 
 /** Full studio view for one goal (EM1-EM5 read model). */
 export function readPersonaStudio(repoRoot: string, goal: string): XosPersonaStudio | null {
-  const goalsDir = resolveProjectGoalsDir(repoRoot)
-  const goalDir = join(goalsDir, goal)
+  const goalDir = resolveGoalDir(repoRoot, goal)
   if (!existsSync(join(goalDir, 'GOAL.md'))) {
     return null
   }
@@ -204,7 +203,7 @@ export async function applyPersonaMutation(
     return fail(`Goal ${goal} was not found.`)
   }
   const mediaDir = personaMediaDir(repoRoot, goal)
-  const goalDir = join(resolveProjectGoalsDir(repoRoot), goal)
+  const goalDir = resolveGoalDir(repoRoot, goal)
   try {
     switch (mutation.kind) {
       case 'review-image':

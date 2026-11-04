@@ -10,6 +10,7 @@ import type { XosModelChoice } from '../../shared/xos-runtime-types'
 import { readXosModelArgs, writeXosModelArgs } from '../../shared/xos-model-args'
 import type { XosAutomationRunConfig } from '../../shared/xos-runtime-types'
 import { xosPreviewAuto } from './xos-auto-mode'
+import { effectiveReservePercent } from './xos-dispatch-policy'
 import { classifyRunScreen, describeLimit, type XosRunLimitVerdict } from './xos-limit-classifier'
 import { assessQuota } from './xos-quota'
 import { appendLedger, readRunConfig } from './xos-runtime-store'
@@ -31,23 +32,18 @@ type Pending = Chain & { parentRunId: string; reason: string; expiresAt: number 
 
 const pending = new Map<string, Pending>()
 const chains = new Map<string, Chain>()
-/** Automations started from a lane queue: their run counts as scheduled (it replaces one). */
-const queuedStarts = new Map<string, number>()
+
+/** The durable half of a run's chain; held in the run journal across restarts (H8). */
+export function chainForRun(runId: string): Chain | null {
+  return chains.get(runId) ?? null
+}
+
+export function restoreChain(runId: string, chain: Chain): void {
+  chains.set(runId, chain)
+}
 /** Upstream may report one completion twice; only the first may start a fallback. */
 const handled = new Set<string>()
 const HANDLED_LIMIT = 500
-
-export function markQueuedStart(automationId: string): void {
-  queuedStarts.set(automationId, Date.now() + PENDING_TTL_MS)
-}
-
-function rootTrigger(automationId: string, run: AutomationRun): AutomationRun['trigger'] {
-  const until = queuedStarts.get(automationId)
-  queuedStarts.delete(automationId)
-  return run.trigger === 'manual' && until !== undefined && until > Date.now()
-    ? 'scheduled'
-    : run.trigger
-}
 
 export function primaryChoice(automation: Automation): XosModelChoice {
   const { model, effort } = readXosModelArgs(automation.agentId, automation.extraAgentArgs ?? '')
@@ -84,7 +80,10 @@ async function planRoot(
 ): Promise<{ options: XosModelChoice[]; start: number; reason: string | null }> {
   const primary = primaryChoice(automation)
   if (config.auto) {
-    const preview = await xosPreviewAuto(config.auto)
+    const preview = await xosPreviewAuto({
+      ...config.auto,
+      reservePercent: effectiveReservePercent(config.auto.reservePercent)
+    })
     const picks = preview.candidates.filter((entry) => entry.available).map((entry) => entry.choice)
     if (picks.length === 0) {
       return {
@@ -123,7 +122,7 @@ export async function xosLaunchAutomation(
   run: AutomationRun
 ): Promise<Automation> {
   try {
-    const trigger = rootTrigger(automation.id, run)
+    const trigger = run.trigger
     let chain: Chain
     let parentRunId: string | null = null
     let reason: string | null
@@ -205,13 +204,23 @@ function nextChoice(
   return -1
 }
 
+/** A chat run that finished cleanly has a real success signal; a terminal screen does not. */
+export function classifyFinishedRun(run: AutomationRun): XosRunLimitVerdict | null {
+  const succeeded = run.sessionKind === 'chat' && run.status === 'completed'
+  return (
+    classifyRunScreen(run.outputSnapshot?.content, succeeded ? { exitCode: 0 } : {}) ??
+    classifyRunScreen(run.error)
+  )
+}
+
+/** Returns true when a fallback retry was started for this run. */
 export function xosObserveFinishedRun(
   host: { automation: Automation | undefined; runNow: (automationId: string) => Promise<unknown> },
   run: AutomationRun
-): void {
+): boolean {
   try {
     if ((run.status !== 'completed' && run.status !== 'dispatch_failed') || handled.has(run.id)) {
-      return
+      return false
     }
     handled.add(run.id)
     if (handled.size > HANDLED_LIMIT) {
@@ -219,7 +228,7 @@ export function xosObserveFinishedRun(
     }
     const chain = chains.get(run.id)
     chains.delete(run.id)
-    const verdict = classifyRunScreen(run.outputSnapshot?.content) ?? classifyRunScreen(run.error)
+    const verdict = classifyFinishedRun(run)
     appendLedger({
       type: 'outcome',
       runId: run.id,
@@ -229,7 +238,7 @@ export function xosObserveFinishedRun(
     })
     const automation = host.automation
     if (!verdict || !automation) {
-      return
+      return false
     }
     const config = readRunConfig(automation.id)
     const current = chain ?? {
@@ -242,7 +251,7 @@ export function xosObserveFinishedRun(
     const what = `${automation.name}: ${describeLimit(verdict)} on ${choiceLabel(current.choice)}`
     if (!fallsBack(current.rootTrigger, config)) {
       notify(`${what}. Manual runs don't fall back unless you turn it on in the automation.`)
-      return
+      return false
     }
     const options = current.options
     const index = nextChoice(options, current.attempt, current.choice, verdict)
@@ -252,7 +261,7 @@ export function xosObserveFinishedRun(
           ? `${what}. Add fallback models to this automation to retry on another model.`
           : `${what}. Every fallback has been tried.`
       )
-      return
+      return false
     }
     pending.set(automation.id, {
       rootRunId: current.rootRunId,
@@ -269,7 +278,9 @@ export function xosObserveFinishedRun(
       pending.delete(automation.id)
       notify(`${automation.name}: the fallback run could not start (${String(error)}).`)
     })
+    return true
   } catch (error) {
     console.warn('[xos] fallback observation failed', error)
+    return false
   }
 }

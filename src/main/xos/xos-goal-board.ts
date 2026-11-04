@@ -3,7 +3,7 @@
 import { basename, join, resolve } from 'node:path'
 import { isRepoOnCatalogHost } from '../../shared/execution-host'
 import type { XosCronJob, XosGoalBoard, XosGoalRun, XosProject } from '../../shared/xos-goals-types'
-import { isDirectory, safeReaddir } from './xos-goal-files'
+import { safeReaddir } from './xos-goal-files'
 import { readRunReceipts, readTokenUsage } from './xos-goal-receipts'
 import {
   hashCrontab,
@@ -20,7 +20,12 @@ import { runningFor, runningGoalJobs, within } from './xos-goal-processes'
 import { liveRunRegistry } from './xos-live-registry'
 import { nativeRunningFor } from './xos-live-tail'
 import { readNativeReceipts } from './xos-native-receipts'
-import { hasProjectGoals, readProjectMeta, resolveProjectGoalsDir } from './xos-project-home'
+import {
+  hasProjectGoals,
+  listProjectGoals,
+  readProjectMeta,
+  resolveProjectGoalsDir
+} from './xos-project-home'
 import { goalQueues, scanProjectQueues } from './xos-work-items'
 
 export type XosRepoSource = {
@@ -87,16 +92,14 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
 
   for (const candidate of discoverProjects(repos, cronLines)) {
     const goalsDir = resolveProjectGoalsDir(candidate.root)
-    const goalNames = safeReaddir(goalsDir).filter(
-      (name) => !name.startsWith('_') && !name.startsWith('.') && isDirectory(join(goalsDir, name))
-    )
+    const goalNames = listProjectGoals(candidate.root)
     const known = new Set(goalNames)
     const projectLines = cronLines.filter(
       (line) => line.workdir && within(resolve(line.workdir), candidate.root)
     )
     const projectJobs = projectLines.map((line) => toCronJob(line, known, now))
     projectLines.forEach((line) => claimed.add(line.id))
-    const org = loadOrg(basename(candidate.root))
+    const org = loadOrg(candidate.root)
     const automationsDir = join(candidate.root, 'automations')
     const runs = readRunReceipts(automationsDir)
     const nativeRuns = readNativeReceipts(candidate.root)
@@ -110,7 +113,7 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
     const goals = goalNames
       .map((goal) =>
         buildGoal({
-          project: { ...candidate, goalsDir },
+          project: candidate,
           goal,
           org,
           runs: runsForGoal(goal),

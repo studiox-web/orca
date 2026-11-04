@@ -80,7 +80,7 @@ describe('lane locks', () => {
 
     gate.xosAfterRunFinished(run('a1', 'a', 'completed'))
     await flush()
-    expect(host.runNow).toHaveBeenCalledWith('c')
+    expect(host.runNow).toHaveBeenCalledWith('c', 'scheduled')
     expect(
       'automation' in (await gate.xosBeforeLaunch(automation('b'), run('b2', 'b'), target()))
     ).toBe(true)
@@ -140,27 +140,39 @@ describe('lane locks', () => {
     expect('automation' in allowedChild).toBe(true)
     gate.xosReleaseRun('c2')
 
-    // With CASCADE_ACTIVE_LOCK_LANE, child-goal inherits the lane, but parent-goal still cannot recurse on itself.
+    // Orca's own environment grants nothing: the variable belongs to the agent's process.
     process.env.CASCADE_ACTIVE_LOCK_LANE = 'repo-mutating'
     try {
-      const envChild = await gate.xosBeforeLaunch(
+      const noGrant = await gate.xosBeforeLaunch(
         automation('child-goal'),
         run('c3', 'child-goal'),
         target()
       )
-      expect('automation' in envChild).toBe(true)
-      gate.xosReleaseRun('c3')
-
-      const selfRecurse = await gate.xosBeforeLaunch(
-        automation('parent-goal'),
-        run('p2', 'parent-goal'),
-        target()
-      )
-      expect('refusal' in selfRecurse).toBe(true)
+      expect('refusal' in noGrant).toBe(true)
     } finally {
       delete process.env.CASCADE_ACTIVE_LOCK_LANE
-      gate.xosReleaseRun('p1')
     }
+
+    // A parent still cannot recurse into itself, grant or not.
+    gate.xosGrantInheritedLane('parent-goal', 'repo-mutating')
+    const selfRecurse = await gate.xosBeforeLaunch(
+      automation('parent-goal'),
+      run('p2', 'parent-goal'),
+      target()
+    )
+    expect('refusal' in selfRecurse).toBe(true)
+    gate.xosReleaseRun('p1')
+
+    // Once nobody holds the lane the grant is void, and the child takes the lane normally.
+    await flush()
+    gate.xosGrantInheritedLane('child-goal', 'repo-mutating')
+    const afterRelease = await gate.xosBeforeLaunch(
+      automation('child-goal'),
+      run('c4', 'child-goal'),
+      target()
+    )
+    expect('automation' in afterRelease).toBe(true)
+    gate.xosReleaseRun('c4')
   })
 })
 

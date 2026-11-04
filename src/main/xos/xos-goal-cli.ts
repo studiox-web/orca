@@ -159,9 +159,9 @@ export async function editGoalFromCli(args: {
       if (!resolved.ok) {
         return { ok: false, error: resolved.error }
       }
-      setGoalArea(basename(args.project.root), args.goal.goal, resolved.areaId)
+      setGoalArea(args.project.root, args.goal.goal, resolved.areaId)
     } else {
-      setGoalArea(basename(args.project.root), args.goal.goal, null)
+      setGoalArea(args.project.root, args.goal.goal, null)
     }
     changes.push(`area=${args.area}`)
   }

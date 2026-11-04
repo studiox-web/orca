@@ -39,4 +39,18 @@ describe('classifyRunScreen', () => {
     expect(classifyRunScreen('bash: jq: command not found')).toBeNull()
     expect(classifyRunScreen('')).toBeNull()
   })
+
+  it('reads generic wording only as a line of its own, never inside prose', () => {
+    expect(classifyRunScreen('The login page shows not logged in for guests.')).toBeNull()
+    expect(classifyRunScreen('Handled the 429 Too Many Requests path in the client.')).toBeNull()
+    expect(classifyRunScreen('Not logged in · run claude to sign in')?.kind).toBe('auth')
+    expect(classifyRunScreen('Error: 429 Too Many Requests')?.kind).toBe('usage-limit')
+  })
+
+  it('treats a successful exit as a limit only when the output is just the banner (RT4)', () => {
+    const banner = "You've hit your usage limit. Try again in 3 days."
+    expect(classifyRunScreen(`${banner}\n`, { exitCode: 0 })?.kind).toBe('usage-limit')
+    expect(classifyRunScreen(`${filler(30)}\n${banner}`, { exitCode: 0 })).toBeNull()
+    expect(classifyRunScreen(`${filler(30)}\n${banner}`, { exitCode: 1 })?.kind).toBe('usage-limit')
+  })
 })

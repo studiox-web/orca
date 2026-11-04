@@ -46,6 +46,7 @@ export type XosGoalActions = {
   goalOp: (mutation: WithoutHash<XosGoalMutation>, busyKey?: string) => Promise<boolean>
   areaOp: (mutation: XosAreaMutation) => Promise<boolean>
   runGoal: (goal: XosGoal, options?: XosGoalRunOptions) => void
+  releaseTakeover: (goal: XosGoal, advance: boolean) => void
   setGoalPaused: (goal: XosGoal, paused: boolean) => void
   runJob: (job: XosCronJob) => void
   setJobPaused: (job: XosCronJob, paused: boolean) => void

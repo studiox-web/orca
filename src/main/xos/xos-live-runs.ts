@@ -1,158 +1,182 @@
-// XOS fork: Stage D native goal runs (plan §4 row D, §3e). Goals whose project has no legacy
-// run-goal-cron.sh run directly on Orca's own machinery: the stage B prompt assembly, RT7 lane
-// locks (the same flock files xos-run-gate uses), §3g item claiming, RT8 scoped auto-commit and
-// the stage A limit classifier for the outcome. Output streams to a log file plus an in-memory
-// tail (xos-live-tail.ts reads it); receipts land in ~/.orca-xos/runs/<slug>.jsonl
-// (xos-native-receipts.ts) so the §3c board adapter reads them like the legacy rows.
-import type { Readable } from 'node:stream'
-import { closeSync, existsSync, mkdirSync, openSync, writeFileSync } from 'node:fs'
+// XOS fork: Stage D native goal runs (plan §4 row D, §3e): the stage B prompt assembly, RT7 lane
+// locks, §3g item claiming, RT8 scoped auto-commit and the stage A limit classifier. A run writes
+// straight to its own log and exit file and is recorded in the run journal, so it survives an Orca
+// restart: the next Orca adopts it (adoptNativeRuns) and settles it the same way.
+import { closeSync, mkdirSync, openSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import type { XosGoalRunMode } from '../../shared/xos-goals-types'
-import { readLegacyCommitPolicies, xosAutoCommit } from './xos-auto-commit'
-import { readHead } from './xos-goal-files'
-import { assembleGoalPrompt } from './xos-goal-prompt'
-import { claimWorkItem, releaseWorkItemClaim } from './xos-item-claims'
-import { automationLockFile, laneLockFile, tryLock, type HeldLock } from './xos-lane-lock'
-import { classifyRunScreen } from './xos-limit-classifier'
-import { commitProjectHome, projectHomeDir } from './xos-project-home'
+import type { XosModelChoice } from '../../shared/xos-runtime-types'
+import { buildAgentRunCommand, nativeFallbackChain, shellQuote } from './xos-agent-command'
+import { checkDispatchPolicy, type XosDispatchSource } from './xos-dispatch-policy'
+import { goalAuthority, isGoalAuthorityConfirmed } from './xos-goal-authority'
+import { frontmatterList } from './xos-goal-files'
+import { goalRunTimeoutMinutes } from './xos-goal-run-timeout'
+import { assembleGoalPrompt, markGoalInboxRead } from './xos-goal-prompt'
+import { claimedItemPromptSection, claimWorkItem, releaseWorkItemClaim } from './xos-item-claims'
+import { goalLockFile, laneLockFile, tryLock, type HeldLock } from './xos-lane-lock'
+import type { XosRunLimitVerdict } from './xos-limit-classifier'
 import { mutableLiveRuns } from './xos-live-registry'
 export { liveRunRegistry } from './xos-live-registry'
+export { stopNativeGoalRun }
+import type { XosLiveRun, XosNativeRunArgs } from './xos-live-runs-types'
+import {
+  adoptNativeRuns as adoptRuns,
+  armRunTimeout,
+  journalOf,
+  stopNativeGoalRun
+} from './xos-native-control'
+import { finalizeNativeRun, safeNotify } from './xos-native-finalize'
 import {
   appendReceipt,
-  buildAgentRunCommand,
+  goalRunsToday,
   itemTitleFrom,
-  nativeRunLogsDir,
-  runsTodayCount
+  nativeRunLogsDir
 } from './xos-native-receipts'
-import type { XosLiveRun, XosNativeRunArgs } from './xos-live-runs-types'
+import { commitProjectHome, projectHomeDir } from './xos-project-home'
+import {
+  leasePathFor,
+  listRunJournal,
+  removeRunJournal,
+  writeRunJournal,
+  writeRunLease
+} from './xos-run-journal'
 
 export type { XosNativeRunArgs } from './xos-live-runs-types'
 
-const TAIL_LINES = 120
-const ITEM_PROMPT_BYTES = 32 * 1024
 const FINISHED_RUN_TTL_MS = 60 * 60_000
+const LEASE_GRACE_MS = 10 * 60_000
 
 const liveRuns = mutableLiveRuns()
 
-function safeNotify(body: string): void {
-  try {
-    const { Notification } = require('electron')
-    if (Notification?.isSupported?.()) {
-      new Notification({ title: 'Orca automation', body }).show()
-    }
-  } catch {
-    // Ignore outside Electron or in tests
-  }
+type StartResult = { ok: true; runId: string; message: string } | { ok: false; error: string }
+
+function dispatchSource(trigger: XosNativeRunArgs['trigger']): XosDispatchSource {
+  return trigger === 'scheduled' ? 'schedule' : trigger === 'event' ? 'event' : 'operator'
 }
 
-function pushTail(run: XosLiveRun, chunk: string): void {
-  run.tail.push(chunk)
-  if (run.tail.length > TAIL_LINES) {
-    run.tail.splice(0, run.tail.length - TAIL_LINES)
-  }
-}
-
-async function finalizeRun(run: XosLiveRun, code: number | null, logFd: number): Promise<void> {
-  const finishedAt = new Date().toISOString()
-  const verdict = classifyRunScreen(run.tail.join('\n'))
-  run.finishedAt = finishedAt
-  run.exitCode = code
-  if (code === 0 && !verdict) {
-    run.outcome = 'success'
-  } else if (verdict) {
-    run.outcome =
-      verdict.kind === 'usage-limit' || verdict.kind === 'overloaded' ? 'limited' : 'failed'
-    run.failureReason =
-      verdict.kind === 'auth' || verdict.kind === 'missing-binary' ? verdict.kind : 'usage_limit'
-  } else {
-    run.outcome = 'failed'
-    run.failureReason = 'run_failed'
-  }
-  try {
-    closeSync(logFd)
-  } catch {
-    // Already closed.
-  }
-  appendReceipt(run.repoRoot, {
-    run_id: run.runId,
-    goal: run.goal,
-    runner: run.agent,
-    status: run.outcome === 'success' ? 'success' : 'failed',
-    started_at: run.startedAt,
-    finished_at: finishedAt,
-    duration_seconds: Math.max(
-      0,
-      Math.round((Date.parse(finishedAt) - Date.parse(run.startedAt)) / 1000)
-    ),
-    exit_code: code,
-    log_path: run.logPath,
-    model: run.model,
-    reasoning_effort: run.effort,
-    failure_reason: run.outcome === 'success' ? null : run.failureReason,
-    trigger: run.trigger,
-    mode: run.mode,
-    item_path: run.itemPath,
-    item_title: run.itemTitle,
-    worktree_path: run.worktreePath,
-    branch: run.branch,
-    parent_run_id: run.parentRunId
-  })
-  if (run.itemPath && existsSync(run.itemPath)) {
-    releaseWorkItemClaim(run.itemPath)
-  }
-  run.locks.forEach((lock) => lock.release())
-  run.locks = []
-  if (!run.disableAutoCommit && run.outcome === 'success') {
-    const policy = readLegacyCommitPolicies(run.repoRoot).find((entry) => entry.goal === run.goal)
-    if (policy) {
-      const result = await xosAutoCommit({
-        cwd: run.worktreePath ?? run.repoRoot,
-        repoRoot: run.repoRoot,
-        automationName: run.goal,
-        config: { paths: policy.paths, message: `chore(automation): ${run.goal}`, push: false }
-      })
-      if (result.status === 'failed') {
-        safeNotify(`${run.goal}: auto-commit failed. ${result.detail ?? ''}`)
-      }
-    }
-  }
-  if (run.outcome !== 'success') {
-    safeNotify(`${run.goal}: native run ${run.outcome} (${run.failureReason ?? 'unknown'}).`)
-  }
-  void commitProjectHome(run.repoRoot, `xos: native run ${run.goal} (${run.outcome})`)
-}
-
-/** Start a native goal run: prompt assembly, item claim, lane locks, streaming child, receipt. */
-export async function startNativeGoalRun(
-  args: XosNativeRunArgs
-): Promise<{ ok: true; runId: string; message: string } | { ok: false; error: string }> {
-  const nowMs = args.nowMs ?? Date.now()
-  const repoRoot = args.repoRoot
-  const mode: XosGoalRunMode = args.mode ?? 'normal'
+function pruneFinished(nowMs: number): void {
   for (const [runId, run] of liveRuns) {
     if (run.finishedAt !== null && Date.parse(run.finishedAt) + FINISHED_RUN_TTL_MS < nowMs) {
       liveRuns.delete(runId)
     }
   }
+}
+
+/** RT5/§3.4: start the next model for a limited run; false when the chain has nothing left. */
+async function retryOnFallback(run: XosLiveRun, verdict: XosRunLimitVerdict): Promise<boolean> {
+  const agentBroken = verdict.kind === 'auth' || verdict.kind === 'missing-binary'
+  const chain = agentBroken
+    ? run.fallbackChain.filter((choice) => choice.agent !== run.agent)
+    : run.fallbackChain
+  const [next, ...rest] = chain
+  if (run.disableFallback || !next) {
+    return false
+  }
+  const started = await startNativeGoalRun({
+    repoRoot: run.repoRoot,
+    goal: run.goal,
+    mode: run.mode,
+    runner: next.agent,
+    model: next.model,
+    effort: next.effort,
+    itemPath: run.itemPath ?? undefined,
+    trigger: run.trigger,
+    parentRunId: run.runId,
+    worktree: run.worktreePath ? { path: run.worktreePath, branch: run.branch } : undefined,
+    force: true,
+    attempt: run.attempt + 1,
+    fallbackChain: rest
+  })
+  safeNotify(
+    started.ok
+      ? `${run.goal}: ${verdict.kind} on ${run.agent}; retrying on ${next.agent}.`
+      : `${run.goal}: fallback to ${next.agent} could not start (${started.error}).`
+  )
+  return started.ok
+}
+
+function settle(run: XosLiveRun, code: number | null): void {
+  void finalizeNativeRun(run, code, retryOnFallback)
+}
+
+/** An earlier Orca's runs: settle the finished, keep supervising the live (H8). */
+export function adoptNativeRuns(): number {
+  return adoptRuns(settle)
+}
+
+function laneHeldByActiveRun(laneFile: string): boolean {
+  return listRunJournal().some((entry) => entry.locks.some((lock) => lock.file === laneFile))
+}
+
+function recordSkip(args: XosNativeRunArgs, reason: string, startedAt: string): void {
+  appendReceipt(args.repoRoot, {
+    run_id: `${args.goal}-skip-${Date.parse(startedAt).toString(36)}`,
+    goal: args.goal,
+    runner: args.runner ?? null,
+    status: 'skipped_precheck',
+    started_at: startedAt,
+    finished_at: startedAt,
+    duration_seconds: 0,
+    exit_code: null,
+    log_path: '',
+    failure_reason: reason,
+    trigger: args.trigger ?? 'manual',
+    mode: args.mode ?? 'normal'
+  })
+}
+
+/** Start a native goal run: policy, prompt assembly, item claim, lane locks, detached child. */
+export async function startNativeGoalRun(args: XosNativeRunArgs): Promise<StartResult> {
+  const nowMs = args.nowMs ?? Date.now()
+  const { repoRoot, goal } = args
+  const mode: XosGoalRunMode = args.mode ?? 'normal'
+  const trigger = args.trigger ?? 'manual'
+  const startedAt = new Date(nowMs).toISOString()
+  pruneFinished(nowMs)
+  const policy = checkDispatchPolicy({ repoRoot, source: dispatchSource(trigger), nowMs })
+  if (!policy.allowed) {
+    return { ok: false, error: policy.reason }
+  }
+  const locks: HeldLock[] = []
+  let claimedItem: string | null = null
+  const runId = `${goal}-${nowMs.toString(36)}`
+  const leasePath = leasePathFor(runId)
+  const abandon = (): void => {
+    locks.forEach((held) => held.release())
+    if (claimedItem) {
+      releaseWorkItemClaim(claimedItem)
+    }
+    removeRunJournal(runId, leasePath)
+  }
   try {
     const assembled = assembleGoalPrompt({
       repoRoot,
-      goal: args.goal,
+      goal,
       mode,
       sidecar: args.sidecar,
       operatorMessage: args.message,
       requestedAgent: args.runner,
-      runsToday: runsTodayCount(repoRoot, args.goal, nowMs),
-      bypassQueueGate: true
+      requestedModel: args.model,
+      requestedEffort: args.effort,
+      runsToday: goalRunsToday(repoRoot, goal, nowMs),
+      bypassQueueGate: args.force === true
     })
     if (assembled.status !== 'ready') {
+      recordSkip(args, assembled.reason, startedAt)
       return { ok: false, error: assembled.reason }
+    }
+    const fm = assembled.frontmatter
+    const confirmed = isGoalAuthorityConfirmed(repoRoot, goal, fm)
+    if (trigger !== 'manual' && goalAuthority(fm).elevated && !confirmed) {
+      return {
+        ok: false,
+        error: `${goal} has deploy or push authority; confirm it before it can run unattended.`
+      }
     }
     const itemPath =
       args.itemPath ??
       (mode === 'normal' ? (assembled.queueGate?.candidateItemPaths[0] ?? null) : null)
-    const runId = `${args.goal}-${nowMs.toString(36)}`
     let prompt = assembled.prompt
     let itemTitle: string | null = null
     let itemStage: string | null = null
@@ -161,22 +185,21 @@ export async function startNativeGoalRun(
       if (!claim.claimed) {
         return { ok: false, error: claim.reason ?? 'Could not claim the work item.' }
       }
+      claimedItem = itemPath
       itemTitle = itemTitleFrom(itemPath)
       itemStage = basename(dirname(itemPath))
-      prompt += `\n\n## Claimed Work Item (§3g)\n\n- File: ${itemPath}\n- Stage: ${itemStage}\n- This run claimed it (\`claimed_by: ${runId}\`). On success, move it to the next stage per the queue rules and reference "${basename(itemPath, '.md')}" in the commit message.\n\n### Item contents\n\n${readHead(itemPath, ITEM_PROMPT_BYTES) ?? '_Unreadable item file._'}`
+      prompt += claimedItemPromptSection(itemPath, runId)
     }
-    const lockFiles = [
-      automationLockFile(repoRoot, `goal-${args.goal}`),
-      laneLockFile(repoRoot, assembled.lockLane)
-    ]
-    const locks: HeldLock[] = []
-    for (const file of lockFiles) {
-      const lock = await tryLock(file, assembled.lockWaitSeconds)
+    const timeoutMinutes = goalRunTimeoutMinutes(fm)
+    const deadlineAtMs = nowMs + timeoutMinutes * 60_000
+    const lease = { path: leasePath, expiresAtMs: deadlineAtMs + LEASE_GRACE_MS }
+    writeRunLease(leasePath, null)
+    const laneFile = laneLockFile(repoRoot, assembled.lockLane)
+    const inherited = args.inheritedLane === assembled.lockLane && laneHeldByActiveRun(laneFile)
+    for (const file of [goalLockFile(repoRoot, goal), ...(inherited ? [] : [laneFile])]) {
+      const lock = await tryLock(file, assembled.lockWaitSeconds, lease)
       if (!lock) {
-        locks.forEach((held) => held.release())
-        if (itemPath) {
-          releaseWorkItemClaim(itemPath)
-        }
+        abandon()
         return {
           ok: false,
           error: `Lane "${assembled.lockLane}" is busy${assembled.lockWaitSeconds ? ' after waiting' : ''}; the run was skipped.`
@@ -186,10 +209,10 @@ export async function startNativeGoalRun(
     }
     const logDir = nativeRunLogsDir(repoRoot)
     mkdirSync(logDir, { recursive: true })
-    const promptPath = join(logDir, `${args.goal}-${runId}.prompt.md`)
+    const promptPath = join(logDir, `${runId}.prompt.md`)
     writeFileSync(promptPath, prompt, 'utf8')
-    const logPath = join(logDir, `${args.goal}-${runId}.log`)
-    const logFd = openSync(logPath, 'a')
+    const logPath = join(logDir, `${runId}.log`)
+    const exitPath = join(logDir, `${runId}.exit`)
     const cwd = args.worktree?.path ?? repoRoot
     const command = buildAgentRunCommand({
       root: cwd,
@@ -198,74 +221,96 @@ export async function startNativeGoalRun(
       model: assembled.model,
       effort: assembled.effort,
       lockLane: assembled.lockLane,
-      inboxOnly: mode === 'reply'
+      inboxOnly: mode === 'reply',
+      bypassPermissions: confirmed && !assembled.hasExternalInbox
     })
+    const chain: XosModelChoice[] =
+      args.fallbackChain ??
+      (trigger !== 'manual' || fm.fallback_on_manual === true
+        ? nativeFallbackChain(
+            { agent: assembled.agent, model: assembled.model, effort: assembled.effort },
+            frontmatterList(fm, 'agents'),
+            frontmatterList(fm, 'fallbacks')
+          )
+        : [])
     const run: XosLiveRun = {
       runId,
       repoRoot,
-      goal: args.goal,
+      goal,
       agent: assembled.agent,
       mode,
-      trigger: args.trigger ?? 'manual',
+      trigger,
       parentRunId: args.parentRunId ?? null,
       pid: null,
-      startedAt: new Date(nowMs).toISOString(),
+      startedAt,
+      deadlineAtMs,
+      leasePath,
       itemPath,
       itemTitle,
       itemStage,
       worktreePath: args.worktree?.path ?? null,
       branch: args.worktree?.branch ?? null,
       logPath,
+      exitPath,
       command,
       model: assembled.model,
       effort: assembled.effort,
       disableAutoCommit: assembled.disableAutoCommit,
-      tail: [],
+      disableFallback: assembled.disableFallback,
+      attempt: args.attempt ?? 0,
+      fallbackChain: chain,
       locks,
       finishedAt: null,
       exitCode: null,
       outcome: null,
-      failureReason: null
+      failureReason: null,
+      stopReason: null,
+      finalizing: false,
+      timer: null
     }
-    const child = spawnProcess({
-      program: '/bin/bash',
-      args: ['-lc', command],
-      cwd,
-      detached: true,
-      env: {
-        ...process.env,
-        ORCA_GOAL_HOME: assembled.goalDir,
-        ORCA_PROJECT_HOME: projectHomeDir(repoRoot),
-        ...(itemPath ? { ORCA_ITEM: itemPath } : {})
-      },
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
+    const logFd = openSync(logPath, 'a')
+    let child: ReturnType<typeof spawnProcess>
+    try {
+      child = spawnProcess({
+        program: '/bin/bash',
+        args: [
+          '-lc',
+          `${command}\ncode=$?\nprintf '%s' "$code" > ${shellQuote(exitPath)}\nexit "$code"`
+        ],
+        cwd,
+        detached: true,
+        env: {
+          ...process.env,
+          ORCA_GOAL_HOME: assembled.goalDir,
+          ORCA_PROJECT_HOME: projectHomeDir(repoRoot),
+          ORCA_RUN_ID: runId,
+          ...(itemPath ? { ORCA_ITEM: itemPath } : {})
+        },
+        stdio: ['ignore', logFd, logFd]
+      })
+    } finally {
+      closeSync(logFd)
+    }
     run.pid = child.pid ?? null
-    const onChunk = (chunk: Buffer): void => {
-      const text = chunk.toString('utf8')
-      try {
-        writeFileSync(logFd, text)
-      } catch {
-        // Log file vanished; the in-memory tail still works.
-      }
-      pushTail(run, text)
-    }
-    child.stdout?.on('data', onChunk)
-    child.stderr?.on('data', onChunk)
-    child.on('close', (code) => void finalizeRun(run, code, logFd))
-    child.unref()
-    // Spawn pipes are sockets with unref(); the Readable type just doesn't declare it.
-    const stdout: (Readable & { unref?: () => void }) | null = child.stdout
-    const stderr: (Readable & { unref?: () => void }) | null = child.stderr
-    stdout?.unref?.()
-    stderr?.unref?.()
+    writeRunLease(leasePath, run.pid)
+    writeRunJournal(journalOf(run))
     liveRuns.set(runId, run)
+    child.on('error', (error) => {
+      console.warn('[xos] native run failed to start', error)
+      settle(run, null)
+    })
+    child.on('close', (code) => settle(run, code))
+    child.unref()
+    armRunTimeout(run)
+    markGoalInboxRead(assembled.inboxPaths, goal, startedAt)
+    void commitProjectHome(repoRoot, `xos: start ${mode} run for ${goal}`)
     return {
       ok: true,
       runId,
-      message: `Started ${args.goal} natively (pid ${run.pid ?? '?'}). Log: ${logPath}`
+      message: `Started ${goal} natively (pid ${run.pid ?? '?'}). Log: ${logPath}`
     }
   } catch (error) {
+    abandon()
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
 }

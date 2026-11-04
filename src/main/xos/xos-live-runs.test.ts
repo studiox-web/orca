@@ -151,7 +151,11 @@ describe('startNativeGoalRun (Stage D native runs)', () => {
   it('classifies a usage-limit banner as limited/failed with failure_reason usage_limit', async () => {
     const repo = makeRepo()
     fakeAgents(repo, 'echo "You have hit your usage limit for this session." \nexit 0')
-    const started = await startNativeGoalRun({ repoRoot: repo, goal: 'content-writer' })
+    const started = await startNativeGoalRun({
+      repoRoot: repo,
+      goal: 'content-writer',
+      force: true
+    })
     expect(started.ok).toBe(true)
     await waitFor(
       () =>
@@ -168,7 +172,11 @@ describe('startNativeGoalRun (Stage D native runs)', () => {
   it('maps a non-zero exit to failed without a failure_reason', async () => {
     const repo = makeRepo()
     fakeAgents(repo, 'echo "something broke"\nexit 3')
-    const started = await startNativeGoalRun({ repoRoot: repo, goal: 'content-writer' })
+    const started = await startNativeGoalRun({
+      repoRoot: repo,
+      goal: 'content-writer',
+      force: true
+    })
     expect(started.ok).toBe(true)
     await waitFor(
       () => readLiveTail(liveRunRegistry(), repo, 'content-writer')?.status === 'failed'
@@ -182,9 +190,9 @@ describe('startNativeGoalRun (Stage D native runs)', () => {
   it('refuses when a run is already in flight for the goal (self-recursion lock)', async () => {
     const repo = makeRepo()
     fakeAgents(repo, 'sleep 5\necho done')
-    const first = await startNativeGoalRun({ repoRoot: repo, goal: 'content-writer' })
+    const first = await startNativeGoalRun({ repoRoot: repo, goal: 'content-writer', force: true })
     expect(first.ok).toBe(true)
-    const second = await startNativeGoalRun({ repoRoot: repo, goal: 'content-writer' })
+    const second = await startNativeGoalRun({ repoRoot: repo, goal: 'content-writer', force: true })
     expect(second.ok).toBe(false)
     if (!second.ok) {
       expect(second.error).toContain('busy')

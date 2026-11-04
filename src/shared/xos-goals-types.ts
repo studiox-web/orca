@@ -124,6 +124,8 @@ export type XosGoal = {
   /** Every cron line for this goal is paused (and at least one exists). */
   paused: boolean
   running: XosRunningJob | null
+  /** §3e: an operator session holds this goal's lane until it is released. */
+  takeover?: { agent: string; startedAt: string } | null
   viewer: {
     slug: string
     goalPath: string
@@ -247,7 +249,8 @@ export type XosGoalMutation =
   /** `confirm` must equal the archived folder name. Also removes the goal's crontab lines. */
   | { kind: 'delete'; projectKey: string; archived: string; confirm: string; crontabHash: string }
   | { kind: 'set-area'; projectKey: string; goal: string; areaId: string | null }
-  | { kind: 'import-project'; projectKey: string }
+  /** `goals` cuts over just those goals; omit for the whole project. */
+  | { kind: 'import-project'; projectKey: string; goals?: string[] }
 
 export type XosAreaMutation =
   | { kind: 'upsert'; projectKey: string; area: XosGoalArea }
@@ -275,6 +278,8 @@ export type XosRunNowRequest =
       sidecar?: string
       message?: string
       runner?: string
+      /** Run even though the queue gate says there is no work (operator override). */
+      force?: boolean
     }
   | { kind: 'job'; jobId: string }
 
@@ -302,6 +307,12 @@ export type XosGoalsApi = XosItemsApi &
     liveTail: (args: { projectKey: string; goal: string }) => Promise<XosLiveRunTail | null>
     /** §3e / §3h.2 drill-in: interactive takeover session or autonomous build on an item. */
     continueOn: (args: XosContinueOnRequest) => Promise<XosActionResult>
+    releaseTakeover: (args: {
+      projectKey: string
+      goal: string
+      note?: string
+      advance?: boolean
+    }) => Promise<XosActionResult>
     /** First eligible unclaimed input item for "Build now", or null when the queue gate is dry. */
     nextItem: (args: { projectKey: string; goal: string }) => Promise<XosNextGoalItem>
   }

@@ -2,7 +2,8 @@
 // Source order: ~/.orca-xos/projects/<slug>/org.json, then GOAL.md `area:` frontmatter, then the
 // Cascade defaults (formerly hard-coded constants in CommandCentreController).
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { createHash } from 'node:crypto'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import type { XosGoalArea } from '../../shared/xos-goals-types'
 import { xosHome } from './xos-crontab'
 
@@ -152,8 +153,33 @@ export function projectSlug(name: string): string {
   )
 }
 
-export function orgFilePath(projectName: string): string {
-  return join(xosHome(), 'projects', projectSlug(projectName), 'org.json')
+export type XosProjectHomeOwner = { repoRoot: string }
+
+export function readMetaAt<T extends XosProjectHomeOwner>(homeDir: string): T | null {
+  try {
+    const raw: T = JSON.parse(readFileSync(join(homeDir, 'project.json'), 'utf8'))
+    return raw && typeof raw.repoRoot === 'string' ? raw : null
+  } catch {
+    return null
+  }
+}
+
+/** Two repos can share a folder name; the second gets a path-hashed home instead of the first's. */
+export function projectHomeDir(nameOrRoot: string): string {
+  const base = join(xosHome(), 'projects', projectSlug(basename(nameOrRoot)))
+  if (!isAbsolute(nameOrRoot)) {
+    return base
+  }
+  const owner = readMetaAt(base)?.repoRoot
+  if (!owner || resolve(owner) === resolve(nameOrRoot)) {
+    return base
+  }
+  const hash = createHash('sha1').update(resolve(nameOrRoot)).digest('hex').slice(0, 8)
+  return `${base}-${hash}`
+}
+
+export function orgFilePath(nameOrRoot: string): string {
+  return join(projectHomeDir(nameOrRoot), 'org.json')
 }
 
 export function loadOrg(projectName: string): XosOrg {

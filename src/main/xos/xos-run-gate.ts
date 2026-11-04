@@ -1,46 +1,49 @@
-// XOS fork: the stage A/B gate in front of every automation launch (RT7 lane locks, RT8 auto-commit,
-// RT13 inherited child lanes, RT15 timeouts, and model overlay for fallback retries and Auto mode).
+// XOS fork: the stage A/B gate in front of every automation launch: portfolio policy, goal bindings
+// (C1), RT7 lane locks, RT8 auto-commit, RT15 timeouts, script runs, and the model overlay for
+// fallback retries and Auto mode. Lock, waiter and sweep state lives in xos-run-state.ts.
 import {
   isFinalAutomationRunStatus,
   type Automation,
-  type AutomationDispatchResult,
   type AutomationRun
 } from '../../shared/automations-types'
-import {
-  automationLockFile,
-  isLockFree,
-  laneLockFile,
-  tryLock,
-  type HeldLock
-} from './xos-lane-lock'
+import type { XosAutomationRunConfig, XosRunCommit } from '../../shared/xos-runtime-types'
 import { xosAutoCommit } from './xos-auto-commit'
+import { checkDispatchPolicy } from './xos-dispatch-policy'
+import { prepareGoalLaunch, settleGoalAutomationRun } from './xos-goal-automation'
+import { claimedItemPromptSection, claimWorkItem, releaseWorkItemClaim } from './xos-item-claims'
 import {
-  markQueuedStart,
+  classifyFinishedRun,
   notify,
   xosLaunchAutomation,
   xosObserveFinishedRun
 } from './xos-run-fallback'
+import { leasePathFor, removeRunJournal, writeRunLease } from './xos-run-journal'
+import {
+  armTimeout,
+  automationHost,
+  forget,
+  handoffs,
+  HANDOFF_TTL_MS,
+  held,
+  journal,
+  syncSweepTimer,
+  takeLocks,
+  xosReleaseRun,
+  type CommitTarget,
+  type Held
+} from './xos-run-state'
 import { appendLedger, readRunConfig } from './xos-runtime-store'
+import { cronLineStillActive, startScriptRun } from './xos-script-runs'
 
-const SWEEP_MS = 20_000
+export {
+  registerXosAutomationHost,
+  xosGrantInheritedLane,
+  xosReleaseRun,
+  type XosAutomationHost
+} from './xos-run-state'
 
-export type XosAutomationHost = {
-  findRun: (automationId: string, runId: string) => AutomationRun | null
-  findAutomation: (automationId: string) => Automation | null
-  runNow: (automationId: string) => Promise<unknown>
-  markDispatchResult: (result: AutomationDispatchResult) => Promise<unknown>
-  /** Closes the run's terminal, when it still has one. */
-  closeRunTerminal: (run: AutomationRun) => Promise<void>
-}
-
-type CommitTarget = { cwd: string; repoRoot: string }
-type Held = {
-  automationId: string
-  locks: HeldLock[]
-  timer: NodeJS.Timeout | null
-  commit: CommitTarget | null
-  committing?: boolean
-}
+const DEFAULT_LEASE_MS = 6 * 60 * 60_000
+const LEASE_GRACE_MS = 10 * 60_000
 
 /** Where the run executes, from the dispatch target. */
 export type XosLaunchTarget = {
@@ -49,59 +52,46 @@ export type XosLaunchTarget = {
   /** Local filesystem (not SSH or a remote runtime): only then can Orca commit for it. */
   local: boolean
 }
-type Waiter = { automationId: string; file: string; lane: string; deadline: number }
 
-let host: XosAutomationHost | null = null
-let sweepTimer: NodeJS.Timeout | null = null
-const held = new Map<string, Held>()
-const waiters: Waiter[] = []
-const inheritedLanes = new Map<string, { lane: string; expiresAt: number }>()
+export type XosGateResult =
+  | { automation: Automation }
+  | { script: true }
+  /** `precheck`: the work wasn't due, so the run counts as skipped_precheck, not unavailable. */
+  | { refusal: string; precheck?: boolean }
 
-/** RT13: allow a nested child run of `automationId` to inherit an already-held lock lane. */
-export function xosGrantInheritedLane(automationId: string, lane: string): void {
-  inheritedLanes.set(automationId, { lane, expiresAt: Date.now() + 2 * 60_000 })
-}
-
-function consumeInheritedLane(automationId: string, lane: string): boolean {
-  if (process.env.CASCADE_ACTIVE_LOCK_LANE === lane) {
-    return true
+function goalPolicyRefusal(repoRoot: string | null, run: AutomationRun): XosGateResult | null {
+  if (!repoRoot) {
+    return null
   }
-  const entry = inheritedLanes.get(automationId)
-  if (entry && entry.lane === lane && entry.expiresAt > Date.now()) {
-    inheritedLanes.delete(automationId)
-    return true
+  const source = run.trigger === 'scheduled' ? 'schedule' : 'operator'
+  const decision = checkDispatchPolicy({ repoRoot, source })
+  return decision.allowed ? null : { refusal: decision.reason, precheck: true }
+}
+
+async function launchScript(
+  automation: Automation,
+  run: AutomationRun,
+  config: XosAutomationRunConfig,
+  entry: Held
+): Promise<XosGateResult> {
+  const script = config.script
+  const host = automationHost()
+  if (!script || !host) {
+    return { refusal: 'This script automation has no command.' }
   }
-  return false
-}
-
-function syncSweepTimer(): void {
-  if (held.size === 0 && waiters.length === 0 && sweepTimer) {
-    clearInterval(sweepTimer)
-    sweepTimer = null
-  } else if ((held.size > 0 || waiters.length > 0) && !sweepTimer) {
-    sweepTimer = setInterval(() => void sweep(), SWEEP_MS)
-    sweepTimer.unref()
+  if (await cronLineStillActive(script)) {
+    xosReleaseRun(run.id)
+    return { refusal: 'The crontab line this replaces is still active.', precheck: true }
   }
+  startScriptRun({
+    automationId: automation.id,
+    run,
+    script,
+    deadlineAtMs: entry.deadlineAtMs,
+    reportResult: host.markDispatchResult
+  })
+  return { script: true }
 }
-
-export function registerXosAutomationHost(next: XosAutomationHost): void {
-  host = next
-}
-
-async function acquireAll(files: string[]): Promise<HeldLock[] | null> {
-  const taken: HeldLock[] = []
-  for (const file of files) {
-    const lock = await tryLock(file)
-    if (!lock) {
-      taken.forEach((entry) => entry.release())
-      return null
-    }
-    taken.push(lock)
-  }
-  return taken
-}
-
-export type XosGateResult = { automation: Automation } | { refusal: string }
 
 export async function xosBeforeLaunch(
   automation: Automation,
@@ -110,78 +100,75 @@ export async function xosBeforeLaunch(
 ): Promise<XosGateResult> {
   const config = readRunConfig(automation.id)
   const repoRoot = target.local ? target.repoRoot : null
-  if (config.lockLane && repoRoot) {
-    const laneFile = laneLockFile(repoRoot, config.lockLane)
-    const inherited = consumeInheritedLane(automation.id, config.lockLane)
-    const lockFiles = inherited
-      ? [automationLockFile(repoRoot, automation.id)]
-      : [automationLockFile(repoRoot, automation.id), laneFile]
-    let locks: HeldLock[] | null
-    try {
-      locks = await acquireAll(lockFiles)
-    } catch (error) {
-      return { refusal: `Could not take lane "${config.lockLane}": ${String(error)}` }
-    }
-    if (!locks) {
-      if (config.lockWaitMinutes > 0) {
-        enqueue({
-          automationId: automation.id,
-          file: laneFile,
-          lane: config.lockLane,
-          deadline: Date.now() + config.lockWaitMinutes * 60_000
-        })
-        return {
-          refusal: `Lane "${config.lockLane}" is busy. Queued: this automation starts when the lane frees (up to ${config.lockWaitMinutes} min).`
-        }
-      }
-      return { refusal: `Lane "${config.lockLane}" is busy with another run; skipped.` }
-    }
-    held.set(run.id, { automationId: automation.id, locks, timer: null, commit: null })
+  const policy = goalPolicyRefusal(repoRoot, run)
+  if (policy) {
+    return policy
   }
-  const entryFor = (): Held =>
-    held.get(run.id) ?? { automationId: automation.id, locks: [], timer: null, commit: null }
+  const goalLaunch = config.goal ? await prepareGoalLaunch(automation, run, config.goal) : null
+  if (goalLaunch && 'skip' in goalLaunch) {
+    return { refusal: goalLaunch.skip, precheck: true }
+  }
+  const lane = config.lockLane ?? goalLaunch?.lockLane ?? null
+  const timeoutMinutes = config.timeoutMinutes ?? goalLaunch?.timeoutMinutes ?? null
+  const deadlineAtMs = timeoutMinutes ? Date.now() + timeoutMinutes * 60_000 : null
+  const entry: Held = {
+    automationId: automation.id,
+    locks: [],
+    timer: null,
+    commit: null,
+    goal: null,
+    leasePath: leasePathFor(run.id),
+    deadlineAtMs
+  }
+  if (lane && repoRoot) {
+    const taken = await takeLocks({
+      automation,
+      repoRoot,
+      lane,
+      lockWaitMinutes: config.lockWaitMinutes || (goalLaunch?.lockWaitMinutes ?? 0),
+      lease: {
+        path: entry.leasePath,
+        expiresAtMs: (deadlineAtMs ?? Date.now() + DEFAULT_LEASE_MS) + LEASE_GRACE_MS
+      }
+    })
+    if ('refusal' in taken) {
+      removeRunJournal(run.id, entry.leasePath)
+      return taken
+    }
+    entry.locks = taken.locks
+    entry.leasePath = taken.leasePath
+  }
+  let launchPrompt: string | null = null
+  if (goalLaunch && config.goal) {
+    const itemPath = goalLaunch.itemPath
+    if (itemPath && !claimWorkItem(itemPath, { runId: run.id }).claimed) {
+      entry.locks.forEach((lock) => lock.release())
+      return { refusal: 'The next work item was claimed by another run.', precheck: true }
+    }
+    launchPrompt = itemPath
+      ? `${goalLaunch.prompt}${claimedItemPromptSection(itemPath, run.id)}`
+      : goalLaunch.prompt
+    entry.goal = {
+      ...config.goal,
+      itemPath,
+      inboxPaths: goalLaunch.inboxPaths,
+      startedAt: new Date().toISOString()
+    }
+  }
   // New-per-run worktrees are created after this point; their changes belong on their own branch.
   if (config.autoCommit && repoRoot && automation.workspaceMode === 'existing') {
-    held.set(run.id, { ...entryFor(), commit: { cwd: target.cwd, repoRoot } })
+    entry.commit = { cwd: target.cwd, repoRoot }
   }
-  if (config.timeoutMinutes && automation.surface !== 'chat') {
-    const entry = entryFor()
-    entry.timer = setTimeout(
-      () => void timeOut(automation.id, run.id, config.timeoutMinutes!),
-      config.timeoutMinutes * 60_000
-    )
-    entry.timer.unref()
-    held.set(run.id, entry)
-  }
+  held.set(run.id, entry)
+  armTimeout(run.id, entry, timeoutMinutes ?? 0)
   syncSweepTimer()
-  return { automation: await xosLaunchAutomation(automation, run) }
-}
-
-function enqueue(waiter: Waiter): void {
-  const index = waiters.findIndex((entry) => entry.automationId === waiter.automationId)
-  if (index === -1) {
-    waiters.push(waiter)
-  } else {
-    waiters[index] = waiter
+  if (config.script) {
+    journal(run.id, entry)
+    return launchScript(automation, run, config, entry)
   }
-  syncSweepTimer()
-}
-
-/** Releases a run's locks and timer, then lets a queued automation take the freed lane. */
-export function xosReleaseRun(runId: string): void {
-  const entry = held.get(runId)
-  if (!entry) {
-    return
-  }
-  held.delete(runId)
-  if (entry.timer) {
-    clearTimeout(entry.timer)
-  }
-  entry.locks.forEach((lock) => lock.release())
-  syncSweepTimer()
-  if (entry.locks.length > 0) {
-    void wakeWaiters()
-  }
+  const launched = await xosLaunchAutomation(automation, run)
+  journal(run.id, entry)
+  return { automation: launchPrompt ? { ...launched, prompt: launchPrompt } : launched }
 }
 
 /** Called once a run's final result is recorded (service.markDispatchResult). */
@@ -193,16 +180,17 @@ export function xosAfterRunFinished(run: AutomationRun): void {
   if (entry?.committing) {
     return
   }
-  if (entry?.commit && run.status === 'completed') {
+  // A run that hit a limit did not finish its work, so it isn't committed as finished.
+  if (entry?.commit && run.status === 'completed' && !classifyFinishedRun(run)) {
     entry.committing = true
     if (entry.timer) {
       clearTimeout(entry.timer)
       entry.timer = null
     }
-    void commitRun(run, entry.commit).finally(() => finishRun(run))
+    void commitRun(run, entry.commit).then((commit) => finishRun(run, commit))
     return
   }
-  finishRun(run)
+  finishRun(run, null)
 }
 
 /** Waits for a commit started for this run (tests; the app never needs to). */
@@ -210,12 +198,12 @@ export function xosPendingCommits(): number {
   return Array.from(held.values()).filter((entry) => entry.committing).length
 }
 
-async function commitRun(run: AutomationRun, target: CommitTarget): Promise<void> {
+async function commitRun(run: AutomationRun, target: CommitTarget): Promise<XosRunCommit | null> {
   const config = readRunConfig(run.automationId).autoCommit
   if (!config) {
-    return
+    return null
   }
-  const name = host?.findAutomation(run.automationId)?.name ?? run.automationId
+  const name = automationHost()?.findAutomation(run.automationId)?.name ?? run.automationId
   try {
     const result = await xosAutoCommit({ ...target, automationName: name, config })
     appendLedger({ type: 'commit', runId: run.id, ...result })
@@ -224,77 +212,50 @@ async function commitRun(run: AutomationRun, target: CommitTarget): Promise<void
         `${name}: auto-commit ${result.status === 'failed' ? 'failed' : 'could not push'}. ${result.detail ?? ''}`
       )
     }
+    return result
   } catch (error) {
     console.warn('[xos] auto-commit failed', error)
+    return null
   }
 }
 
-function finishRun(run: AutomationRun): void {
-  xosReleaseRun(run.id)
-  xosObserveFinishedRun(
+function finishRun(run: AutomationRun, commit: XosRunCommit | null): void {
+  const entry = held.get(run.id)
+  if (entry?.goal) {
+    try {
+      settleGoalAutomationRun({
+        run,
+        goal: entry.goal,
+        startedAt: entry.goal.startedAt,
+        verdict: classifyFinishedRun(run),
+        commit: commit ? { sha: commit.sha, failed: commit.status === 'failed' } : null
+      })
+    } catch (error) {
+      console.warn('[xos] could not settle the goal run', error)
+      if (entry.goal.itemPath) {
+        releaseWorkItemClaim(entry.goal.itemPath)
+      }
+    }
+  }
+  const host = automationHost()
+  const retrying = xosObserveFinishedRun(
     {
       automation: host?.findAutomation(run.automationId) ?? undefined,
       runNow: (automationId) => host?.runNow(automationId) ?? Promise.resolve()
     },
     run
   )
-}
-
-async function wakeWaiters(): Promise<void> {
-  const now = Date.now()
-  for (let index = waiters.length - 1; index >= 0; index -= 1) {
-    if (waiters[index].deadline < now) {
-      waiters.splice(index, 1)
-    }
-  }
-  const started = new Set<string>()
-  // Iterate a copy: the loop removes woken waiters.
-  for (const waiter of waiters.slice()) {
-    if (started.has(waiter.file) || !host || !(await isLockFree(waiter.file))) {
-      continue
-    }
-    started.add(waiter.file)
-    waiters.splice(waiters.indexOf(waiter), 1)
-    markQueuedStart(waiter.automationId)
-    void host.runNow(waiter.automationId).catch((error) => {
-      console.warn('[xos] queued lane run could not start', error)
+  // L3: a retry keeps the lane, so a queued automation can't slip in between the two attempts.
+  if (retrying && entry && entry.locks.length > 0) {
+    forget(run.id, entry)
+    handoffs.set(entry.automationId, {
+      locks: entry.locks,
+      leasePath: entry.leasePath,
+      expiresAt: Date.now() + HANDOFF_TTL_MS
     })
-  }
-  syncSweepTimer()
-}
-
-async function timeOut(automationId: string, runId: string, minutes: number): Promise<void> {
-  const run = host?.findRun(automationId, runId)
-  if (!host || !run || isFinalAutomationRunStatus(run.status)) {
-    xosReleaseRun(runId)
+    writeRunLease(entry.leasePath, null)
+    syncSweepTimer()
     return
   }
-  await host.markDispatchResult({
-    runId,
-    status: 'dispatch_failed',
-    error: `Stopped after the ${minutes}-minute timeout.`
-  })
-  await host.closeRunTerminal(run).catch((error) => {
-    console.warn('[xos] could not close a timed-out run terminal', error)
-  })
-  xosReleaseRun(runId)
-}
-
-async function sweep(): Promise<void> {
-  if (!host) {
-    return
-  }
-  // Iterate a copy: releasing deletes entries.
-  for (const [runId, entry] of Array.from(held)) {
-    if (entry.committing) {
-      continue
-    }
-    const run = host.findRun(entry.automationId, runId)
-    if (!run || isFinalAutomationRunStatus(run.status)) {
-      xosReleaseRun(runId)
-    }
-  }
-  if (waiters.length > 0) {
-    await wakeWaiters()
-  }
+  xosReleaseRun(run.id)
 }

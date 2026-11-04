@@ -9,10 +9,11 @@ import {
   writeFileSync
 } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { parseFrontmatter } from './xos-goal-files'
+import { parseFrontmatter, readHead } from './xos-goal-files'
 import { commitProjectHome, projectHomeDir } from './xos-project-home'
 
 export const DEFAULT_CLAIM_TIMEOUT_MS = 45 * 60 * 1000
+const ITEM_PROMPT_BYTES = 32 * 1024
 
 export type XosItemTransitionEvent = {
   at: string
@@ -28,6 +29,11 @@ export type XosItemTransitionEvent = {
   outcome?: string
 }
 
+/** The prompt section for a claimed item: the agent enriches it, Orca moves it (§3g.4). */
+export function claimedItemPromptSection(itemPath: string, runId: string): string {
+  return `\n\n## Claimed Work Item (§3g)\n\n- File: ${itemPath}\n- Stage: ${basename(dirname(itemPath))}\n- This run claimed it (\`claimed_by: ${runId}\`). Enrich the file, but do not move it: Orca moves it to the next stage when the run succeeds. Reference "${basename(itemPath, '.md')}" in any commit message.\n\n### Item contents\n\n${readHead(itemPath, ITEM_PROMPT_BYTES) ?? '_Unreadable item file._'}`
+}
+
 export function isItemClaimActive(
   fm: Record<string, unknown>,
   nowMs: number = Date.now(),
@@ -36,6 +42,12 @@ export function isItemClaimActive(
   const claimedBy = typeof fm.claimed_by === 'string' ? fm.claimed_by.trim() : ''
   if (!claimedBy) {
     return false
+  }
+  // A held session (takeover) states its own end instead of the run-length default.
+  const until =
+    fm.claim_until instanceof Date ? fm.claim_until.getTime() : Date.parse(String(fm.claim_until))
+  if (Number.isFinite(until)) {
+    return nowMs < until
   }
   const rawAt = fm.claimed_at
   const claimedAtMs =
@@ -97,6 +109,8 @@ export function claimWorkItem(
     runId: string
     nowMs?: number
     staleAfterMs?: number
+    /** Holds the claim until this time, past the default expiry. */
+    untilMs?: number
   }
 ): { claimed: boolean; reason?: string } {
   if (!existsSync(filePath)) {
@@ -114,7 +128,8 @@ export function claimWorkItem(
   }
   const nextText = patchMarkdownFrontmatter(text, {
     claimed_by: options.runId,
-    claimed_at: new Date(nowMs).toISOString()
+    claimed_at: new Date(nowMs).toISOString(),
+    claim_until: options.untilMs ? new Date(options.untilMs).toISOString() : null
   })
   writeFileSync(filePath, nextText, 'utf8')
   return { claimed: true }
@@ -127,7 +142,8 @@ export function releaseWorkItemClaim(filePath: string): boolean {
   const text = readFileSync(filePath, 'utf8')
   const nextText = patchMarkdownFrontmatter(text, {
     claimed_by: null,
-    claimed_at: null
+    claimed_at: null,
+    claim_until: null
   })
   if (nextText !== text) {
     writeFileSync(filePath, nextText, 'utf8')
@@ -183,6 +199,7 @@ export function transitionWorkItem(args: {
   const nextText = patchMarkdownFrontmatter(text, {
     claimed_by: null,
     claimed_at: null,
+    claim_until: null,
     ...(args.runId ? { last_run_id: args.runId } : {}),
     ...(args.branch ? { branch: args.branch } : {}),
     ...(args.commit ? { commit: args.commit } : {}),

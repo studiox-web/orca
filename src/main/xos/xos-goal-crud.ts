@@ -1,7 +1,7 @@
 // XOS fork: §3d CRUD for the org chart board. Each mutation re-reads the board, checks the target
 // still exists, and goes through the guarded writers (crontab: hash check + backup; org.json:
 // history copy; goal folders: archive before delete). Every write lands in ~/.orca-xos/audit.jsonl.
-import { basename } from 'node:path'
+import { dirname } from 'node:path'
 import type {
   XosActionResult,
   XosAreaMutation,
@@ -24,7 +24,8 @@ import {
   restoreGoalFolder
 } from './xos-goal-lifecycle'
 import { removeArea, setGoalArea, upsertArea } from './xos-goal-org-edit'
-import { commitProjectHome, importProjectGoals } from './xos-project-home'
+import { commitProjectHome, resolveGoalDir } from './xos-project-home'
+import { importProjectGoals } from './xos-project-import'
 
 const BACKUP_NOTE = 'A backup is in ~/.orca-xos/crontab-backups.'
 
@@ -173,14 +174,19 @@ export async function applyGoalMutation(
   if (!project) {
     return { ok: false, error: 'That project is no longer on the board.' }
   }
-  const orgName = basename(project.root)
+  const orgName = project.root
   switch (mutation.kind) {
     case 'import-project':
       try {
-        const { meta } = await importProjectGoals(project.root)
+        const { meta, skippedExisting } = await importProjectGoals(project.root, {
+          goals: mutation.goals
+        })
+        const kept = skippedExisting.length
+          ? ` Kept ${plural(skippedExisting.length, 'goal')} already there.`
+          : ''
         return {
           ok: true,
-          message: `Imported ${meta.goalsImported} goals and ${meta.itemsImported} items into ~/.orca-xos/projects/${meta.slug}.`
+          message: `Imported ${meta.goalsImported} goals and ${meta.itemsImported} items into ~/.orca-xos/projects/${meta.slug}.${kept}`
         }
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : String(error) }
@@ -241,7 +247,7 @@ export async function applyGoalMutation(
         }
       }
       return attempt(() => {
-        archiveGoalFolder(project.goalsDir, goal.goal)
+        archiveGoalFolder(dirname(resolveGoalDir(project.root, goal.goal)), goal.goal)
         void commitProjectHome(project.root, `xos: archive goal ${goal.goal}`)
         return {
           ok: true,
@@ -288,7 +294,7 @@ export function applyAreaMutation(board: XosGoalBoard, mutation: XosAreaMutation
   if (!project) {
     return { ok: false, error: 'That project is no longer on the board.' }
   }
-  const orgName = basename(project.root)
+  const orgName = project.root
   return attempt(() => ({
     ok: true,
     message:

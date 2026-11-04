@@ -9,15 +9,17 @@ import {
   parseFrontmatter,
   readHead
 } from './xos-goal-files'
+import { equivalentModel, modelFitsAgent, replyModelFor } from './xos-agent-command'
 import {
+  collectGoalInbox,
   expandSharedIncludes,
-  markGoalInboxReadAndCollect,
+  markGoalInboxRead,
   writeGoalOperatorMessage
 } from './xos-goal-inbox'
-import { resolveAgentsMdPath, resolveProjectGoalsDir } from './xos-project-home'
+import { resolveAgentsMdPath, resolveGoalDir } from './xos-project-home'
 import { evaluateGoalQueueGate, type XosQueueGateResult } from './xos-queue-gate'
 
-export { expandSharedIncludes, markGoalInboxReadAndCollect, writeGoalOperatorMessage }
+export { collectGoalInbox, expandSharedIncludes, markGoalInboxRead, writeGoalOperatorMessage }
 
 const DOD_LINE_RE = /^Definition of Done met\r?$/m
 const MAX_DOC_BYTES = 32 * 1024
@@ -39,6 +41,10 @@ export type XosAssembledGoalPrompt =
       prompt: string
       reopenedFromDod: boolean
       openInboxCount: number
+      /** Mark these read with markGoalInboxRead only after the run really started (H4). */
+      inboxPaths: string[]
+      hasExternalInbox: boolean
+      frontmatter: Record<string, unknown>
       queueGate: XosQueueGateResult | null
     }
   | {
@@ -62,6 +68,12 @@ export function resolveAllowedGoalAgent(
   return allowed.length > 0 && !allowed.includes(requestedAgent) ? allowed[0] : requestedAgent
 }
 
+/** The frontmatter model on the agent actually running: same tier if it belongs to another one. */
+function modelForAgent(agent: string, fm: Record<string, unknown>): string | null {
+  const model = frontmatterString(fm, 'model')
+  return modelFitsAgent(agent, model) ? model : equivalentModel(model, agent)
+}
+
 function readOptionalGoalSection(goalDir: string, filename: string, heading: string): string {
   const text = readHead(join(goalDir, filename), MAX_DOC_BYTES)?.trim()
   return text ? `\n## ${heading} (${filename})\n\n${text}\n` : ''
@@ -74,13 +86,16 @@ export function assembleGoalPrompt(args: {
   sidecar?: string
   operatorMessage?: string
   requestedAgent?: string
+  /** An explicit model for this run; beats the contract's (Continue on…, fallback retries). */
+  requestedModel?: string | null
+  requestedEffort?: string | null
   runsToday?: number
   bypassQueueGate?: boolean
   nowMs?: number
 }): XosAssembledGoalPrompt {
   const nowMs = args.nowMs ?? Date.now()
   const mode: XosGoalRunMode = args.mode ?? 'normal'
-  const goalDir = join(resolveProjectGoalsDir(args.repoRoot), args.goal)
+  const goalDir = resolveGoalDir(args.repoRoot, args.goal)
   const goalPath = join(goalDir, 'GOAL.md')
   if (!existsSync(goalPath)) {
     throw new Error(`Goal contract not found: ${goalPath}`)
@@ -144,7 +159,7 @@ export function assembleGoalPrompt(args: {
     }
   }
 
-  const inbox = markGoalInboxReadAndCollect(goalDir, args.goal, new Date(nowMs).toISOString())
+  const inbox = collectGoalInbox(goalDir, args.goal)
   if (mode === 'reply') {
     if (inbox.openCount === 0 && !args.operatorMessage?.trim()) {
       return {
@@ -174,7 +189,7 @@ export function assembleGoalPrompt(args: {
       goalDir,
       mode: 'reply',
       agent,
-      model: 'gpt-5.4-mini',
+      model: replyModelFor(agent),
       effort: 'low',
       lockLane: 'dm',
       lockWaitSeconds: 0,
@@ -183,6 +198,9 @@ export function assembleGoalPrompt(args: {
       prompt: replyPrompt,
       reopenedFromDod: false,
       openInboxCount: inbox.openCount,
+      inboxPaths: inbox.messagePaths,
+      hasExternalInbox: inbox.hasExternalMessages,
+      frontmatter: fm,
       queueGate: null
     }
   }
@@ -242,8 +260,8 @@ export function assembleGoalPrompt(args: {
     goalDir,
     mode,
     agent,
-    model: frontmatterString(fm, 'model'),
-    effort: frontmatterString(fm, 'model_reasoning_effort'),
+    model: args.requestedModel ?? modelForAgent(agent, fm),
+    effort: args.requestedEffort ?? frontmatterString(fm, 'model_reasoning_effort'),
     lockLane: frontmatterString(fm, 'lock_lane') ?? 'repo-mutating',
     lockWaitSeconds: Number(fm.lock_wait_seconds ?? 0) || 0,
     disableFallback: false,
@@ -251,6 +269,9 @@ export function assembleGoalPrompt(args: {
     prompt: fullPrompt,
     reopenedFromDod,
     openInboxCount: inbox.openCount,
+    inboxPaths: inbox.messagePaths,
+    hasExternalInbox: inbox.hasExternalMessages,
+    frontmatter: fm,
     queueGate
   }
 }

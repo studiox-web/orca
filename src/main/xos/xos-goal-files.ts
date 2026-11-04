@@ -23,6 +23,26 @@ export function readHead(path: string, bytes = HEAD_BYTES): string | null {
   }
 }
 
+/** The last `bytes` of a file, starting on a line boundary when the file is longer. */
+export function readTail(path: string, bytes = HEAD_BYTES): string | null {
+  let fd: number | null = null
+  try {
+    const size = statSync(path).size
+    const start = Math.max(0, size - bytes)
+    fd = openSync(path, 'r')
+    const buffer = Buffer.alloc(size - start)
+    readSync(fd, buffer, 0, buffer.length, start)
+    const text = buffer.toString('utf8')
+    return start > 0 ? text.slice(text.indexOf('\n') + 1) : text
+  } catch {
+    return null
+  } finally {
+    if (fd !== null) {
+      closeSync(fd)
+    }
+  }
+}
+
 export function safeReaddir(path: string): string[] {
   try {
     return readdirSync(path)

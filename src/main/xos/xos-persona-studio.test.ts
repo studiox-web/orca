@@ -11,7 +11,7 @@ import {
   resolvePersonaImage
 } from './xos-persona-studio'
 import { personaMediaDir } from './xos-persona-media'
-import { importProjectGoals } from './xos-project-home'
+import { importProjectGoals } from './xos-project-import'
 
 vi.mock('./xos-crontab', async (importOriginal) => {
   const actual = await importOriginal<typeof crontabModule>()

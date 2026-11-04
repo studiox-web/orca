@@ -23,7 +23,7 @@ import { registerXosTakeoverHandlers } from './xos-takeover-ipc'
 import { audit, xosHome } from './xos-crontab'
 import { assembleGoalPrompt } from './xos-goal-prompt'
 import { startNativeGoalRun } from './xos-live-runs'
-import { commitProjectHome, projectHomeDir } from './xos-project-home'
+import { commitProjectHome, isGoalCentral, projectHomeDir } from './xos-project-home'
 
 const ART_PREFIX = '/images/admin/ops-cards/'
 const ART_MAX_BYTES = 4 * 1024 * 1024
@@ -105,7 +105,12 @@ async function runGoalNow(
   }
   const mode = request.mode ?? 'normal'
   const legacyCronScript = join(project.root, 'automations', 'bin', 'run-goal-cron.sh')
-  if (existsSync(legacyCronScript) && mode !== 'sidecar') {
+  // A goal cut over to the central home must not run from the repo copy it left behind (H5).
+  if (
+    existsSync(legacyCronScript) &&
+    mode !== 'sidecar' &&
+    !isGoalCentral(project.root, goal.goal)
+  ) {
     const assembled = assembleGoalPrompt({
       repoRoot: project.root,
       goal: request.goal,
@@ -140,6 +145,7 @@ async function runGoalNow(
     sidecar: request.sidecar,
     message: request.message,
     runner: request.runner,
+    force: request.force,
     trigger: 'manual'
   })
   audit({

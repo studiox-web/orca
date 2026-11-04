@@ -2,7 +2,7 @@
 // writes the current (possibly default) org out, and every write keeps the previous version in
 // org-history/ so any change can be reverted by hand.
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { XosGoalArea, XosProject } from '../../shared/xos-goals-types'
 import { audit } from './xos-crontab'
 import { loadOrg, orgFilePath, type XosOrg } from './xos-goal-org'
@@ -117,7 +117,7 @@ export function resolveOrCreateAreaId(
   }
   try {
     upsertArea(
-      basename(project.root),
+      project.root,
       { id, title: trimmed, description: '', manager: '' },
       new Set(project.goals.map((goal) => goal.goal))
     )

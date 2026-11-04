@@ -1,5 +1,4 @@
 // XOS fork: IPC for Tasks → Goals (§3h stage 0 + stage C CRUD & transition timeline).
-import { join } from 'node:path'
 import { ipcMain } from 'electron'
 import type {
   XosItemActionResult,
@@ -10,8 +9,7 @@ import type {
   XosWorkItem
 } from '../../shared/xos-items-types'
 import { listGoalProjects, type XosRepoSource } from './xos-goal-board'
-import { isDirectory, safeReaddir } from './xos-goal-files'
-import { resolveProjectGoalsDir } from './xos-project-home'
+import { listProjectGoals } from './xos-project-home'
 import { readItemSummary, scanProjectQueues, toItemStage } from './xos-work-items'
 import {
   createWorkItem,
@@ -23,8 +21,7 @@ import {
 const PER_STAGE_LIMIT = 60
 
 function knownGoals(root: string): Set<string> {
-  const dir = resolveProjectGoalsDir(root)
-  return new Set(safeReaddir(dir).filter((name) => isDirectory(join(dir, name))))
+  return new Set(listProjectGoals(root))
 }
 
 export async function buildItemsSnapshot(

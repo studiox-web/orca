@@ -185,7 +185,7 @@ export function createRuntimeAutomationService(input: {
     findRun: (automationId, runId) =>
       store.listAutomationRuns(automationId).find((entry) => entry.id === runId) ?? null,
     findAutomation: (id) => store.listAutomations().find((entry) => entry.id === id) ?? null,
-    runNow: (automationId) => service.runNow(automationId),
+    runNow: (automationId, trigger) => service.runNow(automationId, trigger),
     markDispatchResult: (result) => service.markDispatchResult(result),
     closeRunTerminal: async (run) => {
       const paneKey = run.terminalPaneKey

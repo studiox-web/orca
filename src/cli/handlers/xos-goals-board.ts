@@ -4,7 +4,7 @@ import type { CommandHandler } from '../dispatch'
 import { getOptionalStringFlag } from '../flags'
 import { cliRepoSource } from '../../main/xos/xos-goal-cli'
 import { buildXosGoalBoard } from '../../main/xos/xos-goal-board'
-import { importProjectGoals } from '../../main/xos/xos-project-home'
+import { importProjectGoals } from '../../main/xos/xos-project-import'
 import { listCliGoals } from '../../main/xos/xos-usage-models-cli'
 
 function printOut(json: boolean, payload: unknown, text: string): void {

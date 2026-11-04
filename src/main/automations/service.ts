@@ -145,7 +145,10 @@ export class AutomationService {
     this.timer = null
   }
 
-  async runNow(automationId: string): Promise<AutomationRun> {
+  async runNow(
+    automationId: string,
+    trigger: AutomationRun['trigger'] = 'manual'
+  ): Promise<AutomationRun> {
     const generation = this.dispatchGeneration
     const listed = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (!listed) {
@@ -153,7 +156,7 @@ export class AutomationService {
     }
     const automation = captureLegacyRunTarget(this.store, listed, this.allowRemoteHostScheduling)
     const target = this.resolveTarget(automation)
-    const run = await this.runs.createRun(automation, Date.now(), 'manual')
+    const run = await this.runs.createRun(automation, Date.now(), trigger)
     return await this.requestDispatch(automation, run, target, generation)
   }
 

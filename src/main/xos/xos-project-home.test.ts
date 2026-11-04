@@ -9,13 +9,13 @@ import type * as goalProcessesModule from './xos-goal-processes'
 import {
   hasImportedGoals,
   hasProjectGoals,
-  importProjectGoals,
   projectHomeDir,
   readProjectMeta,
   resolveAgentsMdPath,
   resolveProjectGoalsDir,
   resolveSharedDirs
 } from './xos-project-home'
+import { importProjectGoals } from './xos-project-import'
 import { scanProjectQueues } from './xos-work-items'
 
 vi.mock('./xos-crontab', async (importOriginal) => {

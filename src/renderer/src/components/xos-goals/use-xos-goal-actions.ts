@@ -77,14 +77,35 @@ export function useXosGoalActions(
           ? report(`area:${mutation.kind}`, () => api.mutateArea(mutation))
           : Promise.resolve(false),
       runGoal: (goal, options) => {
+        if (!project || !api) {
+          return
+        }
+        const run = (force: boolean): Promise<XosActionResult> =>
+          api.runNow({
+            kind: 'goal',
+            projectKey: project.key,
+            goal: goal.goal,
+            ...options,
+            force
+          })
+        void run(false).then((result) => {
+          // The queue gate said there is no work: running anyway is the operator's call.
+          if (!result.ok && result.error.startsWith('skipped_precheck')) {
+            toast.warning(result.error, {
+              action: {
+                label: 'Run anyway',
+                onClick: () => void report(goal.goal, () => run(true))
+              }
+            })
+            return
+          }
+          void report(goal.goal, () => Promise.resolve(result))
+        })
+      },
+      releaseTakeover: (goal, advance) => {
         if (project && api) {
           void report(goal.goal, () =>
-            api.runNow({
-              kind: 'goal',
-              projectKey: project.key,
-              goal: goal.goal,
-              ...options
-            })
+            api.releaseTakeover({ projectKey: project.key, goal: goal.goal, advance })
           )
         }
       },

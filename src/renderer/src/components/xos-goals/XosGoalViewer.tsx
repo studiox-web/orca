@@ -187,6 +187,7 @@ export function XosGoalViewer({
         busy={busy}
         onRun={(target, message) => actions.runGoal(target, message ? { message } : undefined)}
         onContinueOn={openDialog}
+        onRelease={(advance) => actions.releaseTakeover(item, advance)}
       />
 
       <XosLiveRunTail projectKey={project.key} goal={item.goal} onOpenLog={actions.openFile} />

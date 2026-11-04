@@ -7,7 +7,8 @@ import { basename, join } from 'node:path'
 import type { XosGoalRun } from '../../shared/xos-goals-types'
 import { xosHome } from './xos-crontab'
 import { parseFrontmatter, frontmatterString, readHead } from './xos-goal-files'
-import { projectSlug } from './xos-goal-org'
+import { readRunReceipts } from './xos-goal-receipts'
+import { projectHomeDir } from './xos-project-home'
 
 const RECEIPT_TAIL_BYTES = 1024 * 1024
 
@@ -25,11 +26,11 @@ export type XosNativeReceipt = XosGoalRun & {
 const runsDir = (): string => join(xosHome(), 'runs')
 
 export function receiptsPath(repoRoot: string): string {
-  return join(runsDir(), `${projectSlug(basename(repoRoot))}.jsonl`)
+  return join(runsDir(), `${basename(projectHomeDir(repoRoot))}.jsonl`)
 }
 
 export function nativeRunLogsDir(repoRoot: string): string {
-  return join(runsDir(), 'logs', projectSlug(basename(repoRoot)))
+  return join(runsDir(), 'logs', basename(projectHomeDir(repoRoot)))
 }
 
 export function appendReceipt(repoRoot: string, receipt: XosNativeReceipt): void {
@@ -83,37 +84,37 @@ export function readNativeReceipts(repoRoot: string): Map<string, XosGoalRun[]> 
   return byGoal
 }
 
+/** The operator's calendar day: caps follow local midnight, not UTC (L5). */
+export function localDay(ms: number): string {
+  const date = new Date(ms)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+function ranOn(row: { status?: string | null; started_at?: string | null }, day: string): boolean {
+  const started = row.started_at ? Date.parse(row.started_at) : Number.NaN
+  return (
+    Number.isFinite(started) &&
+    localDay(started) === day &&
+    !String(row.status ?? '')
+      .toLowerCase()
+      .includes('skip')
+  )
+}
+
 export function runsTodayCount(repoRoot: string, goal: string, nowMs: number): number {
-  const day = new Date(nowMs).toISOString().slice(0, 10)
+  const day = localDay(nowMs)
   return readReceiptLines(repoRoot).filter(
-    (receipt) => receipt.goal === goal && (receipt.started_at ?? '').startsWith(day)
+    (receipt) => receipt.goal === goal && ranOn(receipt, day)
   ).length
 }
 
-/** The one-shot agent command for a native run (claude -p / codex exec over a prompt file). */
-export function buildAgentRunCommand(args: {
-  root: string
-  promptPath: string
-  agent: string
-  model: string | null
-  effort: string | null
-  lockLane: string
-  inboxOnly: boolean
-}): string {
-  const envPrefix = [
-    `CASCADE_ACTIVE_LOCK_LANE=${JSON.stringify(args.lockLane)}`,
-    ...(args.inboxOnly ? ['CASCADE_GOAL_INBOX_ONLY=1'] : [])
-  ].join(' ')
-  if (args.agent === 'claude') {
-    const modelArg = args.model ? ` --model ${JSON.stringify(args.model)}` : ''
-    const effortArg = args.effort ? ` --effort ${JSON.stringify(args.effort)}` : ''
-    return `cd ${JSON.stringify(args.root)} && ${envPrefix} claude -p "$(cat ${JSON.stringify(args.promptPath)})"${modelArg}${effortArg} --dangerously-skip-permissions`
-  }
-  const modelArg = args.model ? ` -m ${JSON.stringify(args.model)}` : ''
-  const effortArg = args.effort
-    ? ` -c ${JSON.stringify(`model_reasoning_effort="${args.effort}"`)}`
-    : ''
-  return `cd ${JSON.stringify(args.root)} && ${envPrefix} codex exec --dangerously-bypass-approvals-and-sandbox -C ${JSON.stringify(args.root)}${modelArg}${effortArg} - < ${JSON.stringify(args.promptPath)}`
+/** Runs today from every path that starts this goal: native receipts plus legacy cron ones. */
+export function goalRunsToday(repoRoot: string, goal: string, nowMs: number): number {
+  const day = localDay(nowMs)
+  const legacy = readRunReceipts(join(repoRoot, 'automations')).get(goal) ?? []
+  return runsTodayCount(repoRoot, goal, nowMs) + legacy.filter((run) => ranOn(run, day)).length
 }
 
 export function itemTitleFrom(path: string): string {

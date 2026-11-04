@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { xosHome } from './xos-crontab'
 import {
   assembleGoalPrompt,
+  markGoalInboxRead,
   expandSharedIncludes,
   resolveAllowedGoalAgent
 } from './xos-goal-prompt'
@@ -127,13 +128,18 @@ describe('xos-goal-prompt (RT2, RT3, RT9, RT10, RT12, RT14, RT17)', () => {
     })
     expect(replyReady.status).toBe('ready')
     if (replyReady.status === 'ready') {
-      expect(replyReady.model).toBe('gpt-5.4-mini')
+      expect(replyReady.model).toBe('haiku')
       expect(replyReady.effort).toBe('low')
       expect(replyReady.lockLane).toBe('dm')
       expect(replyReady.disableFallback).toBe(true)
       expect(replyReady.disableAutoCommit).toBe(true)
       expect(replyReady.prompt).toContain('Inbox-only response run')
       expect(replyReady.prompt).not.toContain('Global operating principles.')
+    }
+    // Assembly alone consumes nothing: a run that never launches leaves the message unread (H4).
+    expect(readFileSync(msgPath, 'utf8')).not.toContain('read_by')
+    if (replyReady.status === 'ready') {
+      markGoalInboxRead(replyReady.inboxPaths, 'cto', '2026-04-03T18:00:00.000Z')
     }
     const updatedInbox = readFileSync(msgPath, 'utf8')
     expect(updatedInbox).toContain('read_by: cto')

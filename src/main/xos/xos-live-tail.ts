@@ -3,7 +3,7 @@
 // in-memory registry; finished ones fall back to their receipt plus the on-disk log tail.
 import { basename, dirname } from 'node:path'
 import type { XosLiveRunTail, XosRunningJob } from '../../shared/xos-goals-types'
-import { readHead } from './xos-goal-files'
+import { readTail } from './xos-goal-files'
 import { readReceiptLines } from './xos-native-receipts'
 import type { XosLiveRun } from './xos-live-runs-types'
 
@@ -52,7 +52,7 @@ function fromLiveRun(run: XosLiveRun): XosLiveRunTail {
     elapsedSeconds: Math.round(
       (Date.parse(run.finishedAt ?? new Date().toISOString()) - Date.parse(run.startedAt)) / 1000
     ),
-    lines: tailToLines(run.tail.join('')),
+    lines: tailToLines(readTail(run.logPath, RUN_CONTEXT_BYTES) ?? ''),
     logPath: run.logPath,
     item: run.itemPath
       ? { path: run.itemPath, title: run.itemTitle ?? '', stage: run.itemStage ?? '' }
@@ -73,7 +73,7 @@ function fromReceipt(repoRoot: string, goal: string): XosLiveRunTail | null {
   if (!receipt) {
     return null
   }
-  const logTail = receipt.log_path ? readHead(receipt.log_path, RUN_CONTEXT_BYTES) : null
+  const logTail = receipt.log_path ? readTail(receipt.log_path, RUN_CONTEXT_BYTES) : null
   return {
     runId: receipt.run_id,
     goal,
@@ -112,10 +112,12 @@ export function readLiveTail(
   repoRoot: string,
   goal: string
 ): XosLiveRunTail | null {
-  for (const run of liveRuns.values()) {
-    if (run.repoRoot === repoRoot && run.goal === goal) {
-      return fromLiveRun(run)
-    }
-  }
-  return fromReceipt(repoRoot, goal)
+  const runs = [...liveRuns.values()].filter(
+    (run) => run.repoRoot === repoRoot && run.goal === goal
+  )
+  // A finished run stays listed for an hour; the one still going, then the newest, is the answer.
+  const current =
+    runs.find((run) => run.finishedAt === null) ??
+    runs.toSorted((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))[0]
+  return current ? fromLiveRun(current) : fromReceipt(repoRoot, goal)
 }

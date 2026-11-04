@@ -18,7 +18,6 @@ import type {
 } from '../../shared/xos-goals-types'
 import { buildXosGoalBoard, findProject, type XosRepoSource } from './xos-goal-board'
 import { audit } from './xos-crontab'
-import { claimWorkItem } from './xos-item-claims'
 import { liveRunRegistry, startNativeGoalRun } from './xos-live-runs'
 import { readLiveTail } from './xos-live-tail'
 import {
@@ -27,6 +26,7 @@ import {
   recordTakeoverReceipt,
   resolveItemWorkspace
 } from './xos-takeover'
+import { releaseTakeoverSession, startTakeoverSession } from './xos-takeover-session'
 
 /** §3h.2 drill-in: claim the item, assemble the takeover prompt, then either open an interactive
  *  agent session (existing project workspace, or a new managed worktree for code items) or start
@@ -78,15 +78,24 @@ async function continueOn(
       telemetrySource: 'unknown',
       comment: `XOS Build now: ${request.goal}${itemSlug ? ` — ${itemSlug}` : ''}`
     })
+    const removeWorktree = (): Promise<unknown> =>
+      runtime
+        .removeManagedWorktree(`path:${created.worktree.path}`, { force: true })
+        .catch((error) => console.warn('[xos] could not remove a failed Build now worktree', error))
     const started = await startNativeGoalRun({
       repoRoot: project.root,
       goal: request.goal,
       message: request.message,
       itemPath: itemPath ?? undefined,
+      runner: request.agent,
+      model: request.model,
+      effort: request.effort,
+      force: true,
       trigger: 'build_now',
       worktree: { path: created.worktree.path, branch: created.worktree.branch ?? null }
     })
     if (!started.ok) {
+      await removeWorktree()
       return started
     }
     audit({
@@ -114,12 +123,18 @@ async function continueOn(
   if (!prepared.ok) {
     return { ok: false, error: prepared.error }
   }
-  const runId = `takeover-${Date.now().toString(36)}`
-  if (itemPath) {
-    const claim = claimWorkItem(itemPath, { runId })
-    if (!claim.claimed) {
-      return { ok: false, error: claim.reason ?? 'Could not claim the work item.' }
-    }
+  const session = await startTakeoverSession({
+    repoRoot: project.root,
+    goal: request.goal,
+    agent: request.agent,
+    itemPath
+  })
+  if (!session.ok) {
+    return session
+  }
+  const abandon = (error: string): XosActionResult => {
+    releaseTakeoverSession({ repoRoot: project.root, goal: request.goal, note: error })
+    return { ok: false, error }
   }
   const modelArgs = writeXosModelArgs(agent, '', {
     model: request.model,
@@ -130,10 +145,9 @@ async function continueOn(
   if (workspace === 'new-worktree') {
     const target = repo()
     if (!target) {
-      return {
-        ok: false,
-        error: `${project.name} is not registered in Orca; add it to open a worktree session.`
-      }
+      return abandon(
+        `${project.name} is not registered in Orca; add it to open a worktree session.`
+      )
     }
     const created = await runtime.createManagedWorktree({
       repoSelector: hostQualifiedRepoSelector(`id:${target.id}`, getRepoExecutionHostId(target)),
@@ -172,10 +186,9 @@ async function continueOn(
     }
   }
   if (!project.worktreeSelector) {
-    return {
-      ok: false,
-      error: `${project.name} has no Orca workspace; add it to Orca to take over interactively.`
-    }
+    return abandon(
+      `${project.name} has no Orca workspace; add it to Orca to take over interactively.`
+    )
   }
   await runtime.createTerminal(project.worktreeSelector, {
     startupAgent: agent,
@@ -213,6 +226,12 @@ export function registerXosTakeoverHandlers(
 ): void {
   ipcMain.handle('xos:goals:liveTail', (_event, args: { projectKey: string; goal: string }) =>
     readLiveTail(liveRunRegistry(), args.projectKey, args.goal)
+  )
+
+  ipcMain.handle(
+    'xos:goals:releaseTakeover',
+    (_event, args: { projectKey: string; goal: string; note?: string; advance?: boolean }) =>
+      releaseTakeoverSession({ ...args, repoRoot: args.projectKey })
   )
 
   ipcMain.handle('xos:goals:nextItem', (_event, args: { projectKey: string; goal: string }) =>

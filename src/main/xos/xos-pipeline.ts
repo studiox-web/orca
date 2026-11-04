@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import type { XosGoal } from '../../shared/xos-goals-types'
 import type { XosQueueRef, XosQueueTone } from '../../shared/xos-items-types'
 import { resolveGoalDeclaredQueues } from './xos-declared-queues'
-import { isDirectory, parseFrontmatter, readHead, safeReaddir } from './xos-goal-files'
-import { resolveProjectGoalsDir } from './xos-project-home'
+import { parseFrontmatter, readHead, safeReaddir } from './xos-goal-files'
+import { listProjectGoals, resolveGoalDir } from './xos-project-home'
 import { LEGACY_ITEM_TYPES } from './xos-queue-map'
 
 export const DEFAULT_STUCK_ITEM_HOURS = 72
@@ -264,13 +264,10 @@ export function computeRepoPipeline(
   repoRoot: string,
   options?: { nowMs?: number; stuckAfterHours?: number }
 ): XosPipelineSummary {
-  const goalsDir = resolveProjectGoalsDir(repoRoot)
-  const goalNames = safeReaddir(goalsDir)
-    .filter((n) => !n.startsWith('_') && !n.startsWith('.') && isDirectory(join(goalsDir, n)))
-    .sort()
+  const goalNames = listProjectGoals(repoRoot)
   const seeds = new Map<string, PipeSeed>()
   for (const goal of goalNames) {
-    const fm = parseFrontmatter(readHead(join(goalsDir, goal, 'GOAL.md')))
+    const fm = parseFrontmatter(readHead(join(resolveGoalDir(repoRoot, goal), 'GOAL.md')))
     const declared = resolveGoalDeclaredQueues(repoRoot, goal, fm)
     const register = (
       q: (typeof declared.in)[number] & (typeof declared.out)[number],
