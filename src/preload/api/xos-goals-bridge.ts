@@ -20,5 +20,8 @@ export const xosGoalsApi: XosGoalsApi = {
   getLegacyCommitPolicies: (args) => ipcRenderer.invoke('xos:runtime:legacyCommitPolicies', args),
   getTierModels: (args) => ipcRenderer.invoke('xos:runtime:tierModels', args),
   setModelTier: (args) => ipcRenderer.invoke('xos:runtime:setModelTier', args),
-  previewAuto: (args) => ipcRenderer.invoke('xos:runtime:previewAuto', args)
+  previewAuto: (args) => ipcRenderer.invoke('xos:runtime:previewAuto', args),
+  liveTail: (args) => ipcRenderer.invoke('xos:goals:liveTail', args),
+  continueOn: (args) => ipcRenderer.invoke('xos:goals:continueOn', args),
+  nextItem: (args) => ipcRenderer.invoke('xos:goals:nextItem', args)
 }

@@ -82,6 +82,12 @@
     background-color: color-mix(in oklab, var(--xos-tone) 14%, transparent);
     border-color: color-mix(in oklab, var(--xos-tone) 35%, transparent);
   }
+  /* Live runs and "operator at the helm" use the primary accent. */
+  .xos-tone-live {
+    color: var(--primary);
+    background-color: color-mix(in oklab, var(--primary) 14%, transparent);
+    border-color: color-mix(in oklab, var(--primary) 35%, transparent);
+  }
   .xos-tone-neutral {
     color: var(--muted-foreground);
     background-color: var(--muted);

@@ -1,10 +1,10 @@
 // XOS fork: the Goal Viewer, ported from DJVibe's GoalDetailPanel (overview tab). Laravel links
 // became Orca actions: Run now opens a terminal, Pause/Resume edit crontab, files open in Orca.
-import React from 'react'
+import React, { useState } from 'react'
 import { ArrowLeft, Clock3, Cpu, FileText, Mail, Pause, Play, RefreshCw, Timer } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import type { XosGoal, XosProject } from '../../../../shared/xos-goals-types'
+import type { XosGoal, XosGoalRun, XosProject } from '../../../../shared/xos-goals-types'
 import { XosGoalManage } from './XosGoalManage'
 import { queueSummary, XosGoalQueueList } from './XosQueuePipes'
 import { goalIdentity, OpsCastingCostPips, RunBattleMeter, useCardArt } from './XosGoalCard'
@@ -30,9 +30,16 @@ import {
   DetailTile,
   GoalFact,
   GoalRunBar,
-  StatusBadge,
   type XosGoalActions
 } from './XosGoalViewerParts'
+import { XosLiveRunTail } from './XosLiveRunTail'
+import { XosGoalDrillIn } from './XosGoalDrillIn'
+import { XosGoalRunList } from './XosGoalRunList'
+import {
+  XosContinueOnDialog,
+  type XosContinueOnDialogRequest,
+  type XosDrillInMode
+} from './XosContinueOnDialog'
 
 export function XosGoalViewer({
   item,
@@ -66,6 +73,9 @@ export function XosGoalViewer({
   )
   const busy = actions.busy === item.goal
   const recommended = item.status.recommended_command?.replace(/^`|`$/g, '') ?? null
+  const [dialog, setDialog] = useState<XosContinueOnDialogRequest | null>(null)
+  const openDialog = (mode: XosDrillInMode, fromRun: XosGoalRun | null = null): void =>
+    setDialog({ mode, goal: item, project, fromRun })
 
   return (
     <div className="space-y-5">
@@ -139,6 +149,16 @@ export function XosGoalViewer({
       </div>
 
       <GoalRunBar item={item} busy={busy} onRun={(options) => actions.runGoal(item, options)} />
+
+      <XosGoalDrillIn
+        item={item}
+        project={project}
+        busy={busy}
+        onRun={(target, message) => actions.runGoal(target, message ? { message } : undefined)}
+        onContinueOn={openDialog}
+      />
+
+      <XosLiveRunTail projectKey={project.key} goal={item.goal} onOpenLog={actions.openFile} />
 
       <section
         className={[
@@ -277,47 +297,7 @@ export function XosGoalViewer({
         )}
       </section>
 
-      <section className="space-y-3 rounded-lg border bg-muted/20 p-3">
-        <h2 className="text-sm font-semibold text-primary">Recent runs</h2>
-        {item.viewer.recentRuns.length === 0 ? (
-          <p className="rounded-lg border bg-background p-3 text-sm text-muted-foreground">
-            No run receipts available.
-          </p>
-        ) : (
-          <div className="grid gap-2">
-            {item.viewer.recentRuns.map((run) => (
-              <div
-                key={`${run.log_path}-${run.started_at}`}
-                className="rounded-lg border bg-background/60 p-3 text-sm"
-              >
-                <span className="flex flex-wrap items-center justify-between gap-2">
-                  <StatusBadge
-                    value={run.failure_reason ? `${run.status}: ${run.failure_reason}` : run.status}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    {formatTimestamp(run.started_at) ?? 'Unknown start'}
-                  </span>
-                </span>
-                <span className="mt-2 block truncate font-mono text-xs" title={run.log_path}>
-                  {run.log_path || 'Run log unavailable'}
-                </span>
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  {run.runner ?? 'runner?'} ·{' '}
-                  {preferredTelemetryValue(run.model, item.viewer.configuredModel) ??
-                    'Unknown model'}{' '}
-                  ·{' '}
-                  {preferredTelemetryValue(run.reasoning_effort, item.viewer.configuredReasoning) ??
-                    'No reasoning level'}{' '}
-                  · {formatDuration(run.duration_seconds) ?? 'No duration'}
-                  {run.exit_code !== null && run.exit_code !== undefined
-                    ? ` · exit ${run.exit_code}`
-                    : ''}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      <XosGoalRunList item={item} onContinueOn={(run) => openDialog('continue-on', run)} />
 
       <Collapsible title="Queues" summary={queueSummary(item.queues)}>
         <XosGoalQueueList queues={item.queues} projectKey={project.key} />
@@ -384,6 +364,8 @@ export function XosGoalViewer({
           ))}
         </dl>
       </Collapsible>
+
+      <XosContinueOnDialog request={dialog} onClose={() => setDialog(null)} />
     </div>
   )
 }

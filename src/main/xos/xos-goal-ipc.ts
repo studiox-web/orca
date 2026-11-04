@@ -1,14 +1,8 @@
-// XOS fork: IPC for the Automations → Org chart board (read, run now, art, open file). Registered
-// from main-process-automations.ts with one line; the §3d writes live in xos-goal-crud-ipc.ts.
-import {
-  closeSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+// XOS fork: IPC for the Automations → Org chart board (read, run now, art, open file) and the
+// stage D drill-in actions (§3e, §3h.2): native goal runs, live tails, Continue on… / Build now /
+// Work on it myself. The §3d writes live in xos-goal-crud-ipc.ts. Registered from
+// main-process-automations.ts with one line.
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync } from 'node:fs'
 import { extname, join, normalize, relative, resolve, sep } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { ipcMain, shell } from 'electron'
@@ -24,8 +18,10 @@ import { allJobs, buildXosGoalBoard, findProject, type XosRepoSource } from './x
 import { registerXosGoalCrudHandlers } from './xos-goal-crud-ipc'
 import { registerXosWorkItemHandlers } from './xos-work-items-ipc'
 import { registerXosRuntimeHandlers } from './xos-runtime-ipc'
+import { registerXosTakeoverHandlers } from './xos-takeover-ipc'
 import { audit, xosHome } from './xos-crontab'
 import { assembleGoalPrompt } from './xos-goal-prompt'
+import { startNativeGoalRun } from './xos-live-runs'
 import { commitProjectHome, projectHomeDir } from './xos-project-home'
 
 const ART_PREFIX = '/images/admin/ops-cards/'
@@ -52,99 +48,6 @@ function jobProject(board: XosGoalBoard, job: XosCronJob): XosProject | null {
 function interactiveCommand(command: string): string {
   const redirect = /\s+>>\s*("[^"]+"|'[^']+'|\S+)\s+2>&1\s*$/.exec(command)
   return redirect ? `${command.slice(0, redirect.index)} 2>&1 | tee -a ${redirect[1]}` : command
-}
-
-function buildDirectAgentCommand(args: {
-  root: string
-  promptPath: string
-  agent: string
-  model: string | null
-  effort: string | null
-  lockLane: string
-  inboxOnly: boolean
-}): string {
-  const envPrefix = [
-    `CASCADE_ACTIVE_LOCK_LANE=${JSON.stringify(args.lockLane)}`,
-    ...(args.inboxOnly ? ['CASCADE_GOAL_INBOX_ONLY=1'] : [])
-  ].join(' ')
-  if (args.agent === 'claude') {
-    const modelArg = args.model ? ` --model ${JSON.stringify(args.model)}` : ''
-    const effortArg = args.effort ? ` --effort ${JSON.stringify(args.effort)}` : ''
-    return `cd ${JSON.stringify(args.root)} && ${envPrefix} claude -p "$(cat ${JSON.stringify(args.promptPath)})"${modelArg}${effortArg} --dangerously-skip-permissions`
-  }
-  const modelArg = args.model ? ` -m ${JSON.stringify(args.model)}` : ''
-  const effortArg = args.effort
-    ? ` -c ${JSON.stringify(`model_reasoning_effort="${args.effort}"`)}`
-    : ''
-  return `cd ${JSON.stringify(args.root)} && ${envPrefix} codex exec --dangerously-bypass-approvals-and-sandbox -C ${JSON.stringify(args.root)}${modelArg}${effortArg} - < ${JSON.stringify(args.promptPath)}`
-}
-
-function goalRunCommand(
-  project: XosProject,
-  request: Extract<XosRunNowRequest, { kind: 'goal' }>
-): { ok: true; command: string; modeLabel: string } | { ok: false; error: string } {
-  const entry = project.goals.find((candidate) => candidate.goal === request.goal)
-  const mode = request.mode ?? 'normal'
-  try {
-    const assembled = assembleGoalPrompt({
-      repoRoot: project.root,
-      goal: request.goal,
-      mode,
-      sidecar: request.sidecar,
-      operatorMessage: request.message,
-      requestedAgent: request.runner ?? entry?.viewer.agents[0],
-      bypassQueueGate: true
-    })
-    void commitProjectHome(project.root, `xos: prepare ${mode} run for ${request.goal}`)
-    if (assembled.status !== 'ready') {
-      return { ok: false, error: assembled.reason }
-    }
-    const legacyCronScript = join(project.root, 'automations', 'bin', 'run-goal-cron.sh')
-    if (existsSync(legacyCronScript) && mode !== 'sidecar') {
-      if (mode === 'reply') {
-        return {
-          ok: true,
-          modeLabel: 'Reply inbox',
-          command: `cd ${JSON.stringify(project.root)} && CASCADE_GOAL_INBOX_ONLY=1 ./automations/bin/run-goal-cron.sh ${request.goal} ${assembled.agent}`
-        }
-      }
-      const cronGoalLine = entry?.viewer.cron.jobs.find((job) =>
-        /run-goal(?:-cron)?\.sh/.test(job.command)
-      )
-      return {
-        ok: true,
-        modeLabel: 'Run',
-        command:
-          cronGoalLine && !request.runner
-            ? interactiveCommand(cronGoalLine.command)
-            : `cd ${JSON.stringify(project.root)} && ./automations/bin/run-goal-cron.sh ${request.goal} ${assembled.agent}`
-      }
-    }
-    const runDir = join(xosHome(), 'runs')
-    mkdirSync(runDir, { recursive: true })
-    const promptPath = join(runDir, `${project.name}-${request.goal}-${Date.now()}.prompt.md`)
-    writeFileSync(promptPath, assembled.prompt, 'utf8')
-    return {
-      ok: true,
-      modeLabel:
-        mode === 'reply'
-          ? 'Reply inbox'
-          : mode === 'sidecar'
-            ? `Sidecar ${request.sidecar}`
-            : 'Run',
-      command: buildDirectAgentCommand({
-        root: project.root,
-        promptPath,
-        agent: assembled.agent,
-        model: assembled.model,
-        effort: assembled.effort,
-        lockLane: assembled.lockLane,
-        inboxOnly: mode === 'reply'
-      })
-    }
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) }
-  }
 }
 
 async function launch(
@@ -184,39 +87,86 @@ async function launch(
   return { ok: true, message: `Started "${title}" in the background. Output: ${logPath}` }
 }
 
+/** Run now: legacy cron-script projects keep the cron parity path; imported/central goals run
+ *  natively (prompt assembly, lane locks, claiming, receipt, live tail). */
+async function runGoalNow(
+  runtime: OrcaRuntimeService,
+  board: XosGoalBoard,
+  request: Extract<XosRunNowRequest, { kind: 'goal' }>
+): Promise<XosActionResult> {
+  const project = findProject(board, request.projectKey)
+  const goal = project?.goals.find((candidate) => candidate.goal === request.goal)
+  if (!project || !goal) {
+    return { ok: false, error: `Goal ${request.goal} was not found.` }
+  }
+  if (goal.running && request.mode !== 'reply') {
+    return { ok: false, error: `${goal.title} is already running (pid ${goal.running.pid}).` }
+  }
+  const mode = request.mode ?? 'normal'
+  const legacyCronScript = join(project.root, 'automations', 'bin', 'run-goal-cron.sh')
+  if (existsSync(legacyCronScript) && mode !== 'sidecar') {
+    const assembled = assembleGoalPrompt({
+      repoRoot: project.root,
+      goal: request.goal,
+      mode,
+      operatorMessage: request.message,
+      requestedAgent: request.runner ?? goal.viewer.agents[0],
+      bypassQueueGate: true
+    })
+    void commitProjectHome(project.root, `xos: prepare ${mode} run for ${request.goal}`)
+    if (assembled.status !== 'ready') {
+      return { ok: false, error: assembled.reason }
+    }
+    if (mode === 'reply') {
+      const command = `cd ${JSON.stringify(project.root)} && CASCADE_GOAL_INBOX_ONLY=1 ./automations/bin/run-goal-cron.sh ${request.goal} ${assembled.agent}`
+      audit({ action: 'goal.run_now', project: project.name, goal: goal.goal, mode, command })
+      return launch(runtime, project, command, `Reply inbox ${goal.goal}`)
+    }
+    const cronGoalLine = goal.viewer.cron.jobs.find((job) =>
+      /run-goal(?:-cron)?\.sh/.test(job.command)
+    )
+    const command =
+      cronGoalLine && !request.runner
+        ? interactiveCommand(cronGoalLine.command)
+        : `cd ${JSON.stringify(project.root)} && ./automations/bin/run-goal-cron.sh ${request.goal} ${assembled.agent}`
+    audit({ action: 'goal.run_now', project: project.name, goal: goal.goal, mode, command })
+    return launch(runtime, project, command, `Run ${goal.goal}`)
+  }
+  const started = await startNativeGoalRun({
+    repoRoot: project.root,
+    goal: request.goal,
+    mode,
+    sidecar: request.sidecar,
+    message: request.message,
+    runner: request.runner,
+    trigger: 'manual'
+  })
+  audit({
+    action: started.ok ? 'goal.run_now_native' : 'goal.run_now_native_failed',
+    project: project.name,
+    goal: goal.goal,
+    mode,
+    sidecar: request.sidecar,
+    hasMessage: Boolean(request.message?.trim()),
+    runId: started.ok ? started.runId : undefined,
+    error: started.ok ? undefined : started.error
+  })
+  return started.ok ? { ok: true, message: started.message } : started
+}
+
 export function registerXosGoalHandlers(repos: XosRepoSource, runtime: OrcaRuntimeService): void {
   ipcMain.handle('xos:goals:getBoard', () => buildXosGoalBoard(repos))
   registerXosGoalCrudHandlers(repos)
   registerXosWorkItemHandlers(repos)
   registerXosRuntimeHandlers()
+  registerXosTakeoverHandlers(repos, runtime)
 
   ipcMain.handle(
     'xos:goals:runNow',
     async (_event, request: XosRunNowRequest): Promise<XosActionResult> => {
       const board = await buildXosGoalBoard(repos)
       if (request.kind === 'goal') {
-        const project = findProject(board, request.projectKey)
-        const goal = project?.goals.find((candidate) => candidate.goal === request.goal)
-        if (!project || !goal) {
-          return { ok: false, error: `Goal ${request.goal} was not found.` }
-        }
-        if (goal.running && request.mode !== 'reply') {
-          return { ok: false, error: `${goal.title} is already running (pid ${goal.running.pid}).` }
-        }
-        const prepared = goalRunCommand(project, request)
-        if (!prepared.ok) {
-          return prepared
-        }
-        audit({
-          action: 'goal.run_now',
-          project: project.name,
-          goal: goal.goal,
-          mode: request.mode ?? 'normal',
-          sidecar: request.sidecar,
-          hasMessage: Boolean(request.message?.trim()),
-          command: prepared.command
-        })
-        return launch(runtime, project, prepared.command, `${prepared.modeLabel} ${goal.goal}`)
+        return runGoalNow(runtime, board, request)
       }
       const job = allJobs(board).find((candidate) => candidate.id === request.jobId)
       if (!job) {
