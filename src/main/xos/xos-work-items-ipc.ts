@@ -1,23 +1,29 @@
-// XOS fork: IPC for Tasks → Goals (§3h stage 0): a read-only board of work items over the legacy
-// repo folders. Writes (move, approve, edit) come in stage C through the guarded, audited path.
-import { closeSync, openSync, readSync, statSync } from 'node:fs'
-import { join, resolve, sep } from 'node:path'
+// XOS fork: IPC for Tasks → Goals (§3h stage 0 + stage C CRUD & transition timeline).
+import { join } from 'node:path'
 import { ipcMain } from 'electron'
 import type {
+  XosItemActionResult,
   XosItemDetail,
+  XosItemMutation,
   XosItemsSnapshot,
   XosProjectItems,
   XosWorkItem
 } from '../../shared/xos-items-types'
 import { listGoalProjects, type XosRepoSource } from './xos-goal-board'
-import { isDirectory, parseFrontmatter, safeReaddir } from './xos-goal-files'
+import { isDirectory, safeReaddir } from './xos-goal-files'
+import { resolveProjectGoalsDir } from './xos-project-home'
 import { readItemSummary, scanProjectQueues, toItemStage } from './xos-work-items'
+import {
+  createWorkItem,
+  editWorkItem,
+  moveWorkItem,
+  readWorkItemDetailForRoots
+} from './xos-work-items-crud'
 
 const PER_STAGE_LIMIT = 60
-const DETAIL_MAX_BYTES = 256 * 1024
 
 function knownGoals(root: string): Set<string> {
-  const dir = join(root, 'automations', 'goals')
+  const dir = resolveProjectGoalsDir(root)
   return new Set(safeReaddir(dir).filter((name) => isDirectory(join(dir, name))))
 }
 
@@ -55,45 +61,58 @@ export async function buildItemsSnapshot(
   return { generatedAt: new Date().toISOString(), projects }
 }
 
-function within(path: string, dir: string): boolean {
-  return path.startsWith(dir.endsWith(sep) ? dir : dir + sep)
-}
-
-/** Reads one item, but only from a folder that is a known stage of a goal project. */
+/** Reads one item and its transition timeline from a known stage folder of a goal project. */
 export async function readItemDetail(
   repos: XosRepoSource,
   requested: string
 ): Promise<XosItemDetail | null> {
-  const path = resolve(requested)
-  if (!path.endsWith('.md')) {
-    return null
-  }
-  const stageDirs = (await listGoalProjects(repos)).flatMap((project) =>
-    scanProjectQueues(project.root, { activeOnly: false }).flatMap(({ stages }) =>
-      stages.flatMap((scanned) => scanned.dirs)
-    )
-  )
-  if (!stageDirs.some((dir) => within(path, dir) && !path.slice(dir.length + 1).includes(sep))) {
-    return null
-  }
-  let fd: number | null = null
-  try {
-    const size = statSync(path).size
-    const length = Math.min(size, DETAIL_MAX_BYTES)
-    fd = openSync(path, 'r')
-    const buffer = Buffer.alloc(length)
-    readSync(fd, buffer, 0, length, 0)
-    const text = buffer.toString('utf8')
-    const frontmatter = parseFrontmatter(text)
-    const end = text.startsWith('---') ? text.indexOf('\n---', 3) : -1
-    const body = end === -1 ? text : text.slice(text.indexOf('\n', end + 4) + 1)
-    return { path, frontmatter, body, truncated: size > DETAIL_MAX_BYTES }
-  } catch {
-    return null
-  } finally {
-    if (fd !== null) {
-      closeSync(fd)
+  const roots = (await listGoalProjects(repos)).map((project) => project.root)
+  return readWorkItemDetailForRoots(roots, requested)
+}
+
+export async function applyItemMutation(
+  repos: XosRepoSource,
+  mutation: XosItemMutation
+): Promise<XosItemActionResult> {
+  const projects = await listGoalProjects(repos)
+  const roots = projects.map((project) => project.root)
+  switch (mutation.kind) {
+    case 'create': {
+      const project =
+        projects.find((p) => p.root === mutation.projectKey || p.name === mutation.projectKey) ??
+        projects[0]
+      if (!project) {
+        return { ok: false, error: 'Project not found for work item creation.' }
+      }
+      return createWorkItem({
+        repoRoot: project.root,
+        typeId: mutation.typeId,
+        stageId: mutation.stageId,
+        title: mutation.title,
+        body: mutation.body,
+        priority: mutation.priority,
+        size: mutation.size,
+        risk: mutation.risk,
+        ready: mutation.ready
+      })
     }
+    case 'move':
+      return moveWorkItem({
+        roots,
+        pathOrQuery: mutation.path,
+        toStageId: mutation.toStageId,
+        bucket: mutation.bucket,
+        goal: mutation.goal
+      })
+    case 'edit':
+      return editWorkItem({
+        roots,
+        pathOrQuery: mutation.path,
+        title: mutation.title,
+        ready: mutation.ready,
+        updates: mutation.updates,
+        body: mutation.body
+      })
   }
 }
 
@@ -103,5 +122,8 @@ export function registerXosWorkItemHandlers(repos: XosRepoSource): void {
   )
   ipcMain.handle('xos:items:get', (_event, args: { path: string }) =>
     typeof args?.path === 'string' ? readItemDetail(repos, args.path) : null
+  )
+  ipcMain.handle('xos:items:mutate', (_event, mutation: XosItemMutation) =>
+    applyItemMutation(repos, mutation)
   )
 }

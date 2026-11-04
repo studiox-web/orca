@@ -1,9 +1,10 @@
-// XOS fork: Stage B goal inbox & @shared/... contract include helpers (RT3, RT9, RT12).
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join, normalize, relative, resolve } from 'node:path'
+// XOS fork: Stage B/C goal inbox & @shared/... contract include helpers (RT3, RT9, RT12, MS1, MS3).
+import { cpSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { basename, join, normalize, relative, resolve } from 'node:path'
+import { audit } from './xos-crontab'
 import { parseFrontmatter, readHead, safeReaddir } from './xos-goal-files'
 import { patchMarkdownFrontmatter } from './xos-item-claims'
-import { resolveSharedDirs } from './xos-project-home'
+import { commitProjectHome, resolveSharedDirs } from './xos-project-home'
 
 const MAX_INBOX_BYTES = 32 * 1024
 const INCLUDE_LINE_RE = /^[ \t]*@shared\/([A-Za-z0-9._/-]+)[ \t]*$/
@@ -119,4 +120,90 @@ export function writeGoalOperatorMessage(
   ].join('\n')
   writeFileSync(fullPath, content, 'utf8')
   return fullPath
+}
+
+export function listGoalInboxMessages(goalDir: string): Record<string, unknown>[] {
+  const inboxDir = join(goalDir, 'inbox')
+  return safeReaddir(inboxDir)
+    .filter((n) => n.endsWith('.md') && !n.startsWith('.') && n.toLowerCase() !== 'readme.md')
+    .sort()
+    .toReversed()
+    .map((filename) => {
+      const path = join(inboxDir, filename)
+      const text = readHead(path, 16 * 1024) ?? ''
+      const fm = parseFrontmatter(text)
+      const end = text.startsWith('---') ? text.indexOf('\n---', 3) : -1
+      const body = (end === -1 ? text : text.slice(text.indexOf('\n', end + 4) + 1)).trim()
+      return {
+        filename,
+        path,
+        id: fm.id ?? filename.replace(/\.md$/, ''),
+        from: fm.from ?? 'unknown',
+        to: fm.to ?? null,
+        status: fm.status ?? 'open',
+        priority: fm.priority ?? 'normal',
+        subject: fm.subject ?? null,
+        createdAt: fm.created_at ?? null,
+        readAt: fm.read_at ?? null,
+        body
+      }
+    })
+}
+
+export function sendGoalInboxMessage(args: {
+  projectRoot: string
+  projectName: string
+  goalsDir: string
+  goal: string
+  body: string
+  from?: string
+  subject?: string
+  priority?: string
+  attachments?: string[]
+  cwd: string
+  nowMs?: number
+}): { path: string; id: string; attachments: string[] } {
+  const nowIso = new Date(args.nowMs ?? Date.now()).toISOString()
+  const stamp = nowIso.replace(/[:.]/g, '-')
+  const sender = (args.from?.trim() || 'operator').replace(/[^A-Za-z0-9_-]/g, '-')
+  const id = `${stamp}__from-${sender}__to-${args.goal}`
+  const inboxDir = join(args.goalsDir, args.goal, 'inbox')
+  mkdirSync(inboxDir, { recursive: true })
+  const copiedAttachments: string[] = []
+  for (const rawAttach of args.attachments ?? []) {
+    const src = resolve(args.cwd, rawAttach)
+    if (existsSync(src) && statSync(src).isFile()) {
+      const attachDir = join(inboxDir, 'attachments')
+      mkdirSync(attachDir, { recursive: true })
+      const destName = `${stamp}-${basename(src)}`
+      cpSync(src, join(attachDir, destName), { force: true })
+      copiedAttachments.push(`inbox/attachments/${destName}`)
+    }
+  }
+  const fullPath = join(inboxDir, `${id}__message.md`)
+  const lines = [
+    '---',
+    `id: ${id}`,
+    `from: ${sender}`,
+    `to: ${args.goal}`,
+    `created_at: ${nowIso}`,
+    `priority: ${args.priority?.trim() || 'high'}`,
+    'status: open',
+    `subject: ${args.subject?.trim() || 'Operator instruction'}`,
+    ...(copiedAttachments.length > 0 ? [`attachments: [${copiedAttachments.join(', ')}]`] : []),
+    '---',
+    '',
+    args.body.trim(),
+    ''
+  ]
+  writeFileSync(fullPath, lines.join('\n'), 'utf8')
+  void commitProjectHome(args.projectRoot, `xos: message ${args.goal} from ${sender}`)
+  audit({
+    action: 'goal.message',
+    project: args.projectName,
+    goal: args.goal,
+    from: sender,
+    path: fullPath
+  })
+  return { path: fullPath, id, attachments: copiedAttachments }
 }

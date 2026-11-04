@@ -31,6 +31,7 @@ import { PORTS_COMMAND_SPECS } from './ports'
 import { PLUGIN_AUTHORING_COMMAND_SPECS, PLUGIN_RUNTIME_COMMAND_SPECS } from './plugin'
 import { PLUGIN_VIEW_COMMAND_SPECS } from './plugin-view'
 import { XOS_GOALS_COMMAND_SPECS } from './xos-goals'
+import { XOS_ITEMS_COMMAND_SPECS } from './xos-items'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -41,6 +42,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...FILE_COMMAND_SPECS,
   ...AUTOMATION_COMMAND_SPECS,
   ...XOS_GOALS_COMMAND_SPECS,
+  ...XOS_ITEMS_COMMAND_SPECS,
   ...BROWSER_BASIC_COMMAND_SPECS,
   ...BROWSER_ADVANCED_COMMAND_SPECS,
   ...ORCHESTRATION_COMMAND_SPECS.map(withFullRecordFlag),

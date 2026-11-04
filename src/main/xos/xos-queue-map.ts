@@ -29,6 +29,9 @@ const FEATURE_REJECT_BUCKETS = [
   'not-interested',
   'other'
 ]
+const IDEA_REJECT_BUCKETS = FEATURE_REJECT_BUCKETS.map(
+  (bucket) => `docs/features/rejected/${bucket}`
+)
 
 export const LEGACY_ITEM_TYPES: LegacyItemType[] = [
   {
@@ -78,6 +81,34 @@ export const LEGACY_ITEM_TYPES: LegacyItemType[] = [
         label: 'Rejected',
         paths: FEATURE_REJECT_BUCKETS.map((bucket) => `${DREAMER_INBOX}/${bucket}`),
         writers: ['feature-backlog-groomer'],
+        kind: 'rejected'
+      }
+    ]
+  },
+  {
+    id: 'feature-ideas',
+    label: 'Feature ideas',
+    stages: [
+      {
+        id: 'backlog',
+        label: 'Idea backlog',
+        paths: ['docs/features/backlog'],
+        writers: ['feature-dreamer'],
+        readers: ['feature-spec-writer']
+      },
+      {
+        id: 'specs',
+        label: 'Specs',
+        paths: ['docs/features/specs'],
+        writers: ['feature-spec-writer'],
+        readers: ['implement-planned-feature-backlog'],
+        readyKey: 'builder.ready'
+      },
+      {
+        id: 'rejected',
+        label: 'Rejected ideas',
+        paths: IDEA_REJECT_BUCKETS,
+        writers: ['feature-spec-writer'],
         kind: 'rejected'
       }
     ]

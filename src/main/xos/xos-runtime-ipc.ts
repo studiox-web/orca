@@ -7,7 +7,8 @@ import type {
   XosModelTier
 } from '../../shared/xos-runtime-types'
 import { readLegacyCommitPolicies } from './xos-auto-commit'
-import { tierKey, xosPreviewAuto, xosTierModels } from './xos-auto-mode'
+import { xosPreviewAuto, xosTierModels } from './xos-auto-mode'
+import { tierKey } from './xos-model-tier'
 import { registerXosModelCatalogHandlers } from './xos-model-catalog'
 import {
   cleanRunConfig,

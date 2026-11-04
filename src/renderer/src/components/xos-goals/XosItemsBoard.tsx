@@ -1,4 +1,4 @@
-// XOS fork: Tasks → Goals board (columns = stages) and list views (§3h stage 0).
+// XOS fork: Tasks → Goals board (columns = stages) and list views (§3h stage 0 & §3h.2 drag-and-drop).
 import React, { useEffect, useState } from 'react'
 import { ChevronRight, CircleCheck } from 'lucide-react'
 import { relativeTime } from './xos-format'
@@ -63,8 +63,13 @@ function ItemCard({
   return (
     <button
       type="button"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('text/plain', item.path)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
       onClick={() => onOpen(item)}
-      className="flex w-full flex-col gap-1.5 rounded-md border bg-card p-2.5 text-left text-sm shadow-xs transition-colors hover:border-primary/50 hover:bg-muted/40"
+      className="flex w-full cursor-grab flex-col gap-1.5 rounded-md border bg-card p-2.5 text-left text-sm shadow-xs transition-colors hover:border-primary/50 hover:bg-muted/40 active:cursor-grabbing"
     >
       <span className="line-clamp-2 font-medium leading-snug">{item.title}</span>
       <ItemChips item={item} limit={3} />
@@ -113,14 +118,17 @@ export function XosItemsBoardView({
   columns,
   focusStageId,
   showProject,
-  onOpen
+  onOpen,
+  onMoveItem
 }: {
   columns: XosItemColumn[]
   focusStageId: string | null
   showProject: boolean
   onOpen: (item: XosViewItem) => void
+  onMoveItem?: (path: string, toStageId: string) => void
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!focusStageId) {
@@ -132,19 +140,38 @@ export function XosItemsBoardView({
       ?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
   }, [focusStageId])
 
+  const handleDrop = (e: React.DragEvent, toStageId: string): void => {
+    e.preventDefault()
+    setDragOverStageId(null)
+    const itemPath = e.dataTransfer.getData('text/plain')
+    if (itemPath && onMoveItem) {
+      onMoveItem(itemPath, toStageId)
+    }
+  }
+
   return (
     <div className="scrollbar-sleek flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
       {columns.map((column) => {
         const collapsed = column.stage.kind !== 'active' && !expanded.has(column.stage.id)
+        const isDropTarget = dragOverStageId === column.stage.id
         if (collapsed) {
           return (
             <button
               key={column.stage.id}
               id={`xos-stage-${column.stage.id}`}
               type="button"
+              onDragOver={(e) => {
+                e.preventDefault()
+                setDragOverStageId(column.stage.id)
+              }}
+              onDragLeave={() => setDragOverStageId(null)}
+              onDrop={(e) => handleDrop(e, column.stage.id)}
               onClick={() => setExpanded((current) => new Set(current).add(column.stage.id))}
               title={`Show ${column.stage.label}`}
-              className="flex w-10 shrink-0 flex-col items-center gap-2 rounded-lg border bg-muted/20 py-3 text-xs text-muted-foreground hover:bg-muted/40"
+              className={[
+                'flex w-10 shrink-0 flex-col items-center gap-2 rounded-lg border bg-muted/20 py-3 text-xs text-muted-foreground hover:bg-muted/40',
+                isDropTarget ? 'ring-2 ring-primary' : ''
+              ].join(' ')}
             >
               <ChevronRight className="size-3.5" />
               <span className="tabular-nums">{column.stage.count}</span>
@@ -156,9 +183,15 @@ export function XosItemsBoardView({
           <section
             key={column.stage.id}
             id={`xos-stage-${column.stage.id}`}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragOverStageId(column.stage.id)
+            }}
+            onDragLeave={() => setDragOverStageId(null)}
+            onDrop={(e) => handleDrop(e, column.stage.id)}
             className={[
-              'flex w-72 shrink-0 flex-col rounded-lg border bg-muted/20 p-2',
-              focusStageId === column.stage.id ? 'ring-2 ring-primary/60' : ''
+              'flex w-72 shrink-0 flex-col rounded-lg border bg-muted/20 p-2 transition-shadow',
+              focusStageId === column.stage.id || isDropTarget ? 'ring-2 ring-primary/60' : ''
             ].join(' ')}
           >
             <ColumnHeader column={column} />

@@ -19,20 +19,15 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'macos-tree-clone',
   'orcad/orcad-stale-lock-reclaim',
   'plugins/plugin-authoring-checks',
-  ...[
-    'access',
-    'active-location',
-    'storage-classification',
-    'offline-settings',
-    'backup-path',
-    'database-recovery',
-    'domain-reader',
-    'recovery-command'
-  ].map((module) => `persistence/profile-state/profile-state-${module}`),
+  ...'access,active-location,storage-classification,offline-settings,backup-path,database-recovery,domain-reader,recovery-command'
+    .split(',')
+    .map((m) => `persistence/profile-state/profile-state-${m}`),
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
   'startup/http1-compatibility-marker',
-  'xos/xos-project-home'
+  ...'xos-project-home,xos-goal-board,xos-goal-crud,xos-goal-cli,xos-usage-models-cli,xos-work-items,xos-work-items-crud,xos-item-claims'
+    .split(',')
+    .map((m) => `xos/${m}`)
 ] as const
 
 // Plain-Node processes and CLI modules cannot load Electron's API.

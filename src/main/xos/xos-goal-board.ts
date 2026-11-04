@@ -10,13 +10,14 @@ import {
   parseCrontabWithPaused,
   readCrontabText,
   toCronJob,
+  xosHome,
   type ParsedCronLine
 } from './xos-crontab'
 import { goalSortKey, loadOrg } from './xos-goal-org'
 import { buildGoal } from './xos-goal-entry'
 import { listArchivedGoals } from './xos-goal-lifecycle'
 import { runningFor, runningGoalJobs, within } from './xos-goal-processes'
-import { hasProjectGoals, resolveProjectGoalsDir } from './xos-project-home'
+import { hasProjectGoals, readProjectMeta, resolveProjectGoalsDir } from './xos-project-home'
 import { goalQueues, scanProjectQueues } from './xos-work-items'
 
 export type XosRepoSource = {
@@ -54,6 +55,14 @@ function discoverProjects(repos: XosRepoSource, cronLines: ParsedCronLine[]): Pr
     const root = line.workdir ? resolve(line.workdir) : null
     if (root && !byRoot.has(root) && hasProjectGoals(root)) {
       byRoot.set(root, { root, name: basename(root), worktreeSelector: null })
+    }
+  }
+  // Imported projects in ~/.orca-xos/projects/*/project.json stay visible after crontab retirement.
+  for (const slug of safeReaddir(join(xosHome(), 'projects'))) {
+    const meta = readProjectMeta(slug)
+    const root = meta?.repoRoot ? resolve(meta.repoRoot) : null
+    if (root && !byRoot.has(root) && hasProjectGoals(root)) {
+      byRoot.set(root, { root, name: meta?.name || basename(root), worktreeSelector: null })
     }
   }
   return [...byRoot.values()].sort((a, b) => a.name.localeCompare(b.name))

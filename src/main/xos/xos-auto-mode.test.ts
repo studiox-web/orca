@@ -11,7 +11,8 @@ vi.mock('electron', () => ({
   Notification: { isSupported: () => false }
 }))
 
-const { inferTier, rankCandidates } = await import('./xos-auto-mode')
+const { rankCandidates } = await import('./xos-auto-mode')
+const { inferTier } = await import('./xos-model-tier')
 const { assessQuota, registerXosQuotaSource } = await import('./xos-quota')
 const { xosLaunchAutomation } = await import('./xos-run-fallback')
 const { readRunAttempts, writeRunConfig } = await import('./xos-runtime-store')
