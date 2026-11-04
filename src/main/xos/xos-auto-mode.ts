@@ -14,25 +14,9 @@ import type {
 import { xosModelArgsSupported } from '../../shared/xos-model-args'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { listXosModels } from './xos-model-catalog'
+import { inferTier, tierKey } from './xos-model-tier'
 import { assessQuota, type XosQuota } from './xos-quota'
 import { readTierEdits } from './xos-runtime-store'
-
-/** RT5 pairs: gpt-5.5↔opus↔gemini pro, mini↔sonnet↔flash, spark↔haiku↔flash-lite. */
-export function inferTier(model: string): XosModelTier | null {
-  const id = model.toLowerCase()
-  if (/haiku|spark|\bnano\b|\blite\b/.test(id)) {
-    return 'light'
-  }
-  if (/\bmini\b|sonnet|flash|fast/.test(id)) {
-    return 'standard'
-  }
-  if (/opus|fable|pro\b|-pro|gpt-5\.\d|codex-max|grok-4/.test(id)) {
-    return 'high'
-  }
-  return null
-}
-
-export const tierKey = (agent: string, model: string): string => `${agent}:${model}`
 
 type Listed = { agent: string; models: XosCatalogModel[] }
 

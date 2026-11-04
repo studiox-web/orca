@@ -45,7 +45,7 @@ function matchesExpr(fm: Record<string, unknown>, key?: string, expected?: strin
     : String(current ?? '').toLowerCase() === expected.toLowerCase()
 }
 
-function isMarkdownItem(name: string): boolean {
+export function isMarkdownItem(name: string): boolean {
   const lower = name.toLowerCase()
   return (
     lower.endsWith('.md') &&
@@ -53,6 +53,44 @@ function isMarkdownItem(name: string): boolean {
     lower !== 'readme.md' &&
     lower !== 'template.md'
   )
+}
+
+export function countDownstreamFloorItems(
+  dirs: string[],
+  readyKey: string | undefined,
+  nowMs: number = Date.now(),
+  claimTimeoutMs: number = DEFAULT_CLAIM_TIMEOUT_MS
+): number {
+  let count = 0
+  for (const dir of dirs) {
+    for (const name of safeReaddir(dir).filter(isMarkdownItem)) {
+      const fm = parseFrontmatter(readHead(join(dir, name), ITEM_HEAD_BYTES))
+      if (!isItemClaimActive(fm, nowMs, claimTimeoutMs) && matchesExpr(fm, readyKey)) {
+        count += 1
+      }
+    }
+  }
+  return count
+}
+
+export function countOpenReplyMessages(
+  goalDir: string,
+  goal: string,
+  inboxIsWorkQueue: boolean
+): number {
+  const inboxDir = join(goalDir, 'inbox')
+  let count = 0
+  for (const name of safeReaddir(inboxDir).filter(isMarkdownItem)) {
+    const fm = parseFrontmatter(readHead(join(inboxDir, name), 4096))
+    if (inboxIsWorkQueue && !fm.from && !fm.to) {
+      continue
+    }
+    const status = String(fm.status ?? 'open').toLowerCase()
+    if (status === 'open' && !fm.responded_at && String(fm.from ?? '') !== goal) {
+      count += 1
+    }
+  }
+  return count
 }
 
 function formatAge(oldestMs: number | null, nowMs: number): string {

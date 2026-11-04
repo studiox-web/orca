@@ -2,8 +2,8 @@
 // writes the current (possibly default) org out, and every write keeps the previous version in
 // org-history/ so any change can be reverted by hand.
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import type { XosGoalArea } from '../../shared/xos-goals-types'
+import { basename, dirname, join } from 'node:path'
+import type { XosGoalArea, XosProject } from '../../shared/xos-goals-types'
 import { audit } from './xos-crontab'
 import { loadOrg, orgFilePath, type XosOrg } from './xos-goal-org'
 
@@ -90,6 +90,41 @@ export function upsertArea(
   }
   saveOrg(projectName, areas, { action: existing ? 'org.edit_area' : 'org.create_area', area: id })
   return existing ? `Saved ${title}.` : `Created area ${title}.`
+}
+
+/**
+ * Resolves a CLI --area value to an area id, creating the area when the project does not have it
+ * yet (bots name areas by title, e.g. --area Engineering). An empty input means "no area".
+ */
+export function resolveOrCreateAreaId(
+  project: XosProject,
+  area: string
+): { ok: true; areaId: string | null } | { ok: false; error: string } {
+  const trimmed = area.trim()
+  if (!trimmed) {
+    return { ok: true, areaId: null }
+  }
+  const lower = trimmed.toLowerCase()
+  const existing = project.areas.find(
+    (candidate) => candidate.id.toLowerCase() === lower || candidate.title.toLowerCase() === lower
+  )
+  if (existing) {
+    return { ok: true, areaId: existing.id }
+  }
+  const id = lower.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  if (!AREA_ID.test(id)) {
+    return { ok: false, error: `Area "${trimmed}" is not a valid area name.` }
+  }
+  try {
+    upsertArea(
+      basename(project.root),
+      { id, title: trimmed, description: '', manager: '' },
+      new Set(project.goals.map((goal) => goal.goal))
+    )
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
+  return { ok: true, areaId: id }
 }
 
 /** Deletes an area; its goals become unassigned (they are not touched otherwise). */

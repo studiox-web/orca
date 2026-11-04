@@ -5,6 +5,9 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     commandPath[0] === 'artifacts' ||
     commandPath[0] === 'environment' ||
     commandPath[0] === 'goals' ||
+    commandPath[0] === 'items' ||
+    commandPath[0] === 'models' ||
+    commandPath[0] === 'usage' ||
     // Paired servers come from the local store; routing SSH lookup would mix two machines in one list.
     commandPath.join(' ') === 'host list' ||
     commandPath[0] === 'serve' ||

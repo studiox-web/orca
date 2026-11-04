@@ -16,7 +16,8 @@ import { claimWorkItem, releaseWorkItemClaim } from './xos-item-claims'
 import { automationLockFile, laneLockFile, tryLock, type HeldLock } from './xos-lane-lock'
 import { classifyRunScreen } from './xos-limit-classifier'
 import { commitProjectHome, projectHomeDir } from './xos-project-home'
-import { notify } from './xos-run-fallback'
+import { mutableLiveRuns } from './xos-live-registry'
+export { liveRunRegistry } from './xos-live-registry'
 import {
   appendReceipt,
   buildAgentRunCommand,
@@ -32,11 +33,18 @@ const TAIL_LINES = 120
 const ITEM_PROMPT_BYTES = 32 * 1024
 const FINISHED_RUN_TTL_MS = 60 * 60_000
 
-const liveRuns = new Map<string, XosLiveRun>()
+const liveRuns = mutableLiveRuns()
 
-/** Read-only view of the live-run registry for xos-live-tail and the board adapter. */
-export function liveRunRegistry(): ReadonlyMap<string, XosLiveRun> {
-  return liveRuns
+function safeNotify(body: string): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Notification } = require('electron')
+    if (Notification?.isSupported?.()) {
+      new Notification({ title: 'Orca automation', body }).show()
+    }
+  } catch {
+    // Ignore outside Electron or in tests
+  }
 }
 
 function pushTail(run: XosLiveRun, chunk: string): void {
@@ -106,12 +114,12 @@ async function finalizeRun(run: XosLiveRun, code: number | null, logFd: number):
         config: { paths: policy.paths, message: `chore(automation): ${run.goal}`, push: false }
       })
       if (result.status === 'failed') {
-        notify(`${run.goal}: auto-commit failed. ${result.detail ?? ''}`)
+        safeNotify(`${run.goal}: auto-commit failed. ${result.detail ?? ''}`)
       }
     }
   }
   if (run.outcome !== 'success') {
-    notify(`${run.goal}: native run ${run.outcome} (${run.failureReason ?? 'unknown'}).`)
+    safeNotify(`${run.goal}: native run ${run.outcome} (${run.failureReason ?? 'unknown'}).`)
   }
   void commitProjectHome(run.repoRoot, `xos: native run ${run.goal} (${run.outcome})`)
 }

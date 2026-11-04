@@ -75,15 +75,64 @@ export type XosItemsSnapshot = {
   projects: XosProjectItems[]
 }
 
+export type XosItemTransition = {
+  at: string
+  item: string
+  fromPath: string
+  toPath: string
+  fromStage: string
+  toStage: string
+  goal: string
+  runId?: string
+  branch?: string
+  commit?: string
+  outcome?: string
+}
+
 export type XosItemDetail = {
   path: string
   frontmatter: Record<string, unknown>
   body: string
   truncated: boolean
+  transitions?: XosItemTransition[]
 }
+
+export type XosItemMutation =
+  | {
+      kind: 'create'
+      projectKey: string
+      typeId: string
+      stageId?: string
+      title: string
+      body?: string
+      priority?: string
+      size?: string
+      risk?: string
+      ready?: boolean
+    }
+  | {
+      kind: 'move'
+      path: string
+      toStageId: string
+      bucket?: string | null
+      goal?: string
+    }
+  | {
+      kind: 'edit'
+      path: string
+      title?: string
+      ready?: boolean | null
+      updates?: Record<string, string | null>
+      body?: string
+    }
+
+export type XosItemActionResult =
+  | { ok: true; message: string; path: string; item?: XosWorkItem }
+  | { ok: false; error: string }
 
 export type XosItemsApi = {
   getItems: (args: { projectKey: string | null }) => Promise<XosItemsSnapshot>
   /** Only files inside a known stage folder are readable. */
   getItem: (args: { path: string }) => Promise<XosItemDetail | null>
+  mutateItem: (mutation: XosItemMutation) => Promise<XosItemActionResult>
 }
