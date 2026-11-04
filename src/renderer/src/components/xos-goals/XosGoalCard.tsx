@@ -15,6 +15,7 @@ import {
   type RunMeter
 } from './xos-goal-card-logic'
 import { fitCardText, formatTimestamp } from './xos-format'
+import { XosGoalLiveBadge } from './XosLiveRunTail'
 import { XosQueueChips } from './XosQueuePipes'
 import anthropicIcon from './assets/anthropic.png'
 import codexIcon from './assets/codex.png'
@@ -288,6 +289,7 @@ export function XosGoalCard({
           <RefreshCw className="size-4 animate-spin motion-reduce:animate-none" />
         </span>
       )}
+      <XosGoalLiveBadge projectKey={projectKey} goal={item.goal} active={item.running !== null} />
     </div>
   )
 }

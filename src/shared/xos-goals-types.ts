@@ -15,6 +15,53 @@ export type XosGoalRun = {
   model?: string | null
   reasoning_effort?: string | null
   failure_reason?: string | null
+  /** Stage D native receipts: how the run was started (manual_takeover marks "operator at the helm"). */
+  trigger?: string | null
+}
+
+/** Live (or most recent native) run of a goal, polled by the Goal Viewer and card badges. */
+export type XosLiveRunTail = {
+  runId: string
+  goal: string
+  status: 'running' | 'success' | 'failed' | 'limited' | 'takeover'
+  startedAt: string
+  finishedAt: string | null
+  elapsedSeconds: number | null
+  /** Last screen lines of the run, newest last. */
+  lines: string[]
+  logPath: string
+  /** Work item this run claimed (§3g.5), with the stage folder it came from. */
+  item: { path: string; title: string; stage: string } | null
+  worktreePath: string | null
+  branch: string | null
+  exitCode: number | null
+  failureReason: string | null
+  trigger: string | null
+  parentRunId: string | null
+}
+
+/** One eligible input-queue item for a goal, as the "Build now" dialog offers it. */
+export type XosNextGoalItem = {
+  path: string
+  title: string
+  stage: string
+  /** Code items build in a fresh worktree; ops/data items stay in the project workspace (§3f). */
+  workspace: 'new-worktree' | 'existing'
+} | null
+
+/** Take over / drill-in launch (§3e, §3h.2). `takeover` opens an interactive agent session;
+ *  `build` starts an autonomous native run on one item, in a new worktree. */
+export type XosContinueOnRequest = {
+  projectKey: string
+  goal: string
+  agent: string
+  model: string | null
+  effort: string | null
+  mode: 'takeover' | 'build'
+  itemPath?: string
+  message?: string
+  /** When set, the assembled prompt includes this run's log tail as "you are taking over" context. */
+  fromStartedAt?: string | null
 }
 
 export type XosGoalUsage = {
@@ -247,4 +294,10 @@ export type XosGoalsApi = XosItemsApi &
     mutateArea: (mutation: XosAreaMutation) => Promise<XosActionResult>
     /** Newest first. */
     getAudit: (args: { limit: number }) => Promise<XosAuditEvent[]>
+    /** Live tail of the goal's current (or latest native) run; null when only legacy runs exist. */
+    liveTail: (args: { projectKey: string; goal: string }) => Promise<XosLiveRunTail | null>
+    /** §3e / §3h.2 drill-in: interactive takeover session or autonomous build on an item. */
+    continueOn: (args: XosContinueOnRequest) => Promise<XosActionResult>
+    /** First eligible unclaimed input item for "Build now", or null when the queue gate is dry. */
+    nextItem: (args: { projectKey: string; goal: string }) => Promise<XosNextGoalItem>
   }

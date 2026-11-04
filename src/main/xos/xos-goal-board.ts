@@ -2,7 +2,7 @@
 // Read-only; every write lives in the §3d CRUD modules (xos-crontab*, xos-goal-lifecycle, org-edit).
 import { basename, join, resolve } from 'node:path'
 import { isRepoOnCatalogHost } from '../../shared/execution-host'
-import type { XosCronJob, XosGoalBoard, XosProject } from '../../shared/xos-goals-types'
+import type { XosCronJob, XosGoalBoard, XosGoalRun, XosProject } from '../../shared/xos-goals-types'
 import { isDirectory, safeReaddir } from './xos-goal-files'
 import { readRunReceipts, readTokenUsage } from './xos-goal-receipts'
 import {
@@ -16,6 +16,9 @@ import { goalSortKey, loadOrg } from './xos-goal-org'
 import { buildGoal } from './xos-goal-entry'
 import { listArchivedGoals } from './xos-goal-lifecycle'
 import { runningFor, runningGoalJobs, within } from './xos-goal-processes'
+import { liveRunRegistry } from './xos-live-runs'
+import { nativeRunningFor } from './xos-live-tail'
+import { readNativeReceipts } from './xos-native-receipts'
 import { hasProjectGoals, resolveProjectGoalsDir } from './xos-project-home'
 import { goalQueues, scanProjectQueues } from './xos-work-items'
 
@@ -87,18 +90,26 @@ export async function buildXosGoalBoard(repos: XosRepoSource): Promise<XosGoalBo
     const org = loadOrg(basename(candidate.root))
     const automationsDir = join(candidate.root, 'automations')
     const runs = readRunReceipts(automationsDir)
+    const nativeRuns = readNativeReceipts(candidate.root)
     const usage = readTokenUsage(automationsDir)
     const queueScan = scanProjectQueues(candidate.root, { activeOnly: true })
+    const liveRuns = liveRunRegistry()
+    const runsForGoal = (goal: string): XosGoalRun[] =>
+      [...(runs.get(goal) ?? []), ...(nativeRuns.get(goal) ?? [])].sort((a, b) =>
+        (b.started_at ?? '').localeCompare(a.started_at ?? '')
+      )
     const goals = goalNames
       .map((goal) =>
         buildGoal({
           project: { ...candidate, goalsDir },
           goal,
           org,
-          runs: runs.get(goal) ?? [],
+          runs: runsForGoal(goal),
           usage: usage.get(goal) ?? [],
           cronJobs: projectJobs.filter((job) => job.goal === goal),
-          running: runningFor(running, candidate.root, goal),
+          running:
+            runningFor(running, candidate.root, goal) ??
+            nativeRunningFor(liveRuns, candidate.root, goal),
           queues: goalQueues(queueScan, goal),
           now
         })
