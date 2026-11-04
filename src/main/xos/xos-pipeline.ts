@@ -236,7 +236,10 @@ function scanQueuePaths(paths: string[], readyKey?: string, readyValue?: string)
         if (readyKey) {
           let cur: unknown = parseFrontmatter(readHead(full, ITEM_HEAD_BYTES))
           for (const part of readyKey.split('.')) {
-            cur = typeof cur === 'object' && cur !== null ? Reflect.get(cur, part) : undefined
+            cur =
+              typeof cur === 'object' && cur !== null
+                ? (cur as Record<string, unknown>)[part]
+                : undefined
           }
           const ok =
             !readyValue || readyValue.toLowerCase() === 'true'
