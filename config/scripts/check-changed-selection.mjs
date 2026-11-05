@@ -10,6 +10,14 @@ const SELECT_ALL_PREFIXES = ['config/scripts/check-changed', 'config/scripts/pr-
 // every test. That full run is CI's job; locally these paths run only their own colocated tests.
 const FULL_SUITE_TRIGGER =
   /(?:^|\/)(?:package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|vitest\.config\.[^/]+|vite\.config\.[^/]+)$|(?:^|\/)(?:config|patches)\/|^src\/packages\//
+const HIGH_FANOUT_LOCAL_TEST_INPUTS = new Set([
+  'src/shared/default-global-settings.ts',
+  'src/shared/global-settings-types.ts'
+])
+const HIGH_FANOUT_LOCAL_TEST_PATTERN =
+  /^src\/renderer\/src\/i18n\/(?:en-runtime-required\.json|locales\/[^/]+\.json)$/
+// Larger related sets approach a full run; CI owns that coverage, so keep local feedback colocated.
+const LOCAL_RELATED_INPUT_LIMIT = 12
 // Only module-graph files can make Vitest's `related` selection meaningful.
 const IMPORTABLE = /\.(?:[cm]?[jt]sx?|json|css|scss|svg|html|wasm|ya?ml|txt|sql)$/
 const UNIT_TEST_FILE = /\.test\.[cm]?[jt]sx?$/
@@ -203,6 +211,14 @@ function ownScriptStem(check) {
   return check.args?.[0].replace(/\.mjs$/, '')
 }
 
+function isFullSuiteTrigger(file) {
+  return (
+    FULL_SUITE_TRIGGER.test(file) ||
+    HIGH_FANOUT_LOCAL_TEST_INPUTS.has(file) ||
+    HIGH_FANOUT_LOCAL_TEST_PATTERN.test(file)
+  )
+}
+
 export function selectTypecheckProjects(files) {
   if (
     files.some((file) => SELECT_ALL_FILES.has(file) || matchesPrefix(file, TYPECHECK_ALL_PREFIXES))
@@ -253,11 +269,16 @@ function isSelected(check, files) {
 // `related` paths go through Vitest's import graph; `colocated` are explicit test files, either
 // changed tests under a trigger path or the `<stem>.test.*` / `<stem>.*.test.*` siblings of one.
 export function splitUnitTestInputs(files, listDirectory = () => []) {
-  const related = files.filter(
-    (file) => IMPORTABLE.test(file) && !FULL_SUITE_TRIGGER.test(file) && !isDocsOnlyPath(file)
+  const relatedCandidates = files.filter(
+    (file) => IMPORTABLE.test(file) && !isFullSuiteTrigger(file) && !isDocsOnlyPath(file)
   )
+  const useColocatedFallback = relatedCandidates.length > LOCAL_RELATED_INPUT_LIMIT
+  const related = useColocatedFallback ? [] : relatedCandidates
   const colocated = new Set()
-  for (const file of files.filter((candidate) => FULL_SUITE_TRIGGER.test(candidate))) {
+  const colocatedInputs = useColocatedFallback
+    ? [...files.filter(isFullSuiteTrigger), ...relatedCandidates]
+    : files.filter(isFullSuiteTrigger)
+  for (const file of colocatedInputs) {
     if (UNIT_TEST_FILE.test(file)) {
       colocated.add(file)
       continue

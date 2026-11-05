@@ -143,7 +143,7 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun }) {
         ...(maxWorkers ? [`--maxWorkers=${maxWorkers}`] : [])
       ])
     tasks.push({
-      name: 'unit tests',
+      name: `unit tests (${related.length} related input(s), ${colocated.length} colocated test(s))`,
       steps: [
         step(node, ['config/scripts/ensure-native-runtime.mjs', '--runtime=node']),
         ...(related.length > 0

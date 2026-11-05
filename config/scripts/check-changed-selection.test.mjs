@@ -58,3 +58,32 @@ it('keeps Vitest full-run triggers out of the related set and runs their colocat
     ]
   })
 })
+
+it('keeps high-fanout settings and localization inputs out of local related runs', () => {
+  expect(
+    splitUnitTestInputs([
+      'src/shared/default-global-settings.ts',
+      'src/shared/global-settings-types.ts',
+      'src/renderer/src/i18n/en-runtime-required.json',
+      'src/renderer/src/i18n/locales/en.json',
+      'src/renderer/src/components/settings/AutomationsSettingsPane.tsx'
+    ])
+  ).toEqual({
+    related: ['src/renderer/src/components/settings/AutomationsSettingsPane.tsx'],
+    colocated: []
+  })
+})
+
+it('falls back to changed and colocated tests when related inputs fan out', () => {
+  const sources = Array.from({ length: 13 }, (_, index) => `src/main/feature-${index}.ts`)
+  const listDirectory = (directory) =>
+    directory === 'src/main/' ? ['feature-0.test.ts', 'feature-5.test.ts', 'unrelated.test.ts'] : []
+  expect(splitUnitTestInputs([...sources, 'src/main/changed.test.ts'], listDirectory)).toEqual({
+    related: [],
+    colocated: [
+      'src/main/changed.test.ts',
+      'src/main/feature-0.test.ts',
+      'src/main/feature-5.test.ts'
+    ]
+  })
+})
