@@ -43,6 +43,11 @@ describe('AutomationsSettingsPane', () => {
     await user.click(toggle)
     expect(updateSettings).toHaveBeenCalledWith({ showAutomationsButton: true })
 
+    const unifiedToggle = screen.getByRole('switch', { name: 'Unified Goals list' })
+    expect(unifiedToggle).toHaveAttribute('aria-checked', 'false')
+    await user.click(unifiedToggle)
+    expect(updateSettings).toHaveBeenCalledWith({ unifiedAutomationSurface: true })
+
     const openButton = screen.getByRole('button', { name: /Open Automations/ })
     expect(openButton).toBeEnabled()
     await user.click(openButton)

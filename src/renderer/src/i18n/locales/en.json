@@ -1097,7 +1097,8 @@
     "copy": "Copy",
     "selectAll": "Select All",
     "quitAndStopAllSessions": "Quit Completely...",
-    "quitAndStopAllSessionsTooltip": "Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch."
+    "quitAndStopAllSessionsTooltip": "Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch.",
+    "goals": "Goals"
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -12455,7 +12456,9 @@
           "keywordAutomations": "automations",
           "keywordSchedule": "schedule",
           "keywordAgent": "agent",
-          "keywordRuns": "runs"
+          "keywordRuns": "runs",
+          "unifiedGoals": "Unified Goals list",
+          "unifiedGoalsDescription": "Opt in to the read-only Goals, automations, scripts, and external jobs list."
         },
         "AgentAwakeSetting": {
           "on": "On",
@@ -18218,6 +18221,65 @@
         },
         "automationTargetAvailability": {
           "hostMismatch": "The saved run host no longer matches this project setup."
+        },
+        "unified": {
+          "goals": "Goals",
+          "orgChart": "Org chart",
+          "kindGoal": "Goal",
+          "kindAutomation": "Automation",
+          "kindScript": "Script",
+          "kindExternal": "External",
+          "filterAll": "All",
+          "searchPlaceholder": "Search name, project, source ID…",
+          "searchGoals": "Search Goals",
+          "filterType": "Type",
+          "filterProject": "Project",
+          "filterHost": "Host",
+          "filterOwner": "Owner",
+          "filterMigration": "Migration",
+          "filterScheduleStatus": "Schedule status",
+          "filterLastRun": "Last run",
+          "filterAgent": "Agent",
+          "filterLifecycle": "Lifecycle",
+          "type": {
+            "goal": "Goal",
+            "automation": "Automation",
+            "script": "Script",
+            "external": "External"
+          },
+          "noRuns": "No runs",
+          "timeUnavailable": "Time unavailable",
+          "unscheduled": "Unscheduled",
+          "readOnly": "Read-only",
+          "scriptExecutionUnavailable": "Script execution is unavailable until the reviewed runner contract exists.",
+          "archivedGoalDescription": "Archived Goal metadata remains discoverable without creating a schedule.",
+          "lifecycle": "Lifecycle",
+          "scheduleState": "Schedule state",
+          "host": "Host",
+          "sourceOwner": "Source / owner",
+          "schedulesAndSources": "Schedules and authoritative sources",
+          "noScheduleAttached": "No schedule is attached.",
+          "enabled": "Enabled",
+          "paused": "Paused",
+          "revision": "Revision",
+          "name": "Name",
+          "schedule": "Schedule",
+          "latestRun": "Latest run",
+          "sourceMigration": "Source / migration",
+          "agent": "Agent",
+          "noProject": "No project",
+          "noScheduleOwner": "No schedule owner",
+          "noMatchingItems": "No items match these filters.",
+          "goalsUnavailable": "Goals are unavailable in this Orca build.",
+          "readOnlyPreview": "Read-only preview",
+          "description": "Derived from authoritative stores on refresh. Goals are local-only in this milestone.",
+          "org": "Org",
+          "nativeAutomations": "Native automations",
+          "refresh": "Refresh",
+          "refreshing": "Refreshing authoritative sources…",
+          "itemCount": "{{visible}} of {{total}} items",
+          "orcaSource": "Orca",
+          "typeHeading": "Type"
         }
       },
       "agent": {

@@ -36,6 +36,10 @@ import { listAgentQuotas } from './xos-quota'
 import { xosStopGoalAutomationRun } from './xos-run-gate'
 import { setXosRpcBackend, type XosRpcBackend } from './xos-rpc-backend'
 import { commitProjectHome, isGoalCentral, projectHomeDir } from './xos-project-home'
+import {
+  registerXosUnifiedAutomationHandler,
+  type XosUnifiedAutomationSource
+} from './xos-unified-automation-ipc'
 
 const ART_PREFIX = '/images/admin/ops-cards/'
 const ART_MAX_BYTES = 4 * 1024 * 1024
@@ -204,7 +208,10 @@ function createRpcBackend(repos: XosRepoSource, runtime: OrcaRuntimeService): Xo
   }
 }
 
-export function registerXosGoalHandlers(repos: XosRepoSource, runtime: OrcaRuntimeService): void {
+export function registerXosGoalHandlers(
+  repos: XosUnifiedAutomationSource,
+  runtime: OrcaRuntimeService
+): void {
   setXosRpcBackend(createRpcBackend(repos, runtime))
   adoptNativeRuns()
   startXosQueueRuntime()
@@ -213,6 +220,7 @@ export function registerXosGoalHandlers(repos: XosRepoSource, runtime: OrcaRunti
     rememberProjects(board.projects.map(({ root, name }) => ({ root, name })))
     return board
   })
+  registerXosUnifiedAutomationHandler(repos)
   registerXosGoalCrudHandlers(repos)
   registerXosStudioHandlers(repos)
   registerXosWorkItemHandlers(repos)

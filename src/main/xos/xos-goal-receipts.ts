@@ -58,6 +58,7 @@ export function readRunReceipts(automationsDir: string): Map<string, XosGoalRun[
       continue
     }
     const run: XosGoalRun = {
+      ...(str(entry.run_id) ? { run_id: str(entry.run_id)! } : {}),
       goal,
       runner: str(entry.runner),
       status: str(entry.status) ?? 'unknown',

@@ -5,8 +5,11 @@ import type { XosGoalQueues, XosItemsApi } from './xos-items-types'
 import type { XosPersonaApi } from './xos-persona-types'
 import type { XosPortfolioApi } from './xos-portfolio-types'
 import type { XosRuntimeApi } from './xos-runtime-types'
+import type { UnifiedAutomationSnapshot } from './unified-automation-types'
 
 export type XosGoalRun = {
+  /** Native receipts carry a durable ID; legacy receipts omit it and stay explicitly legacy. */
+  run_id?: string
   goal: string
   runner: string | null
   status: string
@@ -307,6 +310,8 @@ export type XosGoalsApi = XosItemsApi &
   XosPortfolioApi &
   XosRuntimeApi & {
     getBoard: () => Promise<XosGoalBoard>
+    /** Read-only, request-derived projection; authoritative stores remain unchanged. */
+    getUnifiedAutomations: () => Promise<UnifiedAutomationSnapshot>
     mutateCron: (mutation: XosCronMutation) => Promise<XosActionResult>
     runNow: (request: XosRunNowRequest) => Promise<XosActionResult>
     /** Returns a data: URL for a card image under the project's ops-cards folder, or null. */

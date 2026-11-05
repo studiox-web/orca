@@ -20,6 +20,13 @@ function getShortcutPlatform(): NodeJS.Platform {
 
 export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
+    window.api.ui.onOpenGoals?.(() => {
+      window.localStorage.setItem('orca.xos.automationsView', 'goals')
+      useAppStore.getState().openAutomationsPage()
+      window.dispatchEvent(new Event('orca:xos-open-goals'))
+    }) ?? (() => {})
+  )
+  unsubs.push(
     window.api.ui.onOpenSettings(() => {
       useAppStore.getState().openSettingsPage()
     })

@@ -12,9 +12,18 @@ import { useXosGoalActions } from './use-xos-goal-actions'
 import { useXosGoalBoard } from './use-xos-goal-board'
 import './xos-ops-cards.css'
 
-export function XosOrgChartPage({ onShowList }: { onShowList: () => void }): React.JSX.Element {
-  const [prefs, setPrefs] = useState<Prefs>(readPrefs)
-  const [selectedGoal, setSelectedGoal] = useState<string | null>(null)
+export function XosOrgChartPage({
+  onShowList,
+  initialTarget = null
+}: {
+  onShowList: () => void
+  initialTarget?: { projectKey: string; goal: string } | null
+}): React.JSX.Element {
+  const [prefs, setPrefs] = useState<Prefs>(() => {
+    const stored = readPrefs()
+    return initialTarget ? { ...stored, projectKey: initialTarget.projectKey } : stored
+  })
+  const [selectedGoal, setSelectedGoal] = useState<string | null>(initialTarget?.goal ?? null)
   const { board, loading, error, hidden, refresh } = useXosGoalBoard()
   const project = board?.projects.find((candidate) => candidate.key === prefs.projectKey) ?? null
   const selected = project?.goals.find((goal) => goal.goal === selectedGoal) ?? null

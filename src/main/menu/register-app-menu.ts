@@ -31,6 +31,7 @@ type RegisterAppMenuOptions = AppMenuQuitHandlers & {
   onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
+  onOpenGoals: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: UpdateCheckOptions) => void
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
   onZoomIn: () => void
@@ -52,6 +53,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onOpenSetupGuide,
     onOpenFeatureTour,
     onOpenCrashReport,
+    onOpenGoals,
     onCheckForUpdates,
     onBeforeReload,
     onZoomIn,
@@ -244,6 +246,11 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const viewMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.view', 'View'),
     submenu: [
+      {
+        label: translateMain('menu.goals', 'Goals'),
+        click: (_menuItem, window) => onOpenGoals(window)
+      },
+      { type: 'separator' },
       ...createAppMenuReloadAndDevToolsItems({
         forceReloadShortcutLabel: shortcutLabel('app.forceReload'),
         onBeforeReload,
