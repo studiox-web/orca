@@ -1,6 +1,7 @@
 import type { Automation, AutomationRun } from './automations-types'
 import { hostStableKey, ownerKey } from './automation-owner-key'
 import type { AutomationOwnerRef, StableAutomationCatalogRef } from './automation-owner-ref'
+import { parseExecutionHostId } from './execution-host'
 import type { XosCronJob, XosGoalRun } from './xos-goals-types'
 import type {
   UnifiedRunOutcome,
@@ -55,6 +56,24 @@ export function automationAuthority(automation: Automation): {
   capturedOwner: string | null
   host: string
 } {
+  const executionHost = parseExecutionHostId(automation.runContext?.hostId)
+  if (executionHost?.kind === 'runtime') {
+    const stable: StableAutomationCatalogRef = {
+      authority: { kind: 'runtime', environmentId: executionHost.environmentId },
+      selector:
+        automation.executionTargetType === 'ssh'
+          ? { kind: 'ssh', targetId: automation.executionTargetId }
+          : { kind: 'self' }
+    }
+    return {
+      stable,
+      capturedOwner: null,
+      host:
+        stable.selector.kind === 'ssh'
+          ? `${stable.selector.targetId} via ${executionHost.environmentId}`
+          : executionHost.environmentId
+    }
+  }
   if (automation.executionTargetType !== 'ssh') {
     return {
       stable: LOCAL_UNIFIED_AUTHORITY,

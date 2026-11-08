@@ -1,8 +1,8 @@
 import type { Automation, AutomationRun } from './automations-types'
 import { hostStableKey } from './automation-owner-key'
+import { normalizeRuntimePathForComparison } from './cross-platform-path'
 import type { XosAutomationRunConfig } from './xos-runtime-types'
 import type { XosGoalBoard } from './xos-goals-types'
-import { encodeUnifiedAutomationKey } from './unified-automation-identity'
 import {
   archivedGoalRow,
   boundScriptRow,
@@ -21,7 +21,6 @@ import {
   unifiedSourceRef
 } from './unified-automation-source-adapters'
 import type {
-  UnifiedAutomationIdentity,
   UnifiedAutomationRow,
   UnifiedAutomationSnapshot,
   UnifiedAutomationWarning
@@ -93,6 +92,24 @@ function groupedAutomations(automations: readonly Automation[]): Automation[][] 
   )
 }
 
+function activeGoalBindingTarget(
+  rows: ReadonlyMap<string, UnifiedAutomationRow>,
+  binding: NonNullable<XosAutomationRunConfig['goal']>
+): [string, UnifiedAutomationRow] | null {
+  const projectKey = normalizeRuntimePathForComparison(binding.repoRoot)
+  const matches = [...rows.entries()].filter(([, row]) => {
+    const identity = row.identity
+    return (
+      identity.kind === 'goal' &&
+      hostStableKey(identity.authority) === hostStableKey(LOCAL_UNIFIED_AUTHORITY) &&
+      normalizeRuntimePathForComparison(identity.projectKey) === projectKey &&
+      identity.goal === binding.goal &&
+      row.lifecycle.state === 'active'
+    )
+  })
+  return matches.length === 1 ? matches[0] : null
+}
+
 function foldGoalBinding(
   rows: Map<string, UnifiedAutomationRow>,
   automation: Automation,
@@ -103,17 +120,11 @@ function foldGoalBinding(
   if (!config.goal) {
     return false
   }
-  const identity: UnifiedAutomationIdentity = {
-    kind: 'goal',
-    authority: LOCAL_UNIFIED_AUTHORITY,
-    projectKey: config.goal.repoRoot,
-    goal: config.goal.goal
-  }
-  const key = encodeUnifiedAutomationKey(identity)
-  const target = rows.get(key)
-  if (target?.kind !== 'goal' || target.lifecycle.state !== 'active') {
+  const bindingTarget = activeGoalBindingTarget(rows, config.goal)
+  if (!bindingTarget) {
     return false
   }
+  const [key, target] = bindingTarget
   const schedule = nativeSchedule(automation)
   const schedules = [...target.scheduleChildren, schedule]
   rows.set(key, {
@@ -191,6 +202,28 @@ function addNativeRows(
       rows.set(row.key, row)
       continue
     }
+    if (
+      config?.goal &&
+      hostStableKey(automationAuthority(automation).stable) !==
+        hostStableKey(LOCAL_UNIFIED_AUTHORITY)
+    ) {
+      const conflict = {
+        code: 'binding-conflict' as const,
+        message: `Native automation ${automation.id} cannot bind a non-local execution authority to local-only Goal ${config.goal.repoRoot}:${config.goal.goal}.`
+      }
+      warnings.push(conflict)
+      const target = activeGoalBindingTarget(rows, config.goal)
+      if (target) {
+        rows.set(target[0], {
+          ...target[1],
+          migrationState: 'conflict',
+          warnings: [...target[1].warnings, conflict]
+        })
+      }
+      const row = nativeAutomationRow(automation, latest, [...duplicateWarnings, conflict])
+      rows.set(row.key, row)
+      continue
+    }
     if (foldGoalBinding(rows, automation, latest, config ?? {}, duplicateWarnings)) {
       continue
     }
@@ -230,15 +263,9 @@ function addStaleBindingWarnings(
     }
     warnings.push(warning)
     if (config.goal) {
-      const key = encodeUnifiedAutomationKey({
-        kind: 'goal',
-        authority: LOCAL_UNIFIED_AUTHORITY,
-        projectKey: config.goal.repoRoot,
-        goal: config.goal.goal
-      })
-      const target = rows.get(key)
+      const target = activeGoalBindingTarget(rows, config.goal)
       if (target) {
-        rows.set(key, { ...target, warnings: [...target.warnings, warning] })
+        rows.set(target[0], { ...target[1], warnings: [...target[1].warnings, warning] })
       }
     }
   }
@@ -272,7 +299,7 @@ export function buildUnifiedAutomationSnapshot(
       runtimeBindings: sourceRevision(
         Object.entries(input.runConfigs).map(
           ([id, config]) =>
-            `${id}:${config.goal?.repoRoot ?? ''}:${config.goal?.goal ?? ''}:${config.script ? 'script' : ''}`
+            `${id}:${config.goal ? normalizeRuntimePathForComparison(config.goal.repoRoot) : ''}:${config.goal?.goal ?? ''}:${config.script ? 'script' : ''}`
         )
       )
     },

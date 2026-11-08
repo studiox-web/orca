@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Automation, AutomationRun } from './automations-types'
+import { toRuntimeExecutionHostId } from './execution-host'
 import type { XosAutomationRunConfig } from './xos-runtime-types'
 import type { XosCronJob, XosGoal, XosGoalBoard, XosProject } from './xos-goals-types'
 import {
@@ -244,6 +245,39 @@ describe('unified automation read model', () => {
     expect(folded.sourceRefs.map((ref) => ref.sourceId)).toContain('bound')
   })
 
+  it('canonicalizes equivalent project roots without fuzzy Goal matching', () => {
+    const config = (repoRoot: string) => ({
+      ...emptyConfig(),
+      goal: { repoRoot, goal: 'writer' }
+    })
+    const posix = snapshot({
+      board: board({ projects: [project({ key: '/repo/', root: '/repo/' })] }),
+      automations: [automation('posix-root')],
+      runConfigs: { 'posix-root': config('/repo') }
+    })
+    const posixTrailing = snapshot({
+      board: board({ projects: [project({ key: '/repo/', root: '/repo/' })] }),
+      automations: [automation('posix-root')],
+      runConfigs: { 'posix-root': config('/repo/') }
+    })
+    const windows = snapshot({
+      board: board({ projects: [project({ key: 'C:\\Repo\\', root: 'C:\\Repo\\' })] }),
+      automations: [automation('windows-root')],
+      runConfigs: { 'windows-root': config('c:/repo') }
+    })
+    const caseMismatch = snapshot({
+      board: board({ projects: [project({ key: '/repo/', root: '/repo/' })] }),
+      automations: [automation('case-mismatch')],
+      runConfigs: { 'case-mismatch': config('/Repo') }
+    })
+
+    expect(posix.rows.filter((row) => row.kind === 'automation')).toHaveLength(0)
+    expect(posixTrailing).toEqual(posix)
+    expect(windows.rows.filter((row) => row.kind === 'automation')).toHaveLength(0)
+    expect(caseMismatch.rows.filter((row) => row.kind === 'automation')).toHaveLength(1)
+    expect(caseMismatch.warnings.map((warning) => warning.code)).toContain('binding-target-missing')
+  })
+
   it('keeps multiple schedules and lifecycle, schedule state, and run outcome separate', () => {
     const active = goal({
       status: { status: 'completed' },
@@ -262,6 +296,22 @@ describe('unified automation read model', () => {
     expect(row.scheduleChildren).toHaveLength(2)
     expect(row.lifecycle).toEqual({ state: 'active', stage: 'completed' })
     expect(row.scheduleState).toBe('mixed')
+    expect(row.runSummary?.outcome).toBe('failed')
+  })
+
+  it('leaves Goal stage unknown when only result and latest-run outcome exist', () => {
+    const current = goal({
+      status: { result: 'failed' },
+      result: 'failed',
+      viewer: {
+        ...goal().viewer,
+        contractStatus: 'failed',
+        latestRun: { ...goal().viewer.latestRun!, status: 'failed' }
+      }
+    })
+    const row = snapshot({ board: board({ projects: [project({ goals: [current] })] }) }).rows[0]
+
+    expect(row.lifecycle).toEqual({ state: 'active', stage: null })
     expect(row.runSummary?.outcome).toBe('failed')
   })
 
@@ -381,6 +431,46 @@ describe('unified automation read model', () => {
     expect(nativeRows).toHaveLength(2)
     expect(nativeRows.every((row) => row.warnings[0]?.code === 'binding-conflict')).toBe(true)
     expect(new Set(nativeRows.map((row) => row.key)).size).toBe(2)
+  })
+
+  it.each([
+    [
+      'SSH',
+      {
+        executionTargetType: 'ssh' as const,
+        executionTargetId: 'build-host',
+        executionTargetGeneration: 2
+      }
+    ],
+    [
+      'runtime',
+      {
+        schedulerOwner: 'remote_host_service' as const,
+        runContext: {
+          ...automation('runtime').runContext!,
+          hostId: toRuntimeExecutionHostId('server-1')
+        }
+      }
+    ]
+  ])('keeps a %s-targeted Goal binding separate from the local Goal', (_, overrides) => {
+    const remote = automation('remote-bound', overrides)
+    const result = snapshot({
+      automations: [remote],
+      runConfigs: {
+        'remote-bound': {
+          ...emptyConfig(),
+          goal: { repoRoot: '/repo/', goal: 'writer' }
+        }
+      }
+    })
+
+    const goalRow = result.rows.find((row) => row.kind === 'goal')!
+    const nativeRow = result.rows.find((row) => row.kind === 'automation')!
+    expect(goalRow.scheduleChildren.map((child) => child.owner)).toEqual(['legacy-cron'])
+    expect(goalRow.warnings.map((warning) => warning.code)).toContain('binding-conflict')
+    expect(nativeRow.warnings.map((warning) => warning.code)).toContain('binding-conflict')
+    expect(nativeRow.migrationState).toBe('conflict')
+    expect(result.warnings.map((warning) => warning.code)).toContain('binding-conflict')
   })
 
   it('marks legacy Goal receipts without IDs and never collides duplicate cron lines', () => {

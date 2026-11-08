@@ -21,7 +21,7 @@ import type {
 } from './unified-automation-types'
 
 function goalStage(goal: XosGoal): string | null {
-  return goal.status.status?.trim() || goal.status.result?.trim() || null
+  return goal.status.status?.trim() || null
 }
 
 export function goalBaseRow(
