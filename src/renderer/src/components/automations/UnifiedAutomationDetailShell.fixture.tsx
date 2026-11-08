@@ -39,6 +39,7 @@ const row: UnifiedAutomationRow = {
   name: 'Nightly review',
   project: 'Orca',
   projectKey: '/projects/orca',
+  area: { id: 'operations', title: 'Operations' },
   host: 'This device',
   owner: 'Goal files + legacy cron + Orca',
   lifecycle: { state: 'active', stage: 'Ready' },

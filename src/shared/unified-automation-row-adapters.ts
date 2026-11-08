@@ -1,4 +1,5 @@
 import type { Automation } from './automations-types'
+import { runtimePathDisplayName } from './cross-platform-path'
 import { isTuiAgent } from './tui-agent-config'
 import type { XosAutomationRunConfig } from './xos-runtime-types'
 import type { XosCronJob, XosGoal, XosProject } from './xos-goals-types'
@@ -62,6 +63,7 @@ export function goalBaseRow(
     name: goal.title,
     project: project.name,
     projectKey: project.key,
+    area: { id: goal.area.id, title: goal.area.title },
     host: 'This device (local-only Goals)',
     owner: schedules.length > 0 ? 'Goal files + legacy cron' : 'Goal files',
     lifecycle: { state: 'active', stage: goalStage(goal) },
@@ -102,6 +104,7 @@ export function archivedGoalRow(
     name: archived.title,
     project: project.name,
     projectKey: project.key,
+    area: null,
     host: 'This device (local-only Goals)',
     owner: 'Archived Goal files',
     lifecycle: { state: 'archived', stage: null },
@@ -144,6 +147,7 @@ export function cronScriptRow(
     name: job.name,
     project: project?.name ?? null,
     projectKey: project?.key ?? null,
+    area: null,
     host: 'This device',
     owner: 'Legacy cron',
     lifecycle: { state: 'present', stage: 'Legacy definition' },
@@ -173,7 +177,8 @@ export function cronScriptRow(
 export function nativeAutomationRow(
   automation: Automation,
   latest: UnifiedAttributedAutomationRun | undefined,
-  warnings: UnifiedAutomationWarning[] = []
+  warnings: UnifiedAutomationWarning[] = [],
+  project: XosProject | null = null
 ): UnifiedAutomationRow {
   const authority = automationAuthority(automation)
   const identity: UnifiedAutomationIdentity = {
@@ -187,8 +192,13 @@ export function nativeAutomationRow(
     identity,
     kind: 'automation',
     name: automation.name,
-    project: automation.runContext?.path ?? automation.projectId ?? null,
-    projectKey: automation.runContext?.projectId ?? automation.projectId ?? null,
+    project:
+      project?.name ??
+      runtimePathDisplayName(automation.runContext?.path) ??
+      automation.projectId ??
+      null,
+    projectKey: project?.key ?? automation.runContext?.path ?? automation.projectId ?? null,
+    area: null,
     host: authority.host,
     owner: 'Orca',
     lifecycle: { state: 'present', stage: 'Native definition' },
@@ -206,7 +216,8 @@ export function nativeAutomationRow(
 export function boundScriptRow(
   automation: Automation,
   latest: UnifiedAttributedAutomationRun | undefined,
-  config: XosAutomationRunConfig
+  config: XosAutomationRunConfig,
+  project: XosProject | null = null
 ): UnifiedAutomationRow {
   const authority = automationAuthority(automation)
   const identity: UnifiedAutomationIdentity = {
@@ -228,8 +239,10 @@ export function boundScriptRow(
     identity,
     kind: 'script',
     name: automation.name,
-    project: config.script?.cwd ?? null,
-    projectKey: config.script?.cwd ?? null,
+    project:
+      project?.name ?? runtimePathDisplayName(config.script?.cwd) ?? automation.projectId ?? null,
+    projectKey: project?.key ?? config.script?.cwd ?? null,
+    area: null,
     host: authority.host,
     owner: 'Orca Script binding',
     lifecycle: { state: 'present', stage: 'Bound definition' },

@@ -18005,7 +18005,8 @@
           "all": "All",
           "clear": "Clear filters",
           "agent": "Agent",
-          "lastRun": "Last run"
+          "lastRun": "Last run",
+          "clearAll": "Clear all filters"
         },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, sorted ascending",
@@ -18350,7 +18351,10 @@
               "sourceMissing": "source missing",
               "sourceStale": "source stale",
               "capabilityUnknown": "capability unknown"
-            }
+            },
+            "projectKey": "Project key / path",
+            "area": "Area / department",
+            "noArea": "Project-level / unassigned"
           },
           "createDialog": {
             "title": "Create",
@@ -18376,7 +18380,26 @@
             "openGoalWorkspace": "Open Goal workspace",
             "continueGoal": "Continue to Goal details",
             "goalsUnavailable": "Local Goal projects are unavailable in this build."
-          }
+          },
+          "allHosts": "All hosts",
+          "allSources": "All sources",
+          "allMigrationStates": "All states",
+          "allScheduleStates": "All states",
+          "allRunOutcomes": "All outcomes",
+          "allAgents": "All agents",
+          "activeFilters": "Active filters",
+          "searchPlaceholderWithArea": "Search name, project, area, source ID…",
+          "allTypes": "All types",
+          "allProjects": "All projects",
+          "lifecycleCurrent": "Current",
+          "lifecycleArchived": "Archived",
+          "groupBy": "Group",
+          "noGrouping": "No grouping",
+          "groupProjectArea": "Project & area",
+          "groupProject": "Project",
+          "sourceNotices": "{{count}} source notices",
+          "title": "Automations & Goals",
+          "derivedList": "Derived list"
         }
       },
       "agent": {

@@ -65,6 +65,7 @@ function row(
     name: 'Nightly review',
     project: 'Orca',
     projectKey: '/projects/orca',
+    area: null,
     host: 'This device',
     owner: 'Goal files',
     lifecycle: { state: 'active', stage: 'Ready' },
@@ -130,6 +131,7 @@ describe('UnifiedAutomationDetailShell', () => {
     const current = row(
       { kind: 'goal', authority: local, projectKey: '/projects/orca', goal: 'review' },
       {
+        area: { id: 'editorial', title: 'Editorial' },
         scheduleState: 'mixed',
         scheduleChildren: [
           schedule('cron', 'legacy-cron', '0 5 * * *', cronSource),
@@ -150,6 +152,8 @@ describe('UnifiedAutomationDetailShell', () => {
     const callbacks = renderShell(current)
 
     expect(screen.getByRole('heading', { name: 'Nightly review' })).toBeInTheDocument()
+    expect(screen.getByText('Editorial')).toBeVisible()
+    expect(screen.getAllByText('/projects/orca').length).toBeGreaterThan(0)
     expect(screen.getByText('0 5 * * *')).toBeVisible()
     expect(screen.getByText('FREQ=DAILY;BYHOUR=6')).toBeVisible()
     expect(screen.getAllByText('native-automation').length).toBeGreaterThan(0)

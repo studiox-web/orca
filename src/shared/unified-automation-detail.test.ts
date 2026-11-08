@@ -43,6 +43,7 @@ function row(
     name: key,
     project: null,
     projectKey: identity.kind === 'goal' ? identity.projectKey : null,
+    area: null,
     host: 'test host',
     owner: 'test owner',
     lifecycle: { state: 'present', stage: null },

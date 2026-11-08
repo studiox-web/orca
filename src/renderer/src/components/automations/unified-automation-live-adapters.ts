@@ -9,6 +9,7 @@ import type {
   UnifiedRunOutcome
 } from '../../../../shared/unified-automation-types'
 import { encodeUnifiedAutomationKey } from '../../../../shared/unified-automation-identity'
+import { runtimePathDisplayName } from '../../../../shared/cross-platform-path'
 import { automationAuthority } from '../../../../shared/unified-automation-source-adapters'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
@@ -73,6 +74,7 @@ export function adaptLiveAutomationRow(
     name: row.automation.name,
     project,
     projectKey: row.automation.runContext?.projectId ?? row.automation.projectId ?? null,
+    area: null,
     host: row.hostLabel || 'This device',
     owner: 'Orca',
     lifecycle: { state: 'present', stage: 'Native definition' },
@@ -177,8 +179,9 @@ export function adaptLiveExternalRow(entry: ExternalAutomationListEntry): Unifie
     identity,
     kind: 'external',
     name: entry.job.name,
-    project: entry.job.workdir,
+    project: runtimePathDisplayName(entry.job.workdir),
     projectKey: entry.job.workdir,
+    area: null,
     host: entry.manager.targetLabel || entry.manager.label,
     owner: entry.manager.label || entry.job.provider,
     lifecycle: { state: 'present', stage: entry.job.state || null },

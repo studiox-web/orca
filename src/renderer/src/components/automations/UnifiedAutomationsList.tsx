@@ -16,11 +16,13 @@ import type {
 import type { AutomationsPageController } from './use-automations-page-controller'
 import {
   filterUnifiedAutomationRows,
+  hasActiveUnifiedAutomationFilters,
   INITIAL_UNIFIED_AUTOMATION_FILTERS,
-  UnifiedAutomationListFilters,
   type UnifiedAutomationFilterState
-} from './UnifiedAutomationListFilters'
+} from './unified-automation-filter-model'
+import { UnifiedAutomationListFilters } from './UnifiedAutomationListFilters'
 import { UnifiedAutomationListRows } from './UnifiedAutomationListRows'
+import type { UnifiedAutomationGroupMode } from './unified-automation-grouping'
 import { UnifiedAutomationDetailShell } from './UnifiedAutomationDetailShell'
 import {
   adaptLiveAutomationRow,
@@ -97,6 +99,7 @@ export function UnifiedAutomationsList({
   const [filters, setFilters] = React.useState<UnifiedAutomationFilterState>(
     INITIAL_UNIFIED_AUTOMATION_FILTERS
   )
+  const [groupMode, setGroupMode] = React.useState<UnifiedAutomationGroupMode>('project-area')
   const [detail, setDetail] = React.useState<{
     selection: UnifiedDetailSelection
     lastKnownRow: UnifiedAutomationRow
@@ -274,13 +277,16 @@ export function UnifiedAutomationsList({
           <div className="flex items-center gap-2">
             <Target className="size-5 text-muted-foreground" />
             <h1 className="text-lg font-semibold">
-              {translate('auto.components.automations.unified.goals', 'Goals')}
+              {translate('auto.components.automations.unified.title', 'Automations & Goals')}
             </h1>
-            <Badge variant="secondary">
-              {translate(
+            <Badge
+              variant="secondary"
+              title={translate(
                 'auto.components.automations.unified.readOnlyPreview',
                 'Read-only preview'
               )}
+            >
+              {translate('auto.components.automations.unified.derivedList', 'Derived list')}
             </Badge>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -324,8 +330,10 @@ export function UnifiedAutomationsList({
         rows={rows}
         query={query}
         filters={filters}
+        groupMode={groupMode}
         onQueryChange={setQuery}
         onFiltersChange={setFilters}
+        onGroupModeChange={setGroupMode}
       />
       {error ? (
         <p className="mb-3 rounded-md border border-destructive/40 p-3 text-sm text-destructive">
@@ -346,7 +354,13 @@ export function UnifiedAutomationsList({
           {controller.list.externalManagersUncheckedNotice}
         </p>
       ) : null}
-      <UnifiedAutomationListRows rows={visibleRows} loading={loading} onOpen={openRow} />
+      <UnifiedAutomationListRows
+        rows={visibleRows}
+        loading={loading}
+        groupMode={groupMode}
+        forceExpanded={Boolean(query.trim()) || hasActiveUnifiedAutomationFilters(filters)}
+        onOpen={openRow}
+      />
       <p className="mt-2 text-xs text-muted-foreground">
         {loading
           ? translate(

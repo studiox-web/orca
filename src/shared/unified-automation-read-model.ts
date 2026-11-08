@@ -4,6 +4,7 @@ import type { StableAutomationCatalogRef } from './automation-owner-ref'
 import { normalizeRuntimePathForComparison } from './cross-platform-path'
 import type { XosAutomationRunConfig } from './xos-runtime-types'
 import type { XosGoalBoard } from './xos-goals-types'
+import { exactUnifiedBoardProject } from './unified-automation-project-placement'
 import {
   groupedAutomations,
   latestRunsByAutomationAuthority,
@@ -171,13 +172,18 @@ function addNativeRows(
         : []
     const sourceWarnings = [...duplicateWarnings, ...attributionWarnings]
     const latest = latestRuns.get(qualifiedAutomationKey(authority, automation.id))
+    const project = exactUnifiedBoardProject(input.board, [
+      automation.runContext?.path,
+      config?.goal?.repoRoot,
+      config?.script?.cwd
+    ])
     if (config?.goal && config?.script) {
       const conflict = {
         code: 'binding-conflict' as const,
         message: `Native automation ${automation.id} is bound to both a Goal and a Script.`
       }
       warnings.push(conflict)
-      const row = nativeAutomationRow(automation, latest, [...sourceWarnings, conflict])
+      const row = nativeAutomationRow(automation, latest, [...sourceWarnings, conflict], project)
       rows.set(row.key, row)
       continue
     }
@@ -199,7 +205,7 @@ function addNativeRows(
           warnings: [...target[1].warnings, conflict]
         })
       }
-      const row = nativeAutomationRow(automation, latest, [...sourceWarnings, conflict])
+      const row = nativeAutomationRow(automation, latest, [...sourceWarnings, conflict], project)
       rows.set(row.key, row)
       continue
     }
@@ -212,13 +218,13 @@ function addNativeRows(
         message: `Goal binding ${config.goal.repoRoot}:${config.goal.goal} has no active exact target.`
       }
       warnings.push(missing)
-      const row = nativeAutomationRow(automation, latest, [...sourceWarnings, missing])
+      const row = nativeAutomationRow(automation, latest, [...sourceWarnings, missing], project)
       rows.set(row.key, row)
       continue
     }
     const row = config?.script
-      ? boundScriptRow(automation, latest, config)
-      : nativeAutomationRow(automation, latest, sourceWarnings)
+      ? boundScriptRow(automation, latest, config, project)
+      : nativeAutomationRow(automation, latest, sourceWarnings, project)
     rows.set(row.key, {
       ...row,
       warnings: config?.script ? [...row.warnings, ...sourceWarnings] : row.warnings

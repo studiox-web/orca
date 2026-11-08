@@ -121,6 +121,7 @@ export type UnifiedAutomationRow = {
   name: string
   project: string | null
   projectKey: string | null
+  area: { id: string; title: string } | null
   host: string
   owner: string
   lifecycle: UnifiedLifecycle

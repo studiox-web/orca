@@ -269,6 +269,15 @@ describe('unified automation identity', () => {
 })
 
 describe('unified automation read model', () => {
+  it('preserves exact Goal area placement and canonicalizes an exact native project path', () => {
+    const result = snapshot({ automations: [automation('native')] })
+    const goalRow = result.rows.find((row) => row.kind === 'goal')
+    const nativeRow = result.rows.find((row) => row.kind === 'automation')
+
+    expect(goalRow?.area).toEqual({ id: 'editorial', title: 'Editorial' })
+    expect(nativeRow).toMatchObject({ project: 'Repo', projectKey: '/repo', area: null })
+  })
+
   it('folds only an exact Goal binding and stays deterministic after source reordering', () => {
     const bound = automation('bound', { name: 'Writer native' })
     const sameName = automation('same-name', { name: 'Writer' })

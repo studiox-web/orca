@@ -234,8 +234,23 @@ export function UnifiedAutomationDetailShell({
             [
               translate('auto.components.automations.unified.detail.project', 'Project'),
               row.project ??
-                row.projectKey ??
                 translate('auto.components.automations.unified.detail.noProject', 'No project')
+            ],
+            [
+              translate(
+                'auto.components.automations.unified.detail.projectKey',
+                'Project key / path'
+              ),
+              row.projectKey ??
+                translate('auto.components.automations.unified.detail.unavailable', 'Unavailable')
+            ],
+            [
+              translate('auto.components.automations.unified.detail.area', 'Area / department'),
+              row.area?.title ??
+                translate(
+                  'auto.components.automations.unified.detail.noArea',
+                  'Project-level / unassigned'
+                )
             ],
             [
               translate('auto.components.automations.unified.detail.lifecycle', 'Lifecycle'),
