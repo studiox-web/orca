@@ -2,6 +2,7 @@ import type { AutomationService } from '../automations/service'
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import { mainProcessState as state } from './main-process-state'
 import { registerXosGoalHandlers } from '../xos/xos-goal-ipc'
+import { xosOwnsHeadlessSchedules } from '../xos/xos-scheduler-owner'
 
 export function initializeMainProcessAutomations(): AutomationService {
   const store = state.store
@@ -16,8 +17,8 @@ export function initializeMainProcessAutomations(): AutomationService {
     runtime,
     claudeUsage,
     codexUsage,
-    // Remote clients mirror schedules; only server processes execute remote_host_service ownership.
-    headless: state.isServeMode
+    // XOS local desktop explicitly succeeds the same profile owner; remote clients remain mirrors.
+    headless: xosOwnsHeadlessSchedules(state.isServeMode)
   })
   state.automations = service
   // XOS fork: Automations → Org chart board over legacy goal folders and crontab.

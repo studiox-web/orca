@@ -1,48 +1,51 @@
 #!/usr/bin/env bash
-# Open the Orca (XOS) desktop app when the headless service may hold the profile.
-# The desktop and orcad share one profile lock, so: stop the service, launch the app,
-# wait for the app to take the lock, then start the service again. The service waits in
-# standby while the app runs and takes over the scheduler within a minute of the app quitting.
-set -uo pipefail
+# Never stop a profile owner from a menu launch: it may have work in flight.
+set -euo pipefail
 
 APPIMAGE="${ORCA_XOS_APPIMAGE:-$HOME/Applications/Orca-XOS.AppImage}"
 LOCK="${ORCA_USER_DATA_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/orca}/orcad.lock"
-UNIT=orca-xos-serve.service
 
-lock_role() {
-  # Prints the role of a live lock holder (desktop/orcad), or nothing when the lock is free.
-  [[ -f "$LOCK" ]] || return 0
-  local pid role
-  pid="$(sed -n 's/.*"pid":\([0-9]*\).*/\1/p' "$LOCK")"
-  role="$(sed -n 's/.*"role":"\([a-z]*\)".*/\1/p' "$LOCK")"
-  [[ -n "$pid" && -d "/proc/$pid" ]] && echo "${role:-orcad}"
+refuse() {
+  printf 'Orca XOS: %s\n' "$1" >&2
+  if [[ "${ORCA_BACKGROUND_LAUNCH:-}" != 1 ]] && command -v notify-send >/dev/null; then
+    notify-send 'Orca XOS could not open' "$1" || true
+  fi
+  exit 75
 }
 
-if [[ "$(lock_role)" == "desktop" ]]; then
-  # Already open: hand the activation to the running app.
-  exec "$APPIMAGE" "$@"
+[[ -x "$APPIMAGE" ]] || { printf 'Missing executable: %s\n' "$APPIMAGE" >&2; exit 1; }
+if [[ -f "$LOCK" ]]; then
+  # JSON parsing and process identity checks fail closed; never delete another owner's lock.
+  mode="$(python3 - "$LOCK" <<'PY'
+import json, pathlib, sys
+try:
+    lock = json.loads(pathlib.Path(sys.argv[1]).read_text())
+    pid = lock['pid']
+    if type(pid) is not int or pid <= 0:
+        raise ValueError('invalid pid')
+    proc = pathlib.Path('/proc') / str(pid)
+    if not proc.exists():
+        print('free')
+    else:
+        boot = pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+        ticks = proc.joinpath('stat').read_text().rsplit(')', 1)[1].split()[19]
+        if lock.get('bootId') != boot or str(lock.get('linuxStartTicks')) != ticks:
+            print('unknown')
+        else:
+            argv = proc.joinpath('cmdline').read_bytes().split(b'\0')
+            print('serve' if b'--serve' in argv or lock.get('role') == 'orcad' else
+                  'desktop' if lock.get('role') == 'desktop' else 'unknown')
+except (OSError, ValueError, KeyError):
+    print('unknown')
+PY
+)" || refuse 'Cannot verify the profile owner. Existing work was left running.'
+  case "$mode" in
+    serve) refuse 'The background runtime owns this profile and may have active jobs. Its window can be on a virtual display. Finish or safely stop its work before switching to the desktop; no service was stopped.' ;;
+    desktop|free) ;;
+    *) refuse 'Cannot verify the profile owner. Existing work was left running.' ;;
+  esac
 fi
 
-if systemctl --user is-active --quiet "$UNIT"; then
-  systemctl --user stop "$UNIT"
-fi
-for _ in $(seq 1 100); do
-  [[ -z "$(lock_role)" ]] && break
-  sleep 0.2
-done
-
-setsid nohup "$APPIMAGE" "$@" >/dev/null 2>&1 </dev/null &
-
-# Restart the service only once the desktop owns the lock, so the two never race for it.
-(
-  for _ in $(seq 1 300); do
-    if [[ "$(lock_role)" == "desktop" ]]; then
-      systemctl --user start "$UNIT"
-      exit 0
-    fi
-    sleep 0.5
-  done
-  # The app never took the lock (closed or failed): bring the scheduler back anyway.
-  systemctl --user start "$UNIT"
-) >/dev/null 2>&1 &
-disown
+# The profile lock still arbitrates races with the supervisor. Desktop owns the same scheduler.
+export ORCA_XOS_LOCAL_SCHEDULER=1
+exec "$APPIMAGE" "$@"

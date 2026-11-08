@@ -88,3 +88,24 @@ Nothing here turns itself on. See `xos/PLAN.md` §4c.
 | `orca usage limits`                                                      | Live quota per agent, as Auto mode sees it                       |
 
 Status and remaining work: `xos/PLAN.md` §4a–4c and `xos/audit-ledger-5716fed3b9.md`.
+
+## Desktop / background runtime safety
+
+The XOS desktop launcher checks the live owner's identity and command line, not just the
+`desktop` lock role (Electron `--serve` also uses that role). A server may be rendering on
+Xvfb, so forwarding an activation is not proof of a visible desktop. The launcher now refuses
+that case with a notification and exit 75. It never stops the service or deletes a lock.
+Finish or explicitly arrange a safe stop of background work before switching displays.
+Checking a job list and then killing the service is not an atomic handoff and is not supported.
+
+With the profile free, the launcher starts the desktop with `ORCA_XOS_LOCAL_SCHEDULER=1`.
+That explicit Linux-only option lets the local profile owner continue `remote_host_service`
+schedules through the headless dispatcher. The profile lock still prevents two writers.
+Ordinary desktops and paired remote clients do not opt in. Keep the supervisor running in
+standby so it can resume after the desktop exits; no automation records are rewritten.
+
+`xos/build.sh` builds the application, not the installed shell launcher. The launcher changes
+live in `xos/orcad/orca-xos-desktop.sh`; review and copy that file separately when deploying.
+Do not run the installer merely to update the launcher: it also enables the service/linger.
+An already-running old runtime cannot be upgraded or moved off Xvfb by building a new image.
+A fully automatic idle handoff needs a runtime-level quiescence protocol and is not implemented.

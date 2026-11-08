@@ -15,6 +15,22 @@ const electronBuilderConfig = require('../electron-builder.config.cjs')
 const { copyFiles, FileMatcher } = require('app-builder-lib/out/fileMatcher')
 
 describe('electron-builder config', () => {
+  it('excludes old build outputs and local tooling with an alternate output directory', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    for (const localPath of [
+      'dist/orca-linux.AppImage',
+      'dist/linux-unpacked/resources/app.asar',
+      '.tmp/check.log',
+      '.cache/local-data.json',
+      '.mcp.json'
+    ]) {
+      expect(isPacked(join('/app', localPath), { isDirectory: () => false }), localPath).toBe(false)
+    }
+    expect(isPacked('/app/out/main/index.js', { isDirectory: () => false })).toBe(true)
+  })
+
   it.each(['file', 'directory'])('keeps a root notes %s out of app.asar', async (kind) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-packaging-notes-'))
     const source = join(root, 'app')
