@@ -648,5 +648,17 @@ describe('unified automation read model', () => {
       'legacy-cron',
       'orca'
     ])
+    expect(scripts.find((row) => row.owner === 'Legacy cron')?.scriptEvidence).toEqual({
+      provenance: 'legacy-cron',
+      command: 'backup --all',
+      cwd: '/repo',
+      replacesCronCommand: null
+    })
+    expect(scripts.find((row) => row.owner === 'Orca Script binding')?.scriptEvidence).toEqual({
+      provenance: 'runtime-binding',
+      command: 'backup --all',
+      cwd: '/repo',
+      replacesCronCommand: 'backup --all'
+    })
   })
 })

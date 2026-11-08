@@ -2,7 +2,6 @@ import React from 'react'
 import {
   Archive,
   CalendarClock,
-  ChevronLeft,
   CircleAlert,
   Plug,
   ScrollText,
@@ -11,10 +10,8 @@ import {
 } from 'lucide-react'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import { hostStableKey } from '../../../../shared/automation-owner-key'
 import type {
   UnifiedAutomationKind,
   UnifiedAutomationRow
@@ -62,120 +59,6 @@ function scheduleLabel(row: UnifiedAutomationRow): string {
     return translate('auto.components.automations.unified.unscheduled', 'Unscheduled')
   }
   return `${first.expression}${row.scheduleChildren.length > 1 ? ` +${row.scheduleChildren.length - 1}` : ''}`
-}
-
-export function UnifiedAutomationReadOnlyDetail({
-  row,
-  onBack
-}: {
-  row: UnifiedAutomationRow
-  onBack: () => void
-}): React.JSX.Element {
-  return (
-    <main className="scrollbar-sleek h-full overflow-y-auto bg-background px-4 pb-10 pt-5 text-foreground md:px-6 md:pt-6">
-      <div className="mx-auto max-w-5xl space-y-5">
-        <Button type="button" variant="ghost" size="sm" onClick={onBack}>
-          <ChevronLeft className="size-4" />
-          {translate('auto.components.automations.unified.goals', 'Goals')}
-        </Button>
-        <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-          {typeIcon(row.kind)}
-          <Badge variant="outline">{typeLabel(row.kind)}</Badge>
-          <Badge variant="secondary">
-            {translate('auto.components.automations.unified.readOnly', 'Read-only')}
-          </Badge>
-        </div>
-        <h1 className="text-xl font-semibold">{row.name}</h1>
-        <p className="text-sm text-muted-foreground">
-          {row.kind === 'script'
-            ? translate(
-                'auto.components.automations.unified.scriptExecutionUnavailable',
-                'Script execution is unavailable until the reviewed runner contract exists.'
-              )
-            : translate(
-                'auto.components.automations.unified.archivedGoalDescription',
-                'Archived Goal metadata remains discoverable without creating a schedule.'
-              )}
-        </p>
-        <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {[
-            [
-              translate('auto.components.automations.unified.lifecycle', 'Lifecycle'),
-              `${row.lifecycle.state}${row.lifecycle.stage ? ` · ${row.lifecycle.stage}` : ''}`
-            ],
-            [
-              translate('auto.components.automations.unified.scheduleState', 'Schedule state'),
-              row.scheduleState
-            ],
-            [translate('auto.components.automations.unified.host', 'Host'), row.host],
-            [
-              translate('auto.components.automations.unified.sourceOwner', 'Source / owner'),
-              row.owner
-            ]
-          ].map(([label, value]) => (
-            <div
-              key={label}
-              className="rounded-xl border bg-card p-4 text-card-foreground shadow-xs"
-            >
-              <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {label}
-              </p>
-              <p className="mt-1 text-sm">{value}</p>
-            </div>
-          ))}
-        </section>
-        <section className="rounded-xl border bg-card p-4 shadow-xs">
-          <h2 className="text-sm font-semibold">
-            {translate(
-              'auto.components.automations.unified.schedulesAndSources',
-              'Schedules and authoritative sources'
-            )}
-          </h2>
-          <div className="mt-3 space-y-3">
-            {row.scheduleChildren.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.automations.unified.noScheduleAttached',
-                  'No schedule is attached.'
-                )}
-              </p>
-            ) : (
-              row.scheduleChildren.map((schedule) => (
-                <div key={schedule.key} className="rounded-md border p-3 text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{schedule.owner}</Badge>
-                    <Badge variant="secondary">{schedule.format}</Badge>
-                    <span>
-                      {schedule.enabled
-                        ? translate('auto.components.automations.unified.enabled', 'Enabled')
-                        : translate('auto.components.automations.unified.paused', 'Paused')}
-                    </span>
-                  </div>
-                  <p className="mt-2 font-mono text-xs">{schedule.expression}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{schedule.timezoneLabel}</p>
-                </div>
-              ))
-            )}
-            {row.sourceRefs.map((source) => (
-              <div
-                key={`${source.kind}:${hostStableKey(source.authority)}:${source.sourceId}:${source.revision ?? ''}:${source.ownerKey ?? ''}`}
-                className="flex flex-wrap gap-2 text-xs text-muted-foreground"
-              >
-                <span>{source.label}</span>
-                <span className="font-mono">{source.sourceId}</span>
-                {source.revision ? (
-                  <span>
-                    {translate('auto.components.automations.unified.revision', 'Revision')}{' '}
-                    {source.revision}
-                  </span>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    </main>
-  )
 }
 
 export function UnifiedAutomationListRows({

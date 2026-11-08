@@ -6,7 +6,10 @@ import type {
   UnifiedSourceRef
 } from './unified-automation-types'
 
-export type UnifiedDetailRow = Pick<UnifiedAutomationRow, 'key' | 'identity' | 'sourceRefs'>
+export type UnifiedDetailRow = Pick<
+  UnifiedAutomationRow,
+  'key' | 'identity' | 'sourceRefs' | 'scriptEvidence'
+>
 
 export type UnifiedDetailSelection = {
   key: string
@@ -36,6 +39,7 @@ export type UnifiedDetailTarget =
       bindingAutomationId: string | null
       bindingRef: UnifiedSourceRef | null
       cronRef: UnifiedSourceRef | null
+      evidence: UnifiedAutomationRow['scriptEvidence']
     }
   | {
       kind: 'external'
@@ -140,7 +144,8 @@ function targetForRow(row: UnifiedDetailRow): UnifiedDetailResolution {
         identity,
         bindingAutomationId: bindingRef?.sourceId ?? null,
         bindingRef,
-        cronRef: crons[0] ?? null
+        cronRef: crons[0] ?? null,
+        evidence: row.scriptEvidence ?? null
       }
     }
   }

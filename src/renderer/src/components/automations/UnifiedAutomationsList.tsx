@@ -4,11 +4,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { hostStableKey, ownerKey } from '../../../../shared/automation-owner-key'
 import {
-  hostStableKey,
-  ownerKey,
-  toStableCatalogRef
-} from '../../../../shared/automation-owner-key'
+  unifiedDetailSelection,
+  type UnifiedDetailSelection
+} from '../../../../shared/unified-automation-detail'
 import type {
   UnifiedAutomationRow,
   UnifiedAutomationSnapshot
@@ -20,10 +20,8 @@ import {
   UnifiedAutomationListFilters,
   type UnifiedAutomationFilterState
 } from './UnifiedAutomationListFilters'
-import {
-  UnifiedAutomationListRows,
-  UnifiedAutomationReadOnlyDetail
-} from './UnifiedAutomationListRows'
+import { UnifiedAutomationListRows } from './UnifiedAutomationListRows'
+import { UnifiedAutomationDetailShell } from './UnifiedAutomationDetailShell'
 import {
   adaptLiveAutomationRow,
   adaptLiveExternalRow,
@@ -78,7 +76,10 @@ export function UnifiedAutomationsList({
   const [filters, setFilters] = React.useState<UnifiedAutomationFilterState>(
     INITIAL_UNIFIED_AUTOMATION_FILTERS
   )
-  const [readOnlyDetail, setReadOnlyDetail] = React.useState<UnifiedAutomationRow | null>(null)
+  const [detail, setDetail] = React.useState<{
+    selection: UnifiedDetailSelection
+    lastKnownRow: UnifiedAutomationRow
+  } | null>(null)
   const [createOpen, setCreateOpen] = React.useState(false)
   const [goalProjects, setGoalProjects] = React.useState<UnifiedGoalProjectChoice[]>([])
   const [goalProjectsLoading, setGoalProjectsLoading] = React.useState(false)
@@ -182,39 +183,22 @@ export function UnifiedAutomationsList({
     [snapshot]
   )
 
-  const openExternal = (row: UnifiedAutomationRow): boolean => {
-    if (row.identity.kind !== 'external') {
-      return false
+  const nativeCandidate = (row: UnifiedAutomationRow) => {
+    if (row.identity.kind !== 'automation') {
+      return null
     }
     const identity = row.identity
-    const entry = controller.list.externalAutomationEntries.find(
-      (candidate) =>
-        candidate.manager.id === identity.managerId &&
-        candidate.job.id === identity.jobId &&
-        hostStableKey(toStableCatalogRef(candidate.scope.owner)) ===
-          hostStableKey(identity.authority)
+    return (
+      controller.list.visibleRows.find(
+        (live) =>
+          live.automation.id === identity.automationId &&
+          hostStableKey(liveAuthority(live)) === hostStableKey(identity.authority)
+      ) ?? null
     )
-    if (!entry) {
-      return true
-    }
-    controller.list.selectAutomationRow(null)
-    controller.local.selectExternalKey(entry.key)
-    controller.local.setActivePaneTab('overview')
-    controller.local.setIsDetailOpen(true)
-    onOpenNative()
-    return true
   }
 
   const openNative = (row: UnifiedAutomationRow): void => {
-    if (row.identity.kind !== 'automation') {
-      return
-    }
-    const identity = row.identity
-    const candidate = controller.list.visibleRows.find(
-      (live) =>
-        live.automation.id === identity.automationId &&
-        hostStableKey(liveAuthority(live)) === hostStableKey(identity.authority)
-    )
+    const candidate = nativeCandidate(row)
     if (!candidate) {
       return
     }
@@ -225,28 +209,19 @@ export function UnifiedAutomationsList({
   }
 
   const openRow = (row: UnifiedAutomationRow): void => {
-    if (row.kind === 'goal') {
-      if (row.lifecycle.state === 'archived') {
-        setReadOnlyDetail(row)
-      } else if (row.identity.kind === 'goal') {
-        onOpenGoal(row.identity.projectKey, row.identity.goal)
-      }
-      return
-    }
-    if (row.kind === 'script') {
-      setReadOnlyDetail(row)
-      return
-    }
-    if (!openExternal(row)) {
-      openNative(row)
-    }
+    setDetail({ selection: unifiedDetailSelection(row), lastKnownRow: row })
   }
 
-  if (readOnlyDetail) {
+  if (detail) {
     return (
-      <UnifiedAutomationReadOnlyDetail
-        row={readOnlyDetail}
-        onBack={() => setReadOnlyDetail(null)}
+      <UnifiedAutomationDetailShell
+        selection={detail.selection}
+        rows={rows}
+        lastKnownRow={detail.lastKnownRow}
+        onBack={() => setDetail(null)}
+        onOpenGoal={onOpenGoal}
+        canOpenNative={(row) => nativeCandidate(row) !== null}
+        onOpenNative={openNative}
       />
     )
   }

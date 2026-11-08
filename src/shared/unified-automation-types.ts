@@ -90,6 +90,13 @@ export type UnifiedAutomationWarning = {
   message: string
 }
 
+export type UnifiedScriptEvidence = {
+  provenance: 'runtime-binding' | 'legacy-cron'
+  command: string | null
+  cwd: string | null
+  replacesCronCommand: string | null
+}
+
 export type UnifiedAutomationRow = {
   key: string
   identity: UnifiedAutomationIdentity
@@ -107,6 +114,7 @@ export type UnifiedAutomationRow = {
   migrationState: UnifiedMigrationState
   sourceRefs: UnifiedSourceRef[]
   warnings: UnifiedAutomationWarning[]
+  scriptEvidence?: UnifiedScriptEvidence | null
   readOnly: true
 }
 

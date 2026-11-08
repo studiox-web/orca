@@ -152,6 +152,12 @@ export function cronScriptRow(
     agentId: null,
     migrationState: 'legacy',
     sourceRefs: [schedule.sourceRef],
+    scriptEvidence: {
+      provenance: 'legacy-cron',
+      command: job.command || null,
+      cwd: job.workdir,
+      replacesCronCommand: null
+    },
     warnings: [
       {
         code: 'legacy-source-identity',
@@ -232,6 +238,12 @@ export function boundScriptRow(
     agentId: null,
     migrationState: 'none',
     sourceRefs: [binding, schedule.sourceRef],
+    scriptEvidence: {
+      provenance: 'runtime-binding',
+      command: config.script?.command || null,
+      cwd: config.script?.cwd || null,
+      replacesCronCommand: config.script?.replacesCronCommand ?? null
+    },
     warnings: config.script?.replacesCronCommand
       ? [
           {

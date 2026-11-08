@@ -115,7 +115,8 @@ describe('unified automation detail target', () => {
       target: {
         kind: 'script',
         bindingAutomationId: 'automation-2',
-        cronRef: { sourceId: 'cron:2' }
+        cronRef: { sourceId: 'cron:2' },
+        evidence: null
       }
     })
     expect(resolutions[3]).toMatchObject({
