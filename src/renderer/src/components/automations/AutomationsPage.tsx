@@ -24,7 +24,11 @@ export default function AutomationsPage(): React.JSX.Element {
     }
     return unifiedEnabled ? 'goals' : 'org'
   })
-  const [goalTarget, setGoalTarget] = useState<{ projectKey: string; goal: string } | null>(null)
+  const [goalTarget, setGoalTarget] = useState<{
+    projectKey: string
+    goal: string | null
+    create?: boolean
+  } | null>(null)
   useEffect(() => window.localStorage.setItem(XOS_VIEW_KEY, xosView), [xosView])
   useEffect(() => {
     const openGoals = (): void => setXosView(unifiedEnabled ? 'goals' : 'org')
@@ -58,6 +62,19 @@ export default function AutomationsPage(): React.JSX.Element {
           setXosView('org')
         }}
         onOpenNative={() => setXosView('native')}
+        editorsEnabled={controller.store.settings?.unifiedAutomationEditors === true}
+        onCreateAutomation={() => {
+          controller.editorActions.openCreateDialog()
+          setXosView('native')
+        }}
+        onCreateGoal={(projectKey) => {
+          setGoalTarget({ projectKey, goal: null, create: true })
+          setXosView('org')
+        }}
+        onOpenGoalAdvanced={(projectKey) => {
+          setGoalTarget(projectKey ? { projectKey, goal: null } : null)
+          setXosView('org')
+        }}
       />
     )
   }

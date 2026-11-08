@@ -240,6 +240,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   showAutomationsButton?: boolean
   /** Read-only, request-derived Goals/Automations/Scripts/External list. */
   unifiedAutomationSurface?: boolean
+  /** Enables the delegated create chooser on the unified automation list. */
+  unifiedAutomationEditors?: boolean
   /** Deprecated: Artifacts are always available. Use showArtifactsButton for sidebar visibility. */
   artifactsEnabled?: boolean
   /** Capability gate for agent-driven publishing; off until granted, enforced in main, not just the UI. */

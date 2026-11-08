@@ -1,5 +1,5 @@
 import React from 'react'
-import { CalendarClock, CircleAlert, Network, RefreshCw, Target } from 'lucide-react'
+import { CalendarClock, CircleAlert, Network, Plus, RefreshCw, Target } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -30,6 +30,10 @@ import {
   unifiedNativeSourceKey,
   withUnifiedAutomationHostWarnings
 } from './unified-automation-live-adapters'
+import {
+  UnifiedAutomationCreateDialog,
+  type UnifiedGoalProjectChoice
+} from './UnifiedAutomationCreateDialog'
 
 function liveAuthority(row: AutomationsPageController['list']['visibleRows'][number]) {
   return (
@@ -51,13 +55,21 @@ export function UnifiedAutomationsList({
   onShowOrg,
   onShowNative,
   onOpenGoal,
-  onOpenNative
+  onOpenNative,
+  editorsEnabled,
+  onCreateAutomation,
+  onCreateGoal,
+  onOpenGoalAdvanced
 }: {
   controller: AutomationsPageController
   onShowOrg: () => void
   onShowNative: () => void
   onOpenGoal: (projectKey: string, goal: string) => void
   onOpenNative: () => void
+  editorsEnabled: boolean
+  onCreateAutomation: () => void
+  onCreateGoal: (projectKey: string) => void
+  onOpenGoalAdvanced: (projectKey: string | null) => void
 }): React.JSX.Element {
   const [snapshot, setSnapshot] = React.useState<UnifiedAutomationSnapshot | null>(null)
   const [error, setError] = React.useState<string | null>(null)
@@ -67,6 +79,31 @@ export function UnifiedAutomationsList({
     INITIAL_UNIFIED_AUTOMATION_FILTERS
   )
   const [readOnlyDetail, setReadOnlyDetail] = React.useState<UnifiedAutomationRow | null>(null)
+  const [createOpen, setCreateOpen] = React.useState(false)
+  const [goalProjects, setGoalProjects] = React.useState<UnifiedGoalProjectChoice[]>([])
+  const [goalProjectsLoading, setGoalProjectsLoading] = React.useState(false)
+  const [goalProjectsError, setGoalProjectsError] = React.useState<string | null>(null)
+
+  const openCreate = React.useCallback(() => {
+    setCreateOpen(true)
+    setGoalProjectsLoading(true)
+    setGoalProjectsError(null)
+    const api = window.api.xosGoals
+    if (!api) {
+      setGoalProjects([])
+      setGoalProjectsLoading(false)
+      setGoalProjectsError('Local Goal projects are unavailable in this build.')
+      return
+    }
+    void api
+      .getBoard()
+      .then((board) => setGoalProjects(board.projects.map(({ key, name }) => ({ key, name }))))
+      .catch((caught) => {
+        setGoalProjects([])
+        setGoalProjectsError(caught instanceof Error ? caught.message : String(caught))
+      })
+      .finally(() => setGoalProjectsLoading(false))
+  }, [])
 
   const refresh = React.useCallback(async () => {
     const api = window.api.xosGoals
@@ -238,6 +275,12 @@ export function UnifiedAutomationsList({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {editorsEnabled ? (
+            <Button type="button" size="sm" onClick={openCreate}>
+              <Plus className="size-4" />
+              {translate('auto.components.automations.unified.create', 'Create')}
+            </Button>
+          ) : null}
           <Button type="button" variant="outline" size="sm" onClick={onShowOrg}>
             <Network className="size-4" />
             {translate('auto.components.automations.unified.org', 'Org')}
@@ -300,6 +343,25 @@ export function UnifiedAutomationsList({
               { visible: visibleRows.length, total: rows.length }
             )}
       </p>
+      <UnifiedAutomationCreateDialog
+        open={createOpen}
+        goalProjects={goalProjects}
+        goalProjectsLoading={goalProjectsLoading}
+        goalProjectsError={goalProjectsError}
+        onOpenChange={setCreateOpen}
+        onCreateAutomation={() => {
+          setCreateOpen(false)
+          onCreateAutomation()
+        }}
+        onCreateGoal={(projectKey) => {
+          setCreateOpen(false)
+          onCreateGoal(projectKey)
+        }}
+        onOpenGoalAdvanced={(projectKey) => {
+          setCreateOpen(false)
+          onOpenGoalAdvanced(projectKey)
+        }}
+      />
     </main>
   )
 }

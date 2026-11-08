@@ -48,6 +48,20 @@ describe('AutomationsSettingsPane', () => {
     await user.click(unifiedToggle)
     expect(updateSettings).toHaveBeenCalledWith({ unifiedAutomationSurface: true })
 
+    const editorToggle = screen.getByRole('switch', { name: 'Unified create chooser' })
+    expect(editorToggle).toHaveAttribute('aria-checked', 'false')
+    await user.click(editorToggle)
+    expect(updateSettings).toHaveBeenCalledWith({ unifiedAutomationEditors: true })
+
+    const enabledSettings = {
+      ...getDefaultSettings('/tmp'),
+      unifiedAutomationEditors: true
+    }
+    cleanup()
+    render(<AutomationsSettingsPane settings={enabledSettings} updateSettings={updateSettings} />)
+    await user.click(screen.getByRole('switch', { name: 'Unified create chooser' }))
+    expect(updateSettings).toHaveBeenCalledWith({ unifiedAutomationEditors: false })
+
     const openButton = screen.getByRole('button', { name: /Open Automations/ })
     expect(openButton).toBeEnabled()
     await user.click(openButton)

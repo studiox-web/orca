@@ -10,6 +10,7 @@ import { PortfolioTiles, RunningStrip, XosPortfolioRollupView } from './XosPortf
 import { PREFS_KEY, readPrefs, type Prefs } from './xos-org-prefs'
 import { useXosGoalActions } from './use-xos-goal-actions'
 import { useXosGoalBoard } from './use-xos-goal-board'
+import { XosNewGoalDialog } from './XosNewGoalDialog'
 import './xos-ops-cards.css'
 
 export function XosOrgChartPage({
@@ -17,13 +18,14 @@ export function XosOrgChartPage({
   initialTarget = null
 }: {
   onShowList: () => void
-  initialTarget?: { projectKey: string; goal: string } | null
+  initialTarget?: { projectKey: string; goal: string | null; create?: boolean } | null
 }): React.JSX.Element {
   const [prefs, setPrefs] = useState<Prefs>(() => {
     const stored = readPrefs()
     return initialTarget ? { ...stored, projectKey: initialTarget.projectKey } : stored
   })
   const [selectedGoal, setSelectedGoal] = useState<string | null>(initialTarget?.goal ?? null)
+  const [newGoalOpen, setNewGoalOpen] = useState(initialTarget?.create === true)
   const { board, loading, error, hidden, refresh } = useXosGoalBoard()
   const project = board?.projects.find((candidate) => candidate.key === prefs.projectKey) ?? null
   const selected = project?.goals.find((goal) => goal.goal === selectedGoal) ?? null
@@ -75,6 +77,15 @@ export function XosOrgChartPage({
             }}
           />
         )}
+        {project ? (
+          <XosNewGoalDialog
+            open={newGoalOpen}
+            project={project}
+            actions={actions}
+            onClose={() => setNewGoalOpen(false)}
+            onCreated={(goal) => setSelectedGoal(goal)}
+          />
+        ) : null}
         {!board ? null : !project ? (
           board.projects.length === 0 ? (
             <section className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">

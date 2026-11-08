@@ -159,6 +159,7 @@ export function buildDefaultSettings(args: {
     showTasksButton: true,
     showAutomationsButton: true,
     unifiedAutomationSurface: false,
+    unifiedAutomationEditors: false,
     artifactsEnabled: true,
     artifactSharingEnabled: false,
     agentSkillSharingEnabled: false,
