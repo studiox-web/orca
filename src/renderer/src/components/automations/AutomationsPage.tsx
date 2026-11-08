@@ -44,6 +44,7 @@ export default function AutomationsPage(): React.JSX.Element {
     return (
       <XosOrgChartPage
         initialTarget={goalTarget}
+        onInitialTargetConsumed={() => setGoalTarget(null)}
         onShowList={() => setXosView(unifiedEnabled ? 'goals' : 'native')}
       />
     )

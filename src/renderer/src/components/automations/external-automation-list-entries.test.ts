@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ExternalAutomationManager } from '../../../../shared/automations-types'
 import { buildExternalAutomationListEntries } from './external-automation-list-entries'
 import type { ScopedExternalAutomationManager } from './external-automation-scope-client'
+import { adaptLiveExternalRow } from './unified-automation-live-adapters'
+import {
+  findExactUnifiedExternalEntry,
+  openExactUnifiedExternalEntry
+} from './unified-external-detail-target'
 
 function manager(overrides: Partial<ExternalAutomationManager> = {}): ExternalAutomationManager {
   return {
@@ -81,6 +86,22 @@ describe('buildExternalAutomationListEntries', () => {
 
     expect(entries).toHaveLength(2)
     expect(entries[0]?.key).not.toBe(entries[1]?.key)
+    const runtimeRow = adaptLiveExternalRow(entries[1]!)
+    expect(findExactUnifiedExternalEntry(runtimeRow, entries)).toBe(entries[1])
+
+    const actions = {
+      selectAutomationRow: vi.fn(),
+      selectExternalKey: vi.fn(),
+      setActivePaneTab: vi.fn(),
+      setIsDetailOpen: vi.fn(),
+      openNativeList: vi.fn()
+    }
+    expect(openExactUnifiedExternalEntry(runtimeRow, entries, actions)).toBe(true)
+    expect(actions.selectExternalKey).toHaveBeenCalledExactlyOnceWith(entries[1]?.key)
+    expect(actions.selectAutomationRow).toHaveBeenCalledExactlyOnceWith(null)
+    expect(actions.setActivePaneTab).toHaveBeenCalledExactlyOnceWith('overview')
+    expect(actions.setIsDetailOpen).toHaveBeenCalledExactlyOnceWith(true)
+    expect(actions.openNativeList).toHaveBeenCalledOnce()
   })
 
   it('carries the scope it keyed each entry with', () => {

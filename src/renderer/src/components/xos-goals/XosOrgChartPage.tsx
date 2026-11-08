@@ -15,10 +15,12 @@ import './xos-ops-cards.css'
 
 export function XosOrgChartPage({
   onShowList,
-  initialTarget = null
+  initialTarget = null,
+  onInitialTargetConsumed
 }: {
   onShowList: () => void
   initialTarget?: { projectKey: string; goal: string | null; create?: boolean } | null
+  onInitialTargetConsumed?: () => void
 }): React.JSX.Element {
   const [prefs, setPrefs] = useState<Prefs>(() => {
     const stored = readPrefs()
@@ -34,6 +36,12 @@ export function XosOrgChartPage({
   useEffect(() => {
     window.localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
   }, [prefs])
+
+  useEffect(() => {
+    if (initialTarget) {
+      onInitialTargetConsumed?.()
+    }
+  }, [initialTarget, onInitialTargetConsumed])
 
   const selectProject = (key: string): void => {
     setPrefs((current) => ({ ...current, projectKey: key }))

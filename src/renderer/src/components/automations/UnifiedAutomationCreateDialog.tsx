@@ -120,10 +120,14 @@ export function UnifiedAutomationCreateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl" scrollable>
         <DialogHeader>
-          <DialogTitle>Create</DialogTitle>
+          <DialogTitle>
+            {translate('auto.components.automations.unified.createDialog.title', 'Create')}
+          </DialogTitle>
           <DialogDescription>
-            Choose a supported type. Each choice opens its existing editor and keeps its current
-            storage and behavior.
+            {translate(
+              'auto.components.automations.unified.createDialog.description',
+              'Choose a supported type. Each choice opens its existing editor and keeps its current storage and behavior.'
+            )}
           </DialogDescription>
         </DialogHeader>
         <RadioGroup
@@ -133,34 +137,61 @@ export function UnifiedAutomationCreateDialog({
               setKind(value)
             }
           }}
-          aria-label="Creation type"
+          aria-label={translate(
+            'auto.components.automations.unified.createDialog.typeLabel',
+            'Creation type'
+          )}
           className="grid gap-3 sm:grid-cols-2"
         >
           <CreateOption
             value="automation"
-            title="Agent automation"
-            description="Use Orca's existing host-first automation editor, including agent, model, schedule, grace, precheck, and setup controls."
+            title={translate(
+              'auto.components.automations.unified.createDialog.agentAutomation',
+              'Agent automation'
+            )}
+            description={translate(
+              'auto.components.automations.unified.createDialog.agentAutomationDescription',
+              "Use Orca's existing host-first automation editor, including agent, model, schedule, grace, precheck, and setup controls."
+            )}
             icon={<Bot className="size-4" aria-hidden />}
           />
           <CreateOption
             value="goal"
-            title="Goal"
-            description="Create an unscheduled local Goal from the existing project template."
+            title={translate('auto.components.automations.unified.createDialog.goal', 'Goal')}
+            description={translate(
+              'auto.components.automations.unified.createDialog.goalDescription',
+              'Create an unscheduled local Goal from the existing project template.'
+            )}
             icon={<Target className="size-4" aria-hidden />}
           />
           <CreateOption
             value="script"
-            title="Script"
-            description="Scripts are visible for review only."
-            reason="Unavailable until validation, cancellation, timeout, and artifact contracts exist."
+            title={translate('auto.components.automations.unified.createDialog.script', 'Script')}
+            description={translate(
+              'auto.components.automations.unified.createDialog.scriptDescription',
+              'Scripts are visible for review only.'
+            )}
+            reason={translate(
+              'auto.components.automations.unified.createDialog.scriptUnavailable',
+              'Unavailable until validation, cancellation, timeout, and artifact contracts exist.'
+            )}
             icon={<FileCode2 className="size-4" aria-hidden />}
             disabled
           />
           <CreateOption
             value="external"
-            title="External automation"
-            description="External managers remain authoritative for creating their jobs."
-            reason="Create this automation in its external manager."
+            title={translate(
+              'auto.components.automations.unified.createDialog.externalAutomation',
+              'External automation'
+            )}
+            description={translate(
+              'auto.components.automations.unified.createDialog.externalDescription',
+              'External managers remain authoritative for creating their jobs.'
+            )}
+            reason={translate(
+              'auto.components.automations.unified.createDialog.externalUnavailable',
+              'Create this automation in its external manager.'
+            )}
             icon={<Plug className="size-4" aria-hidden />}
             disabled
           />
@@ -168,24 +199,47 @@ export function UnifiedAutomationCreateDialog({
         {kind === 'goal' ? (
           <section
             className="space-y-3 rounded-xl border bg-muted/20 p-4"
-            aria-label="Goal options"
+            aria-label={translate(
+              'auto.components.automations.unified.createDialog.goalOptions',
+              'Goal options'
+            )}
           >
             <div className="space-y-1">
               <label htmlFor="unified-goal-project" className="text-sm font-medium">
-                Project
+                {translate('auto.components.automations.unified.createDialog.project', 'Project')}
               </label>
               {goalProjectsLoading ? (
-                <p className="text-xs text-muted-foreground">Loading local Goal projects…</p>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.automations.unified.createDialog.loadingProjects',
+                    'Loading local Goal projects…'
+                  )}
+                </p>
               ) : goalProjectsError ? (
                 <p className="text-xs text-destructive">{goalProjectsError}</p>
               ) : goalProjects.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  No local project with an automations/goals folder is available.
+                  {translate(
+                    'auto.components.automations.unified.createDialog.noProjects',
+                    'No local project with an automations/goals folder is available.'
+                  )}
                 </p>
               ) : (
                 <Select value={projectKey} onValueChange={setProjectKey}>
-                  <SelectTrigger id="unified-goal-project" className="w-full" aria-label="Project">
-                    <SelectValue placeholder="Choose a local Goal project" />
+                  <SelectTrigger
+                    id="unified-goal-project"
+                    className="w-full"
+                    aria-label={translate(
+                      'auto.components.automations.unified.createDialog.project',
+                      'Project'
+                    )}
+                  >
+                    <SelectValue
+                      placeholder={translate(
+                        'auto.components.automations.unified.createDialog.projectPlaceholder',
+                        'Choose a local Goal project'
+                      )}
+                    />
                   </SelectTrigger>
                   <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
                     {goalProjects.map((project) => (
@@ -199,13 +253,20 @@ export function UnifiedAutomationCreateDialog({
             </div>
             <Collapsible>
               <CollapsibleTrigger variant="row" className="px-2">
-                <span>Advanced Goal options</span>
+                <span>
+                  {translate(
+                    'auto.components.automations.unified.createDialog.advancedGoalOptions',
+                    'Advanced Goal options'
+                  )}
+                </span>
                 <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-3 px-2 pb-2 text-xs text-muted-foreground">
                 <p>
-                  Goal Viewer keeps the current file, scheduling, pause/resume, archive, and run
-                  management controls. This chooser does not replace or change those actions.
+                  {translate(
+                    'auto.components.automations.unified.createDialog.advancedGoalDescription',
+                    'Goal Viewer keeps the current file, scheduling, pause/resume, archive, and run management controls. This chooser does not replace or change those actions.'
+                  )}
                 </p>
                 <Button
                   type="button"
@@ -213,7 +274,10 @@ export function UnifiedAutomationCreateDialog({
                   size="sm"
                   onClick={() => onOpenGoalAdvanced(projectKey || null)}
                 >
-                  Open Goal workspace
+                  {translate(
+                    'auto.components.automations.unified.createDialog.openGoalWorkspace',
+                    'Open Goal workspace'
+                  )}
                 </Button>
               </CollapsibleContent>
             </Collapsible>
@@ -221,7 +285,7 @@ export function UnifiedAutomationCreateDialog({
         ) : null}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {translate('common.cancel', 'Cancel')}
           </Button>
           <Button
             type="button"
@@ -233,7 +297,10 @@ export function UnifiedAutomationCreateDialog({
                   'auto.components.automations.AutomationsPage.newAutomation',
                   'New Automation'
                 )
-              : 'Continue to Goal details'}
+              : translate(
+                  'auto.components.automations.unified.createDialog.continueGoal',
+                  'Continue to Goal details'
+                )}
           </Button>
         </DialogFooter>
       </DialogContent>

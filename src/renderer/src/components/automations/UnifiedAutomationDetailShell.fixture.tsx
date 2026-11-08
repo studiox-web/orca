@@ -99,6 +99,8 @@ function renderDetail(): React.JSX.Element {
         onOpenGoal={() => undefined}
         canOpenNative={() => false}
         onOpenNative={() => undefined}
+        canOpenExternal={() => false}
+        onOpenExternal={() => undefined}
       />
     </div>
   )

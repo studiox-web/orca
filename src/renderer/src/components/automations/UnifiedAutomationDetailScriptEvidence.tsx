@@ -2,6 +2,7 @@ import React from 'react'
 import { FileCode2, TerminalSquare } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { translate } from '@/i18n/i18n'
 import type { UnifiedScriptEvidence } from '../../../../shared/unified-automation-types'
 
 export function unifiedScriptCommandEvidence(command: string | null): {
@@ -56,48 +57,92 @@ export function UnifiedAutomationDetailScriptEvidence({
     <section className="rounded-xl border bg-card p-4 text-card-foreground shadow-xs">
       <div className="flex items-center gap-2">
         {icon}
-        <h2 className="text-sm font-semibold">Reviewed Script evidence</h2>
-        {evidence?.provenance === 'legacy-cron' ? <Badge variant="outline">Legacy</Badge> : null}
+        <h2 className="text-sm font-semibold">
+          {translate(
+            'auto.components.automations.unified.detail.scriptEvidence',
+            'Reviewed Script evidence'
+          )}
+        </h2>
+        {evidence?.provenance === 'legacy-cron' ? (
+          <Badge variant="outline">
+            {translate('auto.components.automations.unified.detail.legacy', 'Legacy')}
+          </Badge>
+        ) : null}
       </div>
       <dl className="mt-3 grid gap-3 text-sm [grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))]">
         <div>
-          <dt className="text-xs font-medium text-muted-foreground">Command</dt>
+          <dt className="text-xs font-medium text-muted-foreground">
+            {translate('auto.components.automations.unified.detail.command', 'Command')}
+          </dt>
           <dd className="mt-1 break-all font-mono text-xs">
-            {command || 'Missing from the current source data'}
+            {command ||
+              translate(
+                'auto.components.automations.unified.detail.missingSourceData',
+                'Missing from the current source data'
+              )}
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-medium text-muted-foreground">Interpreter evidence</dt>
+          <dt className="text-xs font-medium text-muted-foreground">
+            {translate(
+              'auto.components.automations.unified.detail.interpreterEvidence',
+              'Interpreter evidence'
+            )}
+          </dt>
           <dd className="mt-1 break-all font-mono text-xs">
-            {presentation.interpreter || 'Not explicitly recorded'}
+            {presentation.interpreter ||
+              translate(
+                'auto.components.automations.unified.detail.notExplicitlyRecorded',
+                'Not explicitly recorded'
+              )}
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-medium text-muted-foreground">Arguments</dt>
+          <dt className="text-xs font-medium text-muted-foreground">
+            {translate('auto.components.automations.unified.detail.arguments', 'Arguments')}
+          </dt>
           <dd className="mt-1 text-xs text-muted-foreground">
-            Not separately structured in the current source data
+            {translate(
+              'auto.components.automations.unified.detail.argumentsUnstructured',
+              'Not separately structured in the current source data'
+            )}
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-medium text-muted-foreground">Working directory</dt>
-          <dd className="mt-1 break-all font-mono text-xs">{evidence?.cwd || 'Not recorded'}</dd>
+          <dt className="text-xs font-medium text-muted-foreground">
+            {translate(
+              'auto.components.automations.unified.detail.workingDirectory',
+              'Working directory'
+            )}
+          </dt>
+          <dd className="mt-1 break-all font-mono text-xs">
+            {evidence?.cwd ||
+              translate('auto.components.automations.unified.detail.notRecorded', 'Not recorded')}
+          </dd>
         </div>
         <div>
-          <dt className="text-xs font-medium text-muted-foreground">Host</dt>
+          <dt className="text-xs font-medium text-muted-foreground">
+            {translate('auto.components.automations.unified.detail.host', 'Host')}
+          </dt>
           <dd className="mt-1 text-xs">{host}</dd>
         </div>
         {evidence?.replacesCronCommand ? (
           <div>
             <dt className="text-xs font-medium text-muted-foreground">
-              Replaced cron command evidence
+              {translate(
+                'auto.components.automations.unified.detail.replacedCronEvidence',
+                'Replaced cron command evidence'
+              )}
             </dt>
             <dd className="mt-1 break-all font-mono text-xs">{evidence.replacesCronCommand}</dd>
           </div>
         ) : null}
       </dl>
       <p className="mt-3 text-xs text-muted-foreground">
-        View-only. Validation, cancellation, timeout, artifact retention, and execution controls are
-        unavailable.
+        {translate(
+          'auto.components.automations.unified.detail.scriptViewOnly',
+          'View-only. Validation, cancellation, timeout, artifact retention, and execution controls are unavailable.'
+        )}
       </p>
     </section>
   )

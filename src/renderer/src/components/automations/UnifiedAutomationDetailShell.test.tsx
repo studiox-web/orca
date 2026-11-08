@@ -85,7 +85,9 @@ function renderShell(current: UnifiedAutomationRow, rows = [current]) {
     onBack: vi.fn(),
     onOpenGoal: vi.fn(),
     canOpenNative: vi.fn(() => true),
-    onOpenNative: vi.fn()
+    onOpenNative: vi.fn(),
+    canOpenExternal: vi.fn(() => true),
+    onOpenExternal: vi.fn()
   }
   render(
     <TooltipProvider>
@@ -235,7 +237,7 @@ describe('UnifiedAutomationDetailShell', () => {
     expect(screen.queryByRole('button', { name: 'Open native automation' })).not.toBeInTheDocument()
   })
 
-  it('keeps archived Goals and External rows capability-driven and read-only', () => {
+  it('keeps archived Goals and External rows capability-driven and read-only', async () => {
     const archived = row(
       { kind: 'goal', authority: local, projectKey: '/projects/orca', goal: 'old-goal' },
       {
@@ -255,13 +257,18 @@ describe('UnifiedAutomationDetailShell', () => {
       { kind: 'external', authority: local, managerId: 'manager-1', jobId: 'job-1' },
       { sourceRefs: [source('external', 'job-1')] }
     )
-    renderShell(external)
+    const externalCallbacks = renderShell(external)
     expect(screen.getByRole('heading', { name: 'External manager detail' })).toBeVisible()
     expect(screen.getByText('Detail only · manager unsupported')).toBeVisible()
-    expect(screen.queryByRole('button', { name: /open native|open goal/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open in native list' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Open in native list' }))
+    expect(externalCallbacks.onOpenExternal).toHaveBeenCalledExactlyOnceWith(external)
+    expect(
+      screen.queryByRole('button', { name: /open native automation|open goal/i })
+    ).not.toBeInTheDocument()
   })
 
-  it('focuses its heading and returns on Escape', async () => {
+  it('focuses its heading and lets child UI consume Escape before returning', async () => {
     const goalSource = source('goal', '/projects/orca:review')
     const current = row(
       { kind: 'goal', authority: local, projectKey: '/projects/orca', goal: 'review' },
@@ -271,6 +278,11 @@ describe('UnifiedAutomationDetailShell', () => {
     const heading = screen.getByRole('heading', { name: 'Nightly review' })
 
     await waitFor(() => expect(heading).toHaveFocus())
+    heading.addEventListener('keydown', (event) => event.preventDefault(), { once: true })
+    await userEvent.keyboard('{Escape}')
+    expect(callbacks.onBack).not.toHaveBeenCalled()
+
+    heading.focus()
     await userEvent.keyboard('{Escape}')
     expect(callbacks.onBack).toHaveBeenCalledOnce()
   })

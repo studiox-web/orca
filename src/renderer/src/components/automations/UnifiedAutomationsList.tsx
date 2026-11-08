@@ -32,6 +32,10 @@ import {
   UnifiedAutomationCreateDialog,
   type UnifiedGoalProjectChoice
 } from './UnifiedAutomationCreateDialog'
+import {
+  findExactUnifiedExternalEntry,
+  openExactUnifiedExternalEntry
+} from './unified-external-detail-target'
 
 function liveAuthority(row: AutomationsPageController['list']['visibleRows'][number]) {
   return (
@@ -93,7 +97,12 @@ export function UnifiedAutomationsList({
     if (!api) {
       setGoalProjects([])
       setGoalProjectsLoading(false)
-      setGoalProjectsError('Local Goal projects are unavailable in this build.')
+      setGoalProjectsError(
+        translate(
+          'auto.components.automations.unified.createDialog.goalsUnavailable',
+          'Local Goal projects are unavailable in this build.'
+        )
+      )
       return
     }
     void api
@@ -208,6 +217,19 @@ export function UnifiedAutomationsList({
     onOpenNative()
   }
 
+  const externalCandidate = (row: UnifiedAutomationRow) =>
+    findExactUnifiedExternalEntry(row, controller.list.externalAutomationEntries)
+
+  const openExternal = (row: UnifiedAutomationRow): void => {
+    openExactUnifiedExternalEntry(row, controller.list.externalAutomationEntries, {
+      selectAutomationRow: controller.list.selectAutomationRow,
+      selectExternalKey: controller.local.selectExternalKey,
+      setActivePaneTab: controller.local.setActivePaneTab,
+      setIsDetailOpen: controller.local.setIsDetailOpen,
+      openNativeList: onOpenNative
+    })
+  }
+
   const openRow = (row: UnifiedAutomationRow): void => {
     setDetail({ selection: unifiedDetailSelection(row), lastKnownRow: row })
   }
@@ -222,6 +244,8 @@ export function UnifiedAutomationsList({
         onOpenGoal={onOpenGoal}
         canOpenNative={(row) => nativeCandidate(row) !== null}
         onOpenNative={openNative}
+        canOpenExternal={(row) => externalCandidate(row) !== null}
+        onOpenExternal={openExternal}
       />
     )
   }

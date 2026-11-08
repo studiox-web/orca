@@ -5,13 +5,23 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const harness = vi.hoisted(() => ({
+type OrgChartProps = {
+  initialTarget?: { projectKey: string; goal: string | null; create?: boolean } | null
+  onShowList: () => void
+  onInitialTargetConsumed: () => void
+}
+
+const harness = vi.hoisted<{
+  settings: { unifiedAutomationSurface: boolean; unifiedAutomationEditors: boolean }
+  openCreateDialog: ReturnType<typeof vi.fn>
+  orgProps: OrgChartProps | null
+}>(() => ({
   settings: {
     unifiedAutomationSurface: true,
     unifiedAutomationEditors: false
   },
   openCreateDialog: vi.fn(),
-  orgProps: null as null | Record<string, unknown>
+  orgProps: null
 }))
 
 vi.mock('./use-automations-page-controller', () => ({
@@ -28,6 +38,8 @@ vi.mock('./AutomationsPageSurface', () => ({
 vi.mock('./UnifiedAutomationsList', () => ({
   UnifiedAutomationsList: (props: {
     editorsEnabled: boolean
+    onShowOrg: () => void
+    onOpenGoal: (projectKey: string, goal: string) => void
     onCreateAutomation: () => void
     onCreateGoal: (projectKey: string) => void
   }) => (
@@ -40,6 +52,15 @@ vi.mock('./UnifiedAutomationsList', () => ({
           <button type="button" onClick={() => props.onCreateGoal('/projects/alpha')}>
             Delegate Goal
           </button>
+          <button type="button" onClick={props.onShowOrg}>
+            Show org
+          </button>
+          <button
+            type="button"
+            onClick={() => props.onOpenGoal('/projects/alpha', 'nightly-review')}
+          >
+            Open Goal
+          </button>
         </>
       ) : null}
     </div>
@@ -47,9 +68,19 @@ vi.mock('./UnifiedAutomationsList', () => ({
 }))
 
 vi.mock('../xos-goals/XosOrgChartPage', () => ({
-  XosOrgChartPage: (props: Record<string, unknown>) => {
+  XosOrgChartPage: (props: OrgChartProps) => {
     harness.orgProps = props
-    return <div data-testid="org-surface">Org surface</div>
+    return (
+      <div data-testid="org-surface">
+        Org surface
+        <button type="button" onClick={props.onShowList}>
+          Back to list
+        </button>
+        <button type="button" onClick={props.onInitialTargetConsumed}>
+          Consume target
+        </button>
+      </div>
+    )
   }
 }))
 
@@ -108,5 +139,36 @@ describe('AutomationsPage unified create delegation', () => {
       create: true
     })
     expect(harness.openCreateDialog).not.toHaveBeenCalled()
+  })
+
+  it('consumes Goal targets once so create does not replay on later navigation', async () => {
+    harness.settings.unifiedAutomationEditors = true
+    render(<AutomationsPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delegate Goal' }))
+    expect(harness.orgProps?.initialTarget).toMatchObject({ create: true })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Consume target' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Back to list' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Show org' }))
+
+    expect(harness.orgProps?.initialTarget).toBeNull()
+  })
+
+  it('consumes opened Goal targets once so selection does not replay later', async () => {
+    harness.settings.unifiedAutomationEditors = true
+    render(<AutomationsPage />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open Goal' }))
+    expect(harness.orgProps?.initialTarget).toEqual({
+      projectKey: '/projects/alpha',
+      goal: 'nightly-review'
+    })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Consume target' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Back to list' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Show org' }))
+
+    expect(harness.orgProps?.initialTarget).toBeNull()
   })
 })
