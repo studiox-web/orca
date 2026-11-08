@@ -13,9 +13,15 @@ export type LegacyAdoptionDrainState = 'clear' | 'running' | 'unknown'
 
 export type LegacyAdoptionLineageEvidence =
   | { state: 'absent' }
-  | { state: 'matching'; adoptionId: string; replacementAutomationId: string }
+  | {
+      state: 'matching'
+      source: LegacyCrontabOccurrenceIdentity
+      adoptionId: string
+      replacementAutomationId: string
+    }
   | {
       state: 'conflict'
+      source: LegacyCrontabOccurrenceIdentity
       adoptionId: string | null
       replacementAutomationId: string | null
     }

@@ -84,7 +84,7 @@ export function buildLegacyCrontabAdoptionPreview(args: {
   if (!sourceCurrent) {
     blocking('stale-source-revision', 'The crontab revision no longer matches the preview source.')
   }
-  const sourceUnique = args.source.identicalOccurrenceCount === 1
+  const sourceUnique = args.source.mutationIdentityCount === 1
   if (!sourceUnique) {
     blocking(
       'identical-source-occurrences',
@@ -122,11 +122,21 @@ export function buildLegacyCrontabAdoptionPreview(args: {
     blocking('unsupported-timezone', `The source timezone ${timezone} is unsupported.`)
   }
 
-  const lineageMatches = args.lineage.state !== 'conflict'
-  if (!lineageMatches) {
+  const lineageSourceMatches =
+    args.lineage.state === 'absent' ||
+    stableJson(args.lineage.source) === stableJson(args.source.identity)
+  let lineageMatches = args.lineage.state !== 'conflict' && lineageSourceMatches
+  if (args.lineage.state === 'conflict') {
     blocking(
       'lineage-conflict',
       'Existing adoption lineage points at a different source or target.'
+    )
+  }
+  if (!lineageSourceMatches) {
+    lineageMatches = false
+    blocking(
+      'lineage-conflict',
+      'Existing adoption lineage points at a different source occurrence.'
     )
   }
   if (args.existingTarget.state === 'enabled') {
@@ -147,6 +157,23 @@ export function buildLegacyCrontabAdoptionPreview(args: {
     blocking(
       'lineage-conflict',
       'The existing native target does not match the proposed creation key and owner.'
+    )
+    if (args.lineage.state === 'matching') {
+      lineageMatches = false
+    }
+  }
+  if (args.lineage.state === 'matching' && args.existingTarget.state === 'absent') {
+    lineageMatches = false
+    blocking('lineage-conflict', 'Matching adoption lineage points at a missing native target.')
+  } else if (
+    args.lineage.state === 'matching' &&
+    args.existingTarget.state !== 'absent' &&
+    args.lineage.replacementAutomationId !== args.existingTarget.automationId
+  ) {
+    lineageMatches = false
+    blocking(
+      'lineage-conflict',
+      'Matching adoption lineage and the native target disagree on the replacement automation ID.'
     )
   }
 
@@ -171,12 +198,10 @@ export function buildLegacyCrontabAdoptionPreview(args: {
       : 'required'
   const targetDisabled = args.existingTarget.state !== 'enabled'
   const lineageStatus = lineageMatches && existingTargetMatches ? 'required' : 'blocked'
-  const replacementAutomationId =
-    args.existingTarget.state === 'absent'
-      ? args.lineage.state === 'matching'
-        ? args.lineage.replacementAutomationId
-        : null
-      : args.existingTarget.automationId
+  const lineageAutomationId =
+    args.lineage.state === 'absent' ? null : args.lineage.replacementAutomationId
+  const existingAutomationId =
+    args.existingTarget.state === 'absent' ? null : args.existingTarget.automationId
 
   const cutover: LegacyAdoptionPrecondition[] = [
     precondition('source-revision-current', sourceCurrent ? 'satisfied' : 'blocked'),
@@ -197,7 +222,9 @@ export function buildLegacyCrontabAdoptionPreview(args: {
     ),
     precondition(
       'exact-lineage-persisted',
-      args.lineage.state === 'matching' && existingTargetMatches ? 'satisfied' : lineageStatus
+      args.lineage.state === 'matching' && lineageMatches && existingTargetMatches
+        ? 'satisfied'
+        : lineageStatus
     ),
     precondition('source-and-target-reread', 'required'),
     precondition('exact-source-disabled', 'required'),
@@ -236,7 +263,7 @@ export function buildLegacyCrontabAdoptionPreview(args: {
     destination: args.destination,
     proposedTarget: {
       owner: args.targetOwner,
-      automationId: replacementAutomationId,
+      automationId: existingAutomationId ?? lineageAutomationId,
       creationKey,
       schedule: args.source.schedule.normalizedExpression,
       sourceScheduleFormat: args.source.schedule.format,
@@ -249,12 +276,12 @@ export function buildLegacyCrontabAdoptionPreview(args: {
     lineage: {
       source: args.source.identity,
       adoptionId: args.lineage.state === 'absent' ? null : args.lineage.adoptionId,
-      replacementAutomationId,
+      replacementAutomationId: lineageAutomationId ?? existingAutomationId,
       replacementCreationKey: creationKey,
       persistence:
-        args.lineage.state === 'matching'
+        args.lineage.state === 'matching' && lineageMatches
           ? 'matching'
-          : args.lineage.state === 'conflict'
+          : args.lineage.state === 'conflict' || !lineageMatches
             ? 'conflict'
             : 'not-persisted'
     },

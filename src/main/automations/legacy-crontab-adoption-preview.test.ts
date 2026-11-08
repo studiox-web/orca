@@ -8,6 +8,7 @@ import type {
   LegacyAdoptionExistingTarget,
   LegacyAdoptionLineageEvidence
 } from '../../shared/legacy-crontab-adoption-preview-contract'
+import { parseCrontabWithPaused } from '../xos/xos-crontab'
 import { buildLegacyCrontabAdoptionPreview } from './legacy-crontab-adoption-preview'
 
 const owner: AutomationOwnerRef = {
@@ -18,6 +19,17 @@ const owner: AutomationOwnerRef = {
 function source(text = 'CRON_TZ=UTC\n0 9 * * * cd /repo && ./run-goal.sh writer\n') {
   return parseLegacyCrontabSnapshot({
     text,
+    scope: { authority: owner, user: 'deploy', managerId: 'crontab:deploy' }
+  }).occurrences[0]
+}
+
+function collidingSource() {
+  return parseLegacyCrontabSnapshot({
+    text: [
+      '0 9 * * * cd /repo && ./run-goal.sh writer',
+      '#orca-xos-paused#   0\t9  * * *   cd /repo && ./run-goal.sh writer   ',
+      ''
+    ].join('\n'),
     scope: { authority: owner, user: 'deploy', managerId: 'crontab:deploy' }
   }).occurrences[0]
 }
@@ -54,6 +66,26 @@ function preview(
 }
 
 describe('buildLegacyCrontabAdoptionPreview', () => {
+  it('uses the guarded cron mutation identity for pause and whitespace variants', () => {
+    const text = [
+      '0 9 * * * cd /repo && ./run-goal.sh writer',
+      '#orca-xos-paused#   0\t9  * * *   cd /repo && ./run-goal.sh writer   ',
+      '# PAUSED FOR ORCA MIGRATION 2026-11-08: 0 9 * * * cd /repo && ./run-goal.sh writer',
+      ''
+    ].join('\n')
+    const snapshot = parseLegacyCrontabSnapshot({
+      text,
+      scope: { authority: owner, user: 'deploy', managerId: 'crontab:deploy' }
+    })
+
+    expect(snapshot.occurrences.map(({ identity }) => identity.guardedMutationId)).toEqual(
+      parseCrontabWithPaused(text).map(({ id }) => id)
+    )
+    expect(
+      snapshot.occurrences.every(({ mutationIdentityCount }) => mutationIdentityCount === 3)
+    ).toBe(true)
+  })
+
   it('builds an eligible disabled native target with exact lineage and ordered safety preconditions', () => {
     const candidate = preview()
 
@@ -127,7 +159,7 @@ describe('buildLegacyCrontabAdoptionPreview', () => {
     },
     {
       name: 'identical duplicate ambiguity',
-      overrides: { source: { ...source(), identicalOccurrenceCount: 2 } },
+      overrides: { source: collidingSource() },
       code: 'identical-source-occurrences'
     },
     {
@@ -155,6 +187,7 @@ describe('buildLegacyCrontabAdoptionPreview', () => {
       overrides: {
         lineage: {
           state: 'conflict' as const,
+          source: source().identity,
           adoptionId: 'adoption-other',
           replacementAutomationId: 'automation-other'
         }
@@ -192,6 +225,85 @@ describe('buildLegacyCrontabAdoptionPreview', () => {
       expect.objectContaining({ code: 'existing-target-enabled', severity: 'blocking' })
     )
     expect(candidate.proposedTarget).toMatchObject({ automationId: 'automation-1', enabled: false })
+  })
+
+  it('blocks matching lineage for a different source occurrence', () => {
+    const selected = source()
+    const initial = preview({ source: selected })
+    const candidate = preview({
+      source: selected,
+      lineage: {
+        state: 'matching',
+        source: { ...selected.identity, lineIndex: selected.identity.lineIndex + 1 },
+        adoptionId: 'adoption-1',
+        replacementAutomationId: 'automation-1'
+      },
+      existingTarget: {
+        state: 'disabled',
+        automationId: 'automation-1',
+        creationKey: initial.proposedTarget.creationKey,
+        owner
+      }
+    })
+
+    expect(candidate.verdict).toBe('blocked')
+    expect(candidate.conflicts).toContainEqual(
+      expect.objectContaining({ code: 'lineage-conflict', severity: 'blocking' })
+    )
+    expect(candidate.lineage.persistence).toBe('conflict')
+  })
+
+  it('blocks matching lineage when its replacement target is absent', () => {
+    const selected = source()
+    const candidate = preview({
+      source: selected,
+      lineage: {
+        state: 'matching',
+        source: selected.identity,
+        adoptionId: 'adoption-1',
+        replacementAutomationId: 'automation-1'
+      },
+      existingTarget: { state: 'absent' }
+    })
+
+    expect(candidate.verdict).toBe('blocked')
+    expect(candidate.conflicts).toContainEqual(
+      expect.objectContaining({ code: 'lineage-conflict', severity: 'blocking' })
+    )
+    expect(candidate.lineage).toMatchObject({
+      replacementAutomationId: 'automation-1',
+      persistence: 'conflict'
+    })
+  })
+
+  it('blocks matching lineage when the existing replacement ID differs', () => {
+    const selected = source()
+    const initial = preview({ source: selected })
+    const candidate = preview({
+      source: selected,
+      lineage: {
+        state: 'matching',
+        source: selected.identity,
+        adoptionId: 'adoption-1',
+        replacementAutomationId: 'automation-other'
+      },
+      existingTarget: {
+        state: 'disabled',
+        automationId: 'automation-1',
+        creationKey: initial.proposedTarget.creationKey,
+        owner
+      }
+    })
+
+    expect(candidate.verdict).toBe('blocked')
+    expect(candidate.conflicts).toContainEqual(
+      expect.objectContaining({ code: 'lineage-conflict', severity: 'blocking' })
+    )
+    expect(candidate.proposedTarget.automationId).toBe('automation-1')
+    expect(candidate.lineage).toMatchObject({
+      replacementAutomationId: 'automation-other',
+      persistence: 'conflict'
+    })
   })
 
   it('requires a decision for unresolved host timezone or running work without claiming eligibility', () => {
@@ -241,6 +353,7 @@ describe('buildLegacyCrontabAdoptionPreview', () => {
       missedRunGraceMinutes: 10,
       lineage: {
         state: 'matching',
+        source: selected.identity,
         adoptionId: 'adoption-1',
         replacementAutomationId: 'automation-1'
       },

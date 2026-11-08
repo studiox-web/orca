@@ -79,9 +79,37 @@ describe('parseLegacyCrontabSnapshot', () => {
     })
     expect(firstDuplicate.identity).toMatchObject({ lineIndex: 7, occurrenceOrdinal: 0 })
     expect(secondDuplicate.identity).toMatchObject({ lineIndex: 8, occurrenceOrdinal: 1 })
+    expect(firstDuplicate.identity.guardedMutationId).toBe(
+      secondDuplicate.identity.guardedMutationId
+    )
     expect(firstDuplicate.identity.rawLineDigest).toBe(secondDuplicate.identity.rawLineDigest)
-    expect(firstDuplicate.identicalOccurrenceCount).toBe(2)
-    expect(secondDuplicate.identicalOccurrenceCount).toBe(2)
+    expect(firstDuplicate.mutationIdentityCount).toBe(2)
+    expect(secondDuplicate.mutationIdentityCount).toBe(2)
+  })
+
+  it('groups pause and irrelevant whitespace variants by guarded mutation identity', () => {
+    const command = 'cd /srv/app && ./bin/prune --older-than 30'
+    const snapshot = parseLegacyCrontabSnapshot({
+      scope,
+      text: [
+        `15 4 * * * ${command}`,
+        `#orca-xos-paused#   15\t4  *   * *   ${command}   `,
+        `# PAUSED FOR ORCA MIGRATION 2026-11-08: 15 4 * * * ${command}`,
+        ''
+      ].join('\n')
+    })
+
+    expect(snapshot.occurrences.map(({ identity }) => identity.occurrenceOrdinal)).toEqual([
+      0, 1, 2
+    ])
+    expect(
+      new Set(snapshot.occurrences.map(({ identity }) => identity.guardedMutationId)).size
+    ).toBe(1)
+    expect(new Set(snapshot.occurrences.map(({ identity }) => identity.rawLineDigest)).size).toBe(3)
+    expect(snapshot.occurrences.map(({ mutationIdentityCount }) => mutationIdentityCount)).toEqual([
+      3, 3, 3
+    ])
+    expect(snapshot.occurrences.map(({ state }) => state)).toEqual(['enabled', 'paused', 'paused'])
   })
 
   it('retains unsupported macros and cron dialects as reviewable occurrences', () => {

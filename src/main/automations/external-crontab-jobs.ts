@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto'
 import { isAbsolute, join, posix } from 'node:path'
 import type { ExternalAutomationJob, ExternalAutomationRun } from '../../shared/automations-types'
 import { nextAutomationOccurrenceAfter } from '../../shared/automation-schedule-occurrences'
+import { crontabLineId } from '../../shared/crontab-line-identity'
 
 /** One schedulable line from `crontab -l`, with the shell plumbing peeled off for display. */
 export type CrontabEntry = {
@@ -40,10 +40,6 @@ const CRON_MACROS: Record<string, string | null> = {
 
 const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
 const NAME_TOKEN_LIMIT = 3
-
-function stableId(schedule: string, command: string): string {
-  return `cron-${createHash('sha256').update(`${schedule}\n${command}`).digest('hex').slice(0, 12)}`
-}
 
 function splitScheduleAndCommand(
   line: string
@@ -148,7 +144,7 @@ export function parseCrontab(text: string): CrontabEntry[] {
     }
     const described = describeCommand(parsed.command)
     entries.push({
-      id: stableId(parsed.rawSchedule, parsed.command),
+      id: crontabLineId(parsed.rawSchedule, parsed.command),
       rawSchedule: parsed.rawSchedule,
       cronExpression: parsed.cronExpression,
       command: parsed.command,

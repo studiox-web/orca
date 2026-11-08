@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { AutomationOwnerRef } from './automation-owner-ref'
 import { parseCronExpression } from './automation-schedule-parsing'
+import { crontabLineId } from './crontab-line-identity'
 
 export type LegacyCrontabScope = {
   authority: AutomationOwnerRef
@@ -33,12 +34,13 @@ export type LegacyCrontabOccurrenceIdentity = LegacyCrontabScope & {
   sourceRevision: string
   lineIndex: number
   occurrenceOrdinal: number
+  guardedMutationId: string
   rawLineDigest: string
 }
 
 export type LegacyCrontabOccurrence = {
   identity: LegacyCrontabOccurrenceIdentity
-  identicalOccurrenceCount: number
+  mutationIdentityCount: number
   state: 'enabled' | 'paused'
   pause: LegacyCrontabPauseProvenance | null
   schedule: LegacyCrontabSchedule
@@ -253,9 +255,10 @@ export function parseLegacyCrontabSnapshot(args: {
     if (!parsed) {
       return
     }
+    const guardedMutationId = crontabLineId(parsed.schedule.expression, parsed.command)
     const rawLineDigest = digest(rawLine)
-    const occurrenceOrdinal = ordinals.get(rawLineDigest) ?? 0
-    ordinals.set(rawLineDigest, occurrenceOrdinal + 1)
+    const occurrenceOrdinal = ordinals.get(guardedMutationId) ?? 0
+    ordinals.set(guardedMutationId, occurrenceOrdinal + 1)
     const command = commandParts(parsed.command)
     occurrences.push({
       identity: {
@@ -263,9 +266,10 @@ export function parseLegacyCrontabSnapshot(args: {
         sourceRevision: revision,
         lineIndex,
         occurrenceOrdinal,
+        guardedMutationId,
         rawLineDigest
       },
-      identicalOccurrenceCount: 0,
+      mutationIdentityCount: 0,
       state: pause ? 'paused' : 'enabled',
       pause,
       schedule: parsed.schedule,
@@ -280,7 +284,7 @@ export function parseLegacyCrontabSnapshot(args: {
 
   const duplicateCounts = new Map<string, number>()
   for (const occurrence of occurrences) {
-    const key = occurrence.identity.rawLineDigest
+    const key = occurrence.identity.guardedMutationId
     duplicateCounts.set(key, (duplicateCounts.get(key) ?? 0) + 1)
   }
   return {
@@ -288,7 +292,7 @@ export function parseLegacyCrontabSnapshot(args: {
     revision,
     occurrences: occurrences.map((occurrence) => ({
       ...occurrence,
-      identicalOccurrenceCount: duplicateCounts.get(occurrence.identity.rawLineDigest) ?? 1
+      mutationIdentityCount: duplicateCounts.get(occurrence.identity.guardedMutationId) ?? 1
     }))
   }
 }
