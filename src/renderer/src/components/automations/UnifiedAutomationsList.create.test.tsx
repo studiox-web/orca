@@ -5,8 +5,10 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { AutomationsPageController } from './use-automations-page-controller'
-import { UnifiedAutomationsList } from './UnifiedAutomationsList'
+import {
+  UnifiedAutomationsList,
+  type UnifiedAutomationsListController
+} from './UnifiedAutomationsList'
 
 afterEach(cleanup)
 
@@ -40,7 +42,7 @@ describe('UnifiedAutomationsList create boundary', () => {
       configurable: true,
       value: { xosGoals: api }
     })
-    const controller = {
+    const controller: UnifiedAutomationsListController = {
       list: {
         visibleRows: [],
         externalAutomationEntries: [],
@@ -54,7 +56,7 @@ describe('UnifiedAutomationsList create boundary', () => {
         setActivePaneTab: vi.fn(),
         setIsDetailOpen: vi.fn()
       }
-    } as unknown as AutomationsPageController
+    }
 
     render(
       <TooltipProvider>

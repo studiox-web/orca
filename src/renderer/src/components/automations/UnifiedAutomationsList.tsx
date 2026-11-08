@@ -37,6 +37,23 @@ import {
   openExactUnifiedExternalEntry
 } from './unified-external-detail-target'
 
+export type UnifiedAutomationsListController = {
+  list: Pick<
+    AutomationsPageController['list'],
+    | 'visibleRows'
+    | 'externalAutomationEntries'
+    | 'externalManagersUncheckedNotice'
+    | 'selectAutomationRow'
+  > & {
+    hostCatalog: Pick<AutomationsPageController['list']['hostCatalog'], 'entries'>
+  }
+  store: Pick<AutomationsPageController['store'], 'repoForRow'>
+  local: Pick<
+    AutomationsPageController['local'],
+    'selectExternalKey' | 'setActivePaneTab' | 'setIsDetailOpen'
+  >
+}
+
 function liveAuthority(row: AutomationsPageController['list']['visibleRows'][number]) {
   return (
     row.catalogRef ??
@@ -63,7 +80,7 @@ export function UnifiedAutomationsList({
   onCreateGoal,
   onOpenGoalAdvanced
 }: {
-  controller: AutomationsPageController
+  controller: UnifiedAutomationsListController
   onShowOrg: () => void
   onShowNative: () => void
   onOpenGoal: (projectKey: string, goal: string) => void

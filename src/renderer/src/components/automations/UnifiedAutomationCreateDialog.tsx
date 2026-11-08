@@ -24,6 +24,16 @@ import { cn } from '@/lib/utils'
 export type UnifiedGoalProjectChoice = { key: string; name: string }
 
 type CreateKind = 'automation' | 'goal'
+type UnifiedAutomationCreateDialogProps = {
+  open: boolean
+  goalProjects: readonly UnifiedGoalProjectChoice[]
+  goalProjectsLoading: boolean
+  goalProjectsError: string | null
+  onOpenChange: (open: boolean) => void
+  onCreateAutomation: () => void
+  onCreateGoal: (projectKey: string) => void
+  onOpenGoalAdvanced: (projectKey: string | null) => void
+}
 
 function CreateOption({
   value,
@@ -69,8 +79,7 @@ function CreateOption({
   )
 }
 
-export function UnifiedAutomationCreateDialog({
-  open,
+function UnifiedAutomationCreateDialogContent({
   goalProjects,
   goalProjectsLoading,
   goalProjectsError,
@@ -78,33 +87,16 @@ export function UnifiedAutomationCreateDialog({
   onCreateAutomation,
   onCreateGoal,
   onOpenGoalAdvanced
-}: {
-  open: boolean
-  goalProjects: readonly UnifiedGoalProjectChoice[]
-  goalProjectsLoading: boolean
-  goalProjectsError: string | null
-  onOpenChange: (open: boolean) => void
-  onCreateAutomation: () => void
-  onCreateGoal: (projectKey: string) => void
-  onOpenGoalAdvanced: (projectKey: string | null) => void
-}): React.JSX.Element {
+}: Omit<UnifiedAutomationCreateDialogProps, 'open'>): React.JSX.Element {
   const [kind, setKind] = React.useState<CreateKind>('automation')
-  const [projectKey, setProjectKey] = React.useState('')
-
-  React.useEffect(() => {
-    if (!open) {
-      return
-    }
-    setKind('automation')
-    setProjectKey('')
-  }, [open])
-
-  React.useEffect(() => {
-    if (!open) {
-      return
-    }
-    setProjectKey(goalProjects.length === 1 ? goalProjects[0].key : '')
-  }, [goalProjects, open])
+  const [selectedProjectKey, setSelectedProjectKey] = React.useState('')
+  const projectKey = goalProjectsLoading
+    ? ''
+    : goalProjects.some((project) => project.key === selectedProjectKey)
+      ? selectedProjectKey
+      : goalProjects.length === 1
+        ? goalProjects[0].key
+        : ''
 
   const continueCreate = (): void => {
     if (kind === 'automation') {
@@ -117,32 +109,31 @@ export function UnifiedAutomationCreateDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl" scrollable>
-        <DialogHeader>
-          <DialogTitle>
-            {translate('auto.components.automations.unified.createDialog.title', 'Create')}
-          </DialogTitle>
-          <DialogDescription>
-            {translate(
-              'auto.components.automations.unified.createDialog.description',
-              'Choose a supported type. Each choice opens its existing editor and keeps its current storage and behavior.'
-            )}
-          </DialogDescription>
-        </DialogHeader>
-        <RadioGroup
-          value={kind}
-          onValueChange={(value) => {
-            if (value === 'automation' || value === 'goal') {
-              setKind(value)
-            }
-          }}
-          aria-label={translate(
-            'auto.components.automations.unified.createDialog.typeLabel',
-            'Creation type'
+    <DialogContent className="sm:max-w-2xl" scrollable>
+      <DialogHeader>
+        <DialogTitle>
+          {translate('auto.components.automations.unified.createDialog.title', 'Create')}
+        </DialogTitle>
+        <DialogDescription>
+          {translate(
+            'auto.components.automations.unified.createDialog.description',
+            'Choose a supported type. Each choice opens its existing editor and keeps its current storage and behavior.'
           )}
-          className="grid gap-3 sm:grid-cols-2"
-        >
+        </DialogDescription>
+      </DialogHeader>
+      <RadioGroup
+        value={kind}
+        onValueChange={(value) => {
+          if (value === 'automation' || value === 'goal') {
+            setKind(value)
+          }
+        }}
+        aria-label={translate(
+          'auto.components.automations.unified.createDialog.typeLabel',
+          'Creation type'
+        )}
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
           <CreateOption
             value="automation"
             title={translate(
@@ -195,64 +186,66 @@ export function UnifiedAutomationCreateDialog({
             icon={<Plug className="size-4" aria-hidden />}
             disabled
           />
-        </RadioGroup>
-        {kind === 'goal' ? (
-          <section
-            className="space-y-3 rounded-xl border bg-muted/20 p-4"
-            aria-label={translate(
-              'auto.components.automations.unified.createDialog.goalOptions',
-              'Goal options'
-            )}
-          >
-            <div className="space-y-1">
-              <label htmlFor="unified-goal-project" className="text-sm font-medium">
-                {translate('auto.components.automations.unified.createDialog.project', 'Project')}
-              </label>
-              {goalProjectsLoading ? (
-                <p className="text-xs text-muted-foreground">
-                  {translate(
-                    'auto.components.automations.unified.createDialog.loadingProjects',
-                    'Loading local Goal projects…'
+        </div>
+      </RadioGroup>
+      {kind === 'goal' ? (
+        <section
+          className="space-y-3 rounded-xl border bg-muted/20 p-4"
+          aria-label={translate(
+            'auto.components.automations.unified.createDialog.goalOptions',
+            'Goal options'
+          )}
+        >
+          <div className="space-y-1">
+            <label htmlFor="unified-goal-project" className="text-sm font-medium">
+              {translate('auto.components.automations.unified.createDialog.project', 'Project')}
+            </label>
+            {goalProjectsLoading ? (
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.automations.unified.createDialog.loadingProjects',
+                  'Loading local Goal projects…'
+                )}
+              </p>
+            ) : goalProjectsError ? (
+              <p className="text-xs text-destructive">{goalProjectsError}</p>
+            ) : goalProjects.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.automations.unified.createDialog.noProjects',
+                  'No local project with an automations/goals folder is available.'
+                )}
+              </p>
+            ) : (
+              <Select value={projectKey} onValueChange={setSelectedProjectKey}>
+                <SelectTrigger
+                  id="unified-goal-project"
+                  className="w-full"
+                  aria-label={translate(
+                    'auto.components.automations.unified.createDialog.project',
+                    'Project'
                   )}
-                </p>
-              ) : goalProjectsError ? (
-                <p className="text-xs text-destructive">{goalProjectsError}</p>
-              ) : goalProjects.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  {translate(
-                    'auto.components.automations.unified.createDialog.noProjects',
-                    'No local project with an automations/goals folder is available.'
-                  )}
-                </p>
-              ) : (
-                <Select value={projectKey} onValueChange={setProjectKey}>
-                  <SelectTrigger
-                    id="unified-goal-project"
-                    className="w-full"
-                    aria-label={translate(
-                      'auto.components.automations.unified.createDialog.project',
-                      'Project'
+                >
+                  <SelectValue
+                    placeholder={translate(
+                      'auto.components.automations.unified.createDialog.projectPlaceholder',
+                      'Choose a local Goal project'
                     )}
-                  >
-                    <SelectValue
-                      placeholder={translate(
-                        'auto.components.automations.unified.createDialog.projectPlaceholder',
-                        'Choose a local Goal project'
-                      )}
-                    />
-                  </SelectTrigger>
-                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                    {goalProjects.map((project) => (
-                      <SelectItem key={project.key} value={project.key}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-            <Collapsible>
-              <CollapsibleTrigger variant="row" className="px-2">
+                  />
+                </SelectTrigger>
+                <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                  {goalProjects.map((project) => (
+                    <SelectItem key={project.key} value={project.key}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <Collapsible>
+            <div className="px-2">
+              <CollapsibleTrigger variant="row">
                 <span>
                   {translate(
                     'auto.components.automations.unified.createDialog.advancedGoalOptions',
@@ -261,7 +254,9 @@ export function UnifiedAutomationCreateDialog({
                 </span>
                 <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
               </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 px-2 pb-2 text-xs text-muted-foreground">
+            </div>
+            <CollapsibleContent>
+              <div className="space-y-3 px-2 pb-2 text-xs text-muted-foreground">
                 <p>
                   {translate(
                     'auto.components.automations.unified.createDialog.advancedGoalDescription',
@@ -279,31 +274,47 @@ export function UnifiedAutomationCreateDialog({
                     'Open Goal workspace'
                   )}
                 </Button>
-              </CollapsibleContent>
-            </Collapsible>
-          </section>
-        ) : null}
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {translate('common.cancel', 'Cancel')}
-          </Button>
-          <Button
-            type="button"
-            onClick={continueCreate}
-            disabled={kind === 'goal' && (!projectKey || goalProjectsLoading)}
-          >
-            {kind === 'automation'
-              ? translate(
-                  'auto.components.automations.AutomationsPage.newAutomation',
-                  'New Automation'
-                )
-              : translate(
-                  'auto.components.automations.unified.createDialog.continueGoal',
-                  'Continue to Goal details'
-                )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </section>
+      ) : null}
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          {translate('common.cancel', 'Cancel')}
+        </Button>
+        <Button
+          type="button"
+          onClick={continueCreate}
+          disabled={kind === 'goal' && (!projectKey || goalProjectsLoading)}
+        >
+          {kind === 'automation'
+            ? translate(
+                'auto.components.automations.AutomationsPage.newAutomation',
+                'New Automation'
+              )
+            : translate(
+                'auto.components.automations.unified.createDialog.continueGoal',
+                'Continue to Goal details'
+              )}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  )
+}
+
+export function UnifiedAutomationCreateDialog({
+  open,
+  onOpenChange,
+  ...contentProps
+}: UnifiedAutomationCreateDialogProps): React.JSX.Element {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <UnifiedAutomationCreateDialogContent
+        key={open ? 'open' : 'closed'}
+        onOpenChange={onOpenChange}
+        {...contentProps}
+      />
     </Dialog>
   )
 }

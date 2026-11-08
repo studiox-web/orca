@@ -23,26 +23,39 @@ const project: XosProject = {
 }
 
 function renderDialog({
-  goalOp = vi.fn().mockResolvedValue(true),
+  goalOp,
   currentProject = project
 }: {
-  goalOp?: ReturnType<typeof vi.fn>
+  goalOp?: XosGoalActions['goalOp']
   currentProject?: XosProject
 } = {}) {
+  const goalOperation = goalOp ?? vi.fn<XosGoalActions['goalOp']>().mockResolvedValue(true)
   const onClose = vi.fn()
   const onCreated = vi.fn()
+  const actions: XosGoalActions = {
+    busy: null,
+    cron: vi.fn(),
+    goalOp: goalOperation,
+    areaOp: vi.fn(),
+    runGoal: vi.fn(),
+    releaseTakeover: vi.fn(),
+    setGoalPaused: vi.fn(),
+    runJob: vi.fn(),
+    setJobPaused: vi.fn(),
+    openFile: vi.fn()
+  }
   render(
     <TooltipProvider>
       <XosNewGoalDialog
         open
         project={currentProject}
-        actions={{ goalOp } as unknown as XosGoalActions}
+        actions={actions}
         onClose={onClose}
         onCreated={onCreated}
       />
     </TooltipProvider>
   )
-  return { goalOp, onClose, onCreated }
+  return { goalOp: goalOperation, onClose, onCreated }
 }
 
 afterEach(cleanup)
@@ -102,7 +115,7 @@ describe('XosNewGoalDialog agent selector', () => {
   })
 
   it('keeps existing and archived folder names invalid', async () => {
-    const goalOp = vi.fn().mockResolvedValue(true)
+    const goalOp = vi.fn<XosGoalActions['goalOp']>().mockResolvedValue(true)
     renderDialog({
       goalOp,
       currentProject: {

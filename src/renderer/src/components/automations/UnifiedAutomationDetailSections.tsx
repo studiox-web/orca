@@ -51,9 +51,9 @@ export function UnifiedAutomationDetailSections({
               'Warnings and conflicts'
             )}
           </h2>
-          {row.warnings.map((warning, index) => (
+          {row.warnings.map((warning) => (
             <div
-              key={`${warning.code}:${index}`}
+              key={`${warning.code}:${warning.message}`}
               className="flex gap-2 rounded-md border p-3 text-sm"
             >
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
@@ -155,9 +155,9 @@ export function UnifiedAutomationDetailSections({
           )}
         </h2>
         <div className="mt-3 space-y-3">
-          {row.sourceRefs.map((source, index) => (
+          {row.sourceRefs.map((source) => (
             <article
-              key={`${source.kind}:${hostStableKey(source.authority)}:${source.sourceId}:${source.revision ?? ''}:${source.ownerKey ?? ''}:${index}`}
+              key={`${source.kind}:${hostStableKey(source.authority)}:${source.sourceId}:${source.revision ?? ''}:${source.ownerKey ?? ''}`}
               className="rounded-md border p-3 text-xs"
             >
               <div className="flex flex-wrap items-center gap-2">
@@ -231,36 +231,40 @@ export function UnifiedAutomationDetailSections({
             </p>
           </section>
         ) : (
-          <Collapsible className="rounded-xl border bg-card px-4 shadow-xs">
-            <CollapsibleTrigger variant="row">
-              <span>
-                {translate(
-                  'auto.components.automations.unified.detail.advancedGoalWorkspace',
-                  'Advanced Goal workspace'
-                )}
-              </span>
-              <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="space-y-3 pb-4 text-xs text-muted-foreground">
-              <p>
-                {translate(
-                  'auto.components.automations.unified.detail.advancedGoalDescription',
-                  'Open the existing Goal Viewer for files, scheduling, pause/resume, archive, run, and other established manage capabilities. This shell does not duplicate them.'
-                )}
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => onOpenGoal(goalTarget.projectKey, goalTarget.goal)}
-              >
-                {translate(
-                  'auto.components.automations.unified.detail.openGoalWorkspace',
-                  'Open Goal workspace'
-                )}
-              </Button>
-            </CollapsibleContent>
-          </Collapsible>
+          <section className="rounded-xl border bg-card px-4 shadow-xs">
+            <Collapsible>
+              <CollapsibleTrigger variant="row">
+                <span>
+                  {translate(
+                    'auto.components.automations.unified.detail.advancedGoalWorkspace',
+                    'Advanced Goal workspace'
+                  )}
+                </span>
+                <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="space-y-3 pb-4 text-xs text-muted-foreground">
+                  <p>
+                    {translate(
+                      'auto.components.automations.unified.detail.advancedGoalDescription',
+                      'Open the existing Goal Viewer for files, scheduling, pause/resume, archive, run, and other established manage capabilities. This shell does not duplicate them.'
+                    )}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onOpenGoal(goalTarget.projectKey, goalTarget.goal)}
+                  >
+                    {translate(
+                      'auto.components.automations.unified.detail.openGoalWorkspace',
+                      'Open Goal workspace'
+                    )}
+                  </Button>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </section>
         )
       ) : null}
 
