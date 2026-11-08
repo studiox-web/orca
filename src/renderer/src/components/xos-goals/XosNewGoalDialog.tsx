@@ -1,6 +1,7 @@
 // XOS fork: "hire from blank". Creates automations/goals/<name>/ from the project's goal template
 // (GOAL.md, STATUS.md, log/), files it under an area, then opens GOAL.md for editing.
 import React, { useEffect, useState } from 'react'
+import AgentCombobox from '@/components/agent/AgentCombobox'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,6 +12,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { getAgentCatalog } from '@/lib/agent-catalog'
 import {
   Select,
   SelectContent,
@@ -19,11 +21,12 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import type { XosProject } from '../../../../shared/xos-goals-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { areaIdFromTitle } from './XosAreaDialog'
 import type { XosGoalActions } from './XosGoalViewerParts'
 
 const NO_AREA = '__none__'
-const AGENTS = ['codex', 'claude', 'gemini']
+const GOAL_AGENT_IDS = new Set<TuiAgent>(['codex', 'claude', 'gemini'])
 
 export function XosNewGoalDialog({
   open,
@@ -41,7 +44,7 @@ export function XosNewGoalDialog({
   const [title, setTitle] = useState('')
   const [name, setName] = useState('')
   const [nameEdited, setNameEdited] = useState(false)
-  const [agent, setAgent] = useState('codex')
+  const [agent, setAgent] = useState<TuiAgent>('codex')
   const [areaId, setAreaId] = useState(NO_AREA)
   const [pending, setPending] = useState(false)
 
@@ -60,6 +63,7 @@ export function XosNewGoalDialog({
     project.goals.some((goal) => goal.goal === slug) ||
     project.archived.some((goal) => goal.goal === slug)
   const valid = /^[a-z0-9][a-z0-9-]{1,62}$/.test(slug) && !taken
+  const agents = getAgentCatalog().filter((entry) => GOAL_AGENT_IDS.has(entry.id))
 
   const create = (): void => {
     setPending(true)
@@ -122,21 +126,16 @@ export function XosNewGoalDialog({
           )}
         </label>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1 text-xs">
+          <label className="space-y-1 text-xs">
             <span className="font-semibold text-muted-foreground">Agent</span>
-            <Select value={agent} onValueChange={setAgent}>
-              <SelectTrigger className="w-full" aria-label="Agent">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                {AGENTS.map((name) => (
-                  <SelectItem key={name} value={name}>
-                    {name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+            <AgentCombobox
+              agents={agents}
+              value={agent}
+              onValueChange={setAgent}
+              triggerClassName="w-full min-w-0"
+              allowNarrowTrigger
+            />
+          </label>
           <div className="space-y-1 text-xs">
             <span className="font-semibold text-muted-foreground">Business area</span>
             <Select value={areaId} onValueChange={setAreaId}>
