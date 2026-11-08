@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { parseExecutionHostId } from '../../shared/execution-host'
 import { buildUnifiedAutomationSnapshot } from '../../shared/unified-automation-read-model'
+import { LOCAL_UNIFIED_AUTHORITY } from '../../shared/unified-automation-source-adapters'
 import { buildXosGoalBoard, type XosRepoSource } from './xos-goal-board'
 import { rememberProjects } from './xos-project-registry'
 import { listRunConfigs } from './xos-runtime-store'
@@ -27,7 +28,8 @@ export function registerXosUnifiedAutomationHandler(repos: XosUnifiedAutomationS
       board,
       automations,
       runs: repos.listAutomationRuns().filter((run) => automationIds.has(run.automationId)),
-      runConfigs: listRunConfigs()
+      runConfigs: listRunConfigs(),
+      runConfigAuthority: LOCAL_UNIFIED_AUTHORITY
     })
   })
 }

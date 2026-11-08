@@ -23,7 +23,8 @@ function remoteRow(): AutomationListRow {
       totalTokens: 0,
       estimatedCostUsd: null,
       lastRunAt: 20,
-      lastRunStatus: 'dispatching'
+      lastRunStatus: 'dispatching',
+      lastRunId: 'native-run-20'
     },
     automation: {
       id: 'same-id',
@@ -71,6 +72,18 @@ describe('unified live automation adapters', () => {
     expect(row.sourceRefs[0].ownerKey).toBe('owner:runtime:server-1:4:ssh:build-1:2')
     expect(row.scheduleState).toBe('paused')
     expect(row.runSummary?.outcome).toBe('running')
+    expect(row.runSummary).toMatchObject({ sourceId: 'native-run-20', identity: 'stable' })
+  })
+
+  it('represents aggregate native run evidence without calling it a legacy Goal receipt', () => {
+    const input = remoteRow()
+    input.usageSummary = { ...input.usageSummary!, lastRunId: null }
+
+    expect(adaptLiveAutomationRow(input, 'Project').runSummary).toMatchObject({
+      source: 'native',
+      sourceId: null,
+      identity: 'aggregate-without-run-id'
+    })
   })
 
   it('labels stale storage and disconnected execution independently without changing state', () => {

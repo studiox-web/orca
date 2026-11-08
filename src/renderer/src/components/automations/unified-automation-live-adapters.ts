@@ -9,23 +9,12 @@ import type {
   UnifiedRunOutcome
 } from '../../../../shared/unified-automation-types'
 import { encodeUnifiedAutomationKey } from '../../../../shared/unified-automation-identity'
+import { automationAuthority } from '../../../../shared/unified-automation-source-adapters'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import { getAutomationRowLastRunSnapshot } from './automation-list-last-run'
 import { translate } from '@/i18n/i18n'
-
-function automationAuthority(row: AutomationListRow): StableAutomationCatalogRef {
-  if (row.catalogRef) {
-    return row.catalogRef
-  }
-  return row.automation.executionTargetType === 'ssh'
-    ? {
-        authority: { kind: 'desktop' },
-        selector: { kind: 'ssh', targetId: row.automation.executionTargetId }
-      }
-    : { authority: { kind: 'desktop' }, selector: { kind: 'self' } }
-}
 
 function externalRunOutcome(status: string | null): UnifiedRunOutcome {
   const value = status?.toLowerCase() ?? ''
@@ -65,9 +54,10 @@ export function adaptLiveAutomationRow(
   project: string | null,
   capturedOwnerKey: string | null = null
 ): UnifiedAutomationRow {
-  const authority = automationAuthority(row)
+  const authority = row.catalogRef ?? automationAuthority(row.automation).stable
   const identity = { kind: 'automation' as const, authority, automationId: row.automation.id }
   const lastRun = getAutomationRowLastRunSnapshot(row)
+  const lastRunId = row.usageSummary?.lastRunId ?? null
   const sourceRef = {
     kind: 'native-automation' as const,
     authority,
@@ -107,8 +97,8 @@ export function adaptLiveAutomationRow(
         ? null
         : {
             source: 'native',
-            sourceId: null,
-            identity: 'legacy-without-run-id',
+            sourceId: lastRunId,
+            identity: lastRunId ? 'stable' : 'aggregate-without-run-id',
             outcome: lastRun.tone === 'never' ? 'unknown' : lastRun.tone,
             sourceStatus: lastRun.tone,
             at: new Date(lastRun.at).toISOString()
@@ -209,7 +199,7 @@ export function adaptLiveExternalRow(entry: ExternalAutomationListEntry): Unifie
       ? {
           source: 'external',
           sourceId: entry.job.runs[0]?.id ?? null,
-          identity: entry.job.runs[0]?.id ? 'stable' : 'legacy-without-run-id',
+          identity: entry.job.runs[0]?.id ? 'stable' : 'aggregate-without-run-id',
           outcome: externalRunOutcome(entry.job.lastStatus),
           sourceStatus: entry.job.lastStatus ?? 'unknown',
           at: entry.job.lastRunAt

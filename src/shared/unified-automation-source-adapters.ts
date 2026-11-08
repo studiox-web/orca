@@ -103,6 +103,26 @@ export function automationAuthority(automation: Automation): {
   return { stable, capturedOwner, host: automation.executionTargetId || 'Unknown SSH host' }
 }
 
+export function automationRunAuthority(run: AutomationRun): StableAutomationCatalogRef | null {
+  const executionHost = parseExecutionHostId(run.runContext?.hostId)
+  if (executionHost?.kind === 'local') {
+    return LOCAL_UNIFIED_AUTHORITY
+  }
+  if (executionHost?.kind === 'ssh') {
+    return {
+      authority: { kind: 'desktop' },
+      selector: { kind: 'ssh', targetId: executionHost.targetId }
+    }
+  }
+  if (executionHost?.kind === 'runtime') {
+    return {
+      authority: { kind: 'runtime', environmentId: executionHost.environmentId },
+      selector: { kind: 'self' }
+    }
+  }
+  return null
+}
+
 function nativeSourceRef(automation: Automation): UnifiedSourceRef {
   const authority = automationAuthority(automation)
   return unifiedSourceRef({

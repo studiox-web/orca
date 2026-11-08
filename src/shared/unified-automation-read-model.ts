@@ -1,8 +1,14 @@
 import type { Automation, AutomationRun } from './automations-types'
 import { hostStableKey } from './automation-owner-key'
+import type { StableAutomationCatalogRef } from './automation-owner-ref'
 import { normalizeRuntimePathForComparison } from './cross-platform-path'
 import type { XosAutomationRunConfig } from './xos-runtime-types'
 import type { XosGoalBoard } from './xos-goals-types'
+import {
+  groupedAutomations,
+  latestRunsByAutomationAuthority,
+  qualifiedAutomationKey
+} from './unified-automation-attribution'
 import {
   archivedGoalRow,
   boundScriptRow,
@@ -31,20 +37,8 @@ type BuildUnifiedAutomationSnapshotInput = {
   automations: readonly Automation[]
   runs: readonly AutomationRun[]
   runConfigs: Readonly<Record<string, XosAutomationRunConfig>>
+  runConfigAuthority: StableAutomationCatalogRef
   generatedAt?: string
-}
-
-function latestRunByAutomation(runs: readonly AutomationRun[]): Map<string, AutomationRun> {
-  const latest = new Map<string, AutomationRun>()
-  for (const run of runs) {
-    const current = latest.get(run.automationId)
-    const at = run.startedAt ?? run.createdAt
-    const currentAt = current ? (current.startedAt ?? current.createdAt) : Number.NEGATIVE_INFINITY
-    if (!current || at > currentAt || (at === currentAt && run.id.localeCompare(current.id) > 0)) {
-      latest.set(run.automationId, run)
-    }
-  }
-  return latest
 }
 
 function sourceRevision(values: readonly string[]): string {
@@ -78,20 +72,6 @@ function addBoardRows(rows: Map<string, UnifiedAutomationRow>, board: XosGoalBoa
   }
 }
 
-function groupedAutomations(automations: readonly Automation[]): Automation[][] {
-  const groups = new Map<string, Automation[]>()
-  for (const automation of automations) {
-    const authority = automationAuthority(automation).stable
-    const key = `${hostStableKey(authority)}:${automation.id}`
-    groups.set(key, [...(groups.get(key) ?? []), automation])
-  }
-  return [...groups.values()].sort((a, b) =>
-    `${hostStableKey(automationAuthority(a[0]).stable)}:${a[0].id}`.localeCompare(
-      `${hostStableKey(automationAuthority(b[0]).stable)}:${b[0].id}`
-    )
-  )
-}
-
 function activeGoalBindingTarget(
   rows: ReadonlyMap<string, UnifiedAutomationRow>,
   binding: NonNullable<XosAutomationRunConfig['goal']>
@@ -114,10 +94,10 @@ function foldGoalBinding(
   rows: Map<string, UnifiedAutomationRow>,
   automation: Automation,
   latest: AutomationRun | undefined,
-  config: XosAutomationRunConfig,
+  config: XosAutomationRunConfig | undefined,
   duplicateWarnings: UnifiedAutomationWarning[]
 ): boolean {
-  if (!config.goal) {
+  if (!config?.goal) {
     return false
   }
   const bindingTarget = activeGoalBindingTarget(rows, config.goal)
@@ -160,18 +140,25 @@ function addNativeRows(
   latestRuns: ReadonlyMap<string, AutomationRun>
 ): void {
   const groups = groupedAutomations(input.automations)
-  const authoritiesById = new Map<string, Set<string>>()
-  for (const group of groups) {
-    const automation = group[0]
-    const authorities = authoritiesById.get(automation.id) ?? new Set<string>()
-    authorities.add(hostStableKey(automationAuthority(automation).stable))
-    authoritiesById.set(automation.id, authorities)
-  }
+  const configAuthorityKey = hostStableKey(input.runConfigAuthority)
   for (const group of groups) {
     const automation = [...group].sort((a, b) =>
       `${a.updatedAt}:${a.name}`.localeCompare(`${b.updatedAt}:${b.name}`)
     )[0]
-    const config = input.runConfigs[automation.id]
+    const authority = automationAuthority(automation).stable
+    const authorityKey = hostStableKey(authority)
+    const rawConfig = input.runConfigs[automation.id]
+    const config = authorityKey === configAuthorityKey ? rawConfig : undefined
+    const attributionWarnings: UnifiedAutomationWarning[] =
+      rawConfig && !config
+        ? [
+            {
+              code: 'config-attribution-conflict',
+              message: `Runtime config ${automation.id} belongs to ${configAuthorityKey} and was not attributed to ${authorityKey}.`
+            }
+          ]
+        : []
+    warnings.push(...attributionWarnings)
     const duplicateWarnings: UnifiedAutomationWarning[] =
       group.length > 1
         ? [
@@ -181,24 +168,15 @@ function addNativeRows(
             }
           ]
         : []
-    const latest = latestRuns.get(automation.id)
-    if ((config?.goal || config?.script) && (authoritiesById.get(automation.id)?.size ?? 0) > 1) {
-      const conflict = {
-        code: 'binding-conflict' as const,
-        message: `Runtime binding ${automation.id} is ambiguous across multiple authorities and was not folded.`
-      }
-      warnings.push(conflict)
-      const row = nativeAutomationRow(automation, undefined, [...duplicateWarnings, conflict])
-      rows.set(row.key, row)
-      continue
-    }
+    const sourceWarnings = [...duplicateWarnings, ...attributionWarnings]
+    const latest = latestRuns.get(qualifiedAutomationKey(authority, automation.id))
     if (config?.goal && config?.script) {
       const conflict = {
         code: 'binding-conflict' as const,
         message: `Native automation ${automation.id} is bound to both a Goal and a Script.`
       }
       warnings.push(conflict)
-      const row = nativeAutomationRow(automation, latest, [...duplicateWarnings, conflict])
+      const row = nativeAutomationRow(automation, latest, [...sourceWarnings, conflict])
       rows.set(row.key, row)
       continue
     }
@@ -220,11 +198,11 @@ function addNativeRows(
           warnings: [...target[1].warnings, conflict]
         })
       }
-      const row = nativeAutomationRow(automation, latest, [...duplicateWarnings, conflict])
+      const row = nativeAutomationRow(automation, latest, [...sourceWarnings, conflict])
       rows.set(row.key, row)
       continue
     }
-    if (foldGoalBinding(rows, automation, latest, config ?? {}, duplicateWarnings)) {
+    if (foldGoalBinding(rows, automation, latest, config, sourceWarnings)) {
       continue
     }
     if (config?.goal) {
@@ -233,16 +211,16 @@ function addNativeRows(
         message: `Goal binding ${config.goal.repoRoot}:${config.goal.goal} has no active exact target.`
       }
       warnings.push(missing)
-      const row = nativeAutomationRow(automation, latest, [...duplicateWarnings, missing])
+      const row = nativeAutomationRow(automation, latest, [...sourceWarnings, missing])
       rows.set(row.key, row)
       continue
     }
     const row = config?.script
       ? boundScriptRow(automation, latest, config)
-      : nativeAutomationRow(automation, latest, duplicateWarnings)
+      : nativeAutomationRow(automation, latest, sourceWarnings)
     rows.set(row.key, {
       ...row,
-      warnings: config?.script ? [...row.warnings, ...duplicateWarnings] : row.warnings
+      warnings: config?.script ? [...row.warnings, ...sourceWarnings] : row.warnings
     })
   }
 }
@@ -252,9 +230,16 @@ function addStaleBindingWarnings(
   warnings: UnifiedAutomationWarning[],
   input: BuildUnifiedAutomationSnapshotInput
 ): void {
-  const automationIds = new Set(input.automations.map((automation) => automation.id))
+  const automationKeys = new Set(
+    input.automations.map((automation) =>
+      qualifiedAutomationKey(automationAuthority(automation).stable, automation.id)
+    )
+  )
   for (const [automationId, config] of Object.entries(input.runConfigs)) {
-    if ((!config.goal && !config.script) || automationIds.has(automationId)) {
+    if (
+      (!config.goal && !config.script) ||
+      automationKeys.has(qualifiedAutomationKey(input.runConfigAuthority, automationId))
+    ) {
       continue
     }
     const warning: UnifiedAutomationWarning = {
@@ -279,8 +264,10 @@ export function buildUnifiedAutomationSnapshot(
     code: 'source-unavailable',
     message
   }))
+  const latestRuns = latestRunsByAutomationAuthority(input.automations, input.runs)
+  warnings.push(...latestRuns.warnings)
   addBoardRows(rows, input.board)
-  addNativeRows(rows, warnings, input, latestRunByAutomation(input.runs))
+  addNativeRows(rows, warnings, input, latestRuns.latest)
   addStaleBindingWarnings(rows, warnings, input)
   return {
     generatedAt: input.generatedAt ?? new Date().toISOString(),
@@ -294,14 +281,18 @@ export function buildUnifiedAutomationSnapshot(
       ),
       legacyCron: input.board.crontabHash,
       nativeAutomations: sourceRevision(
-        input.automations.map((automation) => `${automation.id}:${automation.updatedAt}`)
+        input.automations.map(
+          (automation) =>
+            `${qualifiedAutomationKey(automationAuthority(automation).stable, automation.id)}:${automation.updatedAt}`
+        )
       ),
-      runtimeBindings: sourceRevision(
-        Object.entries(input.runConfigs).map(
+      runtimeBindings: sourceRevision([
+        hostStableKey(input.runConfigAuthority),
+        ...Object.entries(input.runConfigs).map(
           ([id, config]) =>
             `${id}:${config.goal ? normalizeRuntimePathForComparison(config.goal.repoRoot) : ''}:${config.goal?.goal ?? ''}:${config.script ? 'script' : ''}`
         )
-      )
+      ])
     },
     rows: [...rows.values()].sort((a, b) => a.key.localeCompare(b.key)),
     warnings

@@ -70,7 +70,7 @@ export type UnifiedLifecycle = {
 export type UnifiedRunSummary = {
   source: 'native' | 'goal-receipt' | 'external'
   sourceId: string | null
-  identity: 'stable' | 'legacy-without-run-id'
+  identity: 'stable' | 'legacy-without-run-id' | 'aggregate-without-run-id'
   outcome: UnifiedRunOutcome
   sourceStatus: string
   at: string | null
@@ -80,9 +80,11 @@ export type UnifiedAutomationWarning = {
   code:
     | 'binding-conflict'
     | 'binding-target-missing'
+    | 'config-attribution-conflict'
     | 'duplicate-native-identity'
     | 'legacy-run-without-id'
     | 'legacy-source-identity'
+    | 'run-attribution-conflict'
     | 'source-unavailable'
     | 'stale-source'
   message: string

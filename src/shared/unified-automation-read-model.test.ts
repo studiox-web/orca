@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Automation, AutomationRun } from './automations-types'
-import { toRuntimeExecutionHostId } from './execution-host'
+import { hostStableKey } from './automation-owner-key'
+import type { StableAutomationCatalogRef } from './automation-owner-ref'
+import {
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
 import type { XosAutomationRunConfig } from './xos-runtime-types'
 import type { XosCronJob, XosGoal, XosGoalBoard, XosProject } from './xos-goals-types'
 import {
@@ -153,6 +159,38 @@ function automation(id: string, overrides: Partial<Automation> = {}): Automation
   }
 }
 
+function automationRun(
+  id: string,
+  automationId: string,
+  hostId: ExecutionHostId | null,
+  overrides: Partial<AutomationRun> = {}
+): AutomationRun {
+  return {
+    id,
+    automationId,
+    runContext: hostId ? { ...automation(automationId).runContext!, hostId } : null,
+    sourceContext: null,
+    title: `${automationId} run`,
+    scheduledFor: 1,
+    status: 'completed',
+    trigger: 'scheduled',
+    workspaceId: null,
+    sessionKind: 'terminal',
+    chatSessionId: null,
+    terminalSessionId: null,
+    terminalPaneKey: null,
+    terminalPtyId: null,
+    outputSnapshot: null,
+    precheckResult: null,
+    usage: null,
+    error: null,
+    startedAt: 1,
+    dispatchedAt: 1,
+    createdAt: 1,
+    ...overrides
+  }
+}
+
 const emptyConfig = (): XosAutomationRunConfig => ({
   fallbacks: [],
   fallbackOnManualRuns: false,
@@ -171,6 +209,7 @@ function snapshot(
     automations?: Automation[]
     runs?: AutomationRun[]
     runConfigs?: Record<string, XosAutomationRunConfig>
+    runConfigAuthority?: StableAutomationCatalogRef
   } = {}
 ) {
   return buildUnifiedAutomationSnapshot({
@@ -178,6 +217,7 @@ function snapshot(
     automations: args.automations ?? [],
     runs: args.runs ?? [],
     runConfigs: args.runConfigs ?? {},
+    runConfigAuthority: args.runConfigAuthority ?? local,
     generatedAt: '2026-11-04T12:00:00.000Z'
   })
 }
@@ -407,7 +447,81 @@ describe('unified automation read model', () => {
     ).toContain('stale-source')
   })
 
-  it('refuses to fold an ID-only binding that collides across authorities', () => {
+  it('attributes same-ID runs only to their local, SSH, and runtime authorities', () => {
+    const runtimeHostId = toRuntimeExecutionHostId('server-1')
+    const result = snapshot({
+      automations: [
+        automation('same-id'),
+        automation('same-id', {
+          executionTargetType: 'ssh',
+          executionTargetId: 'build-host'
+        }),
+        automation('same-id', {
+          schedulerOwner: 'remote_host_service',
+          runContext: { ...automation('runtime').runContext!, hostId: runtimeHostId }
+        })
+      ],
+      runs: [
+        automationRun('local-run', 'same-id', 'local', { createdAt: 1 }),
+        automationRun('ssh-run', 'same-id', toSshExecutionHostId('build-host'), {
+          status: 'dispatch_failed',
+          createdAt: 3
+        }),
+        automationRun('runtime-run', 'same-id', runtimeHostId, {
+          status: 'skipped_unavailable',
+          createdAt: 2
+        })
+      ]
+    })
+
+    const nativeRows = result.rows.filter((row) => row.identity.kind === 'automation')
+    const rowsByAuthority = new Map(
+      nativeRows.map((row) => [hostStableKey(row.identity.authority), row])
+    )
+    expect(rowsByAuthority.get(hostStableKey(local))?.runSummary?.sourceId).toBe('local-run')
+    expect(
+      rowsByAuthority.get(
+        hostStableKey({
+          authority: { kind: 'desktop' },
+          selector: { kind: 'ssh', targetId: 'build-host' }
+        })
+      )?.runSummary?.sourceId
+    ).toBe('ssh-run')
+    expect(
+      rowsByAuthority.get(
+        hostStableKey({
+          authority: { kind: 'runtime', environmentId: 'server-1' },
+          selector: { kind: 'self' }
+        })
+      )?.runSummary?.sourceId
+    ).toBe('runtime-run')
+  })
+
+  it('leaves a same-ID run without authority lineage unattached and warns', () => {
+    const result = snapshot({
+      automations: [
+        automation('ambiguous-run'),
+        automation('ambiguous-run', {
+          executionTargetType: 'ssh',
+          executionTargetId: 'build-host'
+        })
+      ],
+      runs: [automationRun('unqualified-run', 'ambiguous-run', null)]
+    })
+
+    expect(
+      result.rows
+        .filter((row) => row.identity.kind === 'automation')
+        .every((row) => row.runSummary === null)
+    ).toBe(true)
+    expect(result.warnings).toContainEqual({
+      code: 'run-attribution-conflict',
+      message:
+        'Native run unqualified-run for automation ambiguous-run has no authority-qualified host context and was not attributed.'
+    })
+  })
+
+  it('attributes a same-ID runtime config only to its declared authority', () => {
     const result = snapshot({
       automations: [
         automation('authority-collision'),
@@ -415,6 +529,13 @@ describe('unified automation read model', () => {
           executionTargetType: 'ssh',
           executionTargetId: 'build-host',
           executionTargetGeneration: 2
+        }),
+        automation('authority-collision', {
+          schedulerOwner: 'remote_host_service',
+          runContext: {
+            ...automation('runtime').runContext!,
+            hostId: toRuntimeExecutionHostId('server-1')
+          }
         })
       ],
       runConfigs: {
@@ -427,9 +548,13 @@ describe('unified automation read model', () => {
 
     const goalRow = result.rows.find((row) => row.kind === 'goal')!
     const nativeRows = result.rows.filter((row) => row.kind === 'automation')
-    expect(goalRow.scheduleChildren.map((child) => child.owner)).toEqual(['legacy-cron'])
+    expect(goalRow.scheduleChildren.map((child) => child.owner)).toEqual(['legacy-cron', 'orca'])
     expect(nativeRows).toHaveLength(2)
-    expect(nativeRows.every((row) => row.warnings[0]?.code === 'binding-conflict')).toBe(true)
+    expect(
+      nativeRows.every((row) =>
+        row.warnings.some((warning) => warning.code === 'config-attribution-conflict')
+      )
+    ).toBe(true)
     expect(new Set(nativeRows.map((row) => row.key)).size).toBe(2)
   })
 
@@ -467,10 +592,12 @@ describe('unified automation read model', () => {
     const goalRow = result.rows.find((row) => row.kind === 'goal')!
     const nativeRow = result.rows.find((row) => row.kind === 'automation')!
     expect(goalRow.scheduleChildren.map((child) => child.owner)).toEqual(['legacy-cron'])
-    expect(goalRow.warnings.map((warning) => warning.code)).toContain('binding-conflict')
-    expect(nativeRow.warnings.map((warning) => warning.code)).toContain('binding-conflict')
+    expect(goalRow.warnings.map((warning) => warning.code)).toContain('stale-source')
+    expect(nativeRow.warnings.map((warning) => warning.code)).toContain(
+      'config-attribution-conflict'
+    )
     expect(nativeRow.migrationState).toBe('conflict')
-    expect(result.warnings.map((warning) => warning.code)).toContain('binding-conflict')
+    expect(result.warnings.map((warning) => warning.code)).toContain('config-attribution-conflict')
   })
 
   it('marks legacy Goal receipts without IDs and never collides duplicate cron lines', () => {
