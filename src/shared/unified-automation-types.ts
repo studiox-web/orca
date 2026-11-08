@@ -1,4 +1,5 @@
 import type { TuiAgent } from './tui-agent'
+import type { AutomationRun } from './automations-types'
 import type { StableAutomationCatalogRef } from './automation-owner-ref'
 
 export type UnifiedAutomationKind = 'goal' | 'automation' | 'script' | 'external'
@@ -74,6 +75,22 @@ export type UnifiedRunSummary = {
   outcome: UnifiedRunOutcome
   sourceStatus: string
   at: string | null
+  authorityAttribution: UnifiedRunAuthorityAttribution
+}
+
+export type UnifiedRunAuthorityAttribution = {
+  authority: StableAutomationCatalogRef
+  evidence:
+    | 'source'
+    | 'run-context'
+    | 'inferred-unique-definition'
+    | 'inferred-execution-target'
+    | 'aggregate'
+}
+
+export type UnifiedAttributedAutomationRun = {
+  run: AutomationRun
+  authorityAttribution: UnifiedRunAuthorityAttribution
 }
 
 export type UnifiedAutomationWarning = {

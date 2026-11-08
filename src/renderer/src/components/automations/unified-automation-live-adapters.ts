@@ -101,7 +101,8 @@ export function adaptLiveAutomationRow(
             identity: lastRunId ? 'stable' : 'aggregate-without-run-id',
             outcome: lastRun.tone === 'never' ? 'unknown' : lastRun.tone,
             sourceStatus: lastRun.tone,
-            at: new Date(lastRun.at).toISOString()
+            at: new Date(lastRun.at).toISOString(),
+            authorityAttribution: { authority, evidence: 'aggregate' }
           },
     agentId: row.automation.agentId,
     migrationState: 'none',
@@ -202,7 +203,8 @@ export function adaptLiveExternalRow(entry: ExternalAutomationListEntry): Unifie
           identity: entry.job.runs[0]?.id ? 'stable' : 'aggregate-without-run-id',
           outcome: externalRunOutcome(entry.job.lastStatus),
           sourceStatus: entry.job.lastStatus ?? 'unknown',
-          at: entry.job.lastRunAt
+          at: entry.job.lastRunAt,
+          authorityAttribution: { authority, evidence: 'aggregate' }
         }
       : null,
     agentId: null,

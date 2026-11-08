@@ -497,6 +497,32 @@ describe('unified automation read model', () => {
     ).toBe('runtime-run')
   })
 
+  it('attributes a null-context run to its unique definition authority and records inference', () => {
+    const result = snapshot({
+      automations: [
+        automation('unique-run', {
+          executionTargetType: 'ssh',
+          executionTargetId: 'build-host'
+        })
+      ],
+      runs: [automationRun('unique-unqualified-run', 'unique-run', null)]
+    })
+
+    expect(result.rows.find((row) => row.identity.kind === 'automation')?.runSummary).toMatchObject(
+      {
+        sourceId: 'unique-unqualified-run',
+        authorityAttribution: {
+          authority: {
+            authority: { kind: 'desktop' },
+            selector: { kind: 'ssh', targetId: 'build-host' }
+          },
+          evidence: 'inferred-unique-definition'
+        }
+      }
+    )
+    expect(result.warnings.map((warning) => warning.code)).not.toContain('run-attribution-conflict')
+  })
+
   it('leaves a same-ID run without authority lineage unattached and warns', () => {
     const result = snapshot({
       automations: [
@@ -517,8 +543,37 @@ describe('unified automation read model', () => {
     expect(result.warnings).toContainEqual({
       code: 'run-attribution-conflict',
       message:
-        'Native run unqualified-run for automation ambiguous-run has no authority-qualified host context and was not attributed.'
+        'Native run unqualified-run for automation ambiguous-run has no matching authority-qualified host context across 2 definition authorities and was not attributed.'
     })
+  })
+
+  it('refines a runtime run to its unique SSH execution target authority', () => {
+    const runtimeHostId = toRuntimeExecutionHostId('server-1')
+    const result = snapshot({
+      automations: [
+        automation('runtime-ssh', {
+          schedulerOwner: 'remote_host_service',
+          runContext: { ...automation('runtime').runContext!, hostId: runtimeHostId },
+          executionTargetType: 'ssh',
+          executionTargetId: 'build-host'
+        })
+      ],
+      runs: [automationRun('runtime-ssh-run', 'runtime-ssh', runtimeHostId)]
+    })
+
+    expect(result.rows.find((row) => row.identity.kind === 'automation')?.runSummary).toMatchObject(
+      {
+        sourceId: 'runtime-ssh-run',
+        authorityAttribution: {
+          authority: {
+            authority: { kind: 'runtime', environmentId: 'server-1' },
+            selector: { kind: 'ssh', targetId: 'build-host' }
+          },
+          evidence: 'inferred-execution-target'
+        }
+      }
+    )
+    expect(result.warnings.map((warning) => warning.code)).not.toContain('run-attribution-conflict')
   })
 
   it('attributes a same-ID runtime config only to its declared authority', () => {

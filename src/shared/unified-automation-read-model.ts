@@ -27,6 +27,7 @@ import {
   unifiedSourceRef
 } from './unified-automation-source-adapters'
 import type {
+  UnifiedAttributedAutomationRun,
   UnifiedAutomationRow,
   UnifiedAutomationSnapshot,
   UnifiedAutomationWarning
@@ -93,7 +94,7 @@ function activeGoalBindingTarget(
 function foldGoalBinding(
   rows: Map<string, UnifiedAutomationRow>,
   automation: Automation,
-  latest: AutomationRun | undefined,
+  latest: UnifiedAttributedAutomationRun | undefined,
   config: XosAutomationRunConfig | undefined,
   duplicateWarnings: UnifiedAutomationWarning[]
 ): boolean {
@@ -137,7 +138,7 @@ function addNativeRows(
   rows: Map<string, UnifiedAutomationRow>,
   warnings: UnifiedAutomationWarning[],
   input: BuildUnifiedAutomationSnapshotInput,
-  latestRuns: ReadonlyMap<string, AutomationRun>
+  latestRuns: ReadonlyMap<string, UnifiedAttributedAutomationRun>
 ): void {
   const groups = groupedAutomations(input.automations)
   const configAuthorityKey = hostStableKey(input.runConfigAuthority)

@@ -140,7 +140,8 @@ describe('UnifiedAutomationDetailShell', () => {
           identity: 'stable',
           outcome: 'succeeded',
           sourceStatus: 'completed',
-          at: '2026-11-08T12:00:00.000Z'
+          at: '2026-11-08T12:00:00.000Z',
+          authorityAttribution: { authority: local, evidence: 'run-context' }
         }
       }
     )

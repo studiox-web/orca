@@ -73,7 +73,8 @@ const row: UnifiedAutomationRow = {
     identity: 'stable',
     outcome: 'succeeded',
     sourceStatus: 'completed',
-    at: '2026-11-08T12:00:00.000Z'
+    at: '2026-11-08T12:00:00.000Z',
+    authorityAttribution: { authority, evidence: 'run-context' }
   },
   agentId: 'codex',
   migrationState: 'paired',

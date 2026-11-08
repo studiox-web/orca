@@ -1,4 +1,4 @@
-import type { Automation, AutomationRun } from './automations-types'
+import type { Automation } from './automations-types'
 import { isTuiAgent } from './tui-agent-config'
 import type { XosAutomationRunConfig } from './xos-runtime-types'
 import type { XosCronJob, XosGoal, XosProject } from './xos-goals-types'
@@ -15,6 +15,7 @@ import {
   unifiedSourceRef
 } from './unified-automation-source-adapters'
 import type {
+  UnifiedAttributedAutomationRun,
   UnifiedAutomationIdentity,
   UnifiedAutomationRow,
   UnifiedAutomationWarning
@@ -171,7 +172,7 @@ export function cronScriptRow(
 
 export function nativeAutomationRow(
   automation: Automation,
-  latest: AutomationRun | undefined,
+  latest: UnifiedAttributedAutomationRun | undefined,
   warnings: UnifiedAutomationWarning[] = []
 ): UnifiedAutomationRow {
   const authority = automationAuthority(automation)
@@ -204,7 +205,7 @@ export function nativeAutomationRow(
 
 export function boundScriptRow(
   automation: Automation,
-  latest: AutomationRun | undefined,
+  latest: UnifiedAttributedAutomationRun | undefined,
   config: XosAutomationRunConfig
 ): UnifiedAutomationRow {
   const authority = automationAuthority(automation)

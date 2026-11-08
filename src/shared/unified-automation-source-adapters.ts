@@ -4,6 +4,7 @@ import type { AutomationOwnerRef, StableAutomationCatalogRef } from './automatio
 import { parseExecutionHostId } from './execution-host'
 import type { XosCronJob, XosGoalRun } from './xos-goals-types'
 import type {
+  UnifiedAttributedAutomationRun,
   UnifiedRunOutcome,
   UnifiedRunSummary,
   UnifiedScheduleRef,
@@ -207,21 +208,26 @@ export function goalRunSummary(run: XosGoalRun | null): UnifiedRunSummary | null
     identity: sourceId ? 'stable' : 'legacy-without-run-id',
     outcome: runOutcome(run.status),
     sourceStatus: run.status,
-    at: run.started_at
+    at: run.started_at,
+    authorityAttribution: { authority: LOCAL_UNIFIED_AUTHORITY, evidence: 'source' }
   }
 }
 
-export function nativeRunSummary(run: AutomationRun | undefined): UnifiedRunSummary | null {
-  if (!run) {
+export function nativeRunSummary(
+  attributed: UnifiedAttributedAutomationRun | undefined
+): UnifiedRunSummary | null {
+  if (!attributed) {
     return null
   }
+  const { run, authorityAttribution } = attributed
   return {
     source: 'native',
     sourceId: run.id,
     identity: 'stable',
     outcome: runOutcome(run.status),
     sourceStatus: run.status,
-    at: new Date(run.startedAt ?? run.createdAt).toISOString()
+    at: new Date(run.startedAt ?? run.createdAt).toISOString(),
+    authorityAttribution
   }
 }
 
