@@ -1,3 +1,4 @@
+import type { CoordinatedAutomationLedger } from './coordinated-automation-ledger-types'
 import type { ExecutionHostId } from './execution-host'
 import type {
   RemovedSshTargetTombstone,
@@ -112,6 +113,8 @@ export type PersistedState = {
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]
   automationRuns: AutomationRun[]
+  /** Coordinated parent tombstones and occurrence replay records; absent until first used. */
+  coordinatedAutomationLedger?: CoordinatedAutomationLedger
   /** Catalogs an orcad imported, so a retried commit returns the same receipt. */
   orcadMigrationImportReceipts?: OrcadMigrationImportReceipt[]
   /** Commits whose full receipt aged out of the list above; still answered as committed. */

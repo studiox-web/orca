@@ -49,6 +49,8 @@ export const WSL_DRIVE_UNC_STATE_DISPOSITIONS = {
   automations: 'rewrite',
   // Run history stays as it ran, beside its automation.
   automationRuns: 'keep',
+  // Replay and tombstone records name automations and occurrences, not paths.
+  coordinatedAutomationLedger: 'keep',
   orcadMigrationImportReceipts: 'keep',
   orcadMigrationEvictedReceipts: 'keep',
   orcadMigrationStagedCatalogs: 'keep',

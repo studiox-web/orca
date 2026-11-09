@@ -288,6 +288,10 @@ export function getCoordinatedAutomationRunOperations(
     storageAuthority: owner[automationPersistenceContext].runtime.storageAuthority,
     flush: () => {
       markAutomationDomains(owner)
+      // The replay ledger commits in the same write as the runs it protects.
+      owner[automationPersistenceContext].runtime.dirtyProfileStateDomains?.add(
+        'coordinatedAutomationLedger'
+      )
       owner[automationPersistenceContext].flushBarriers.flush()
     },
     recordAutomationRunsMutation: (runs) => {

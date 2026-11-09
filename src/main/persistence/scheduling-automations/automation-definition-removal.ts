@@ -1,3 +1,4 @@
+import { isCoordinatedAutomation } from '../../../shared/coordinated-automation-types'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import {
   assertAutomationOwnerFence,
@@ -12,6 +13,11 @@ export function deleteAutomation(
   options?: { expectedOwner?: AutomationOwnerPrecondition }
 ): void {
   const automation = (operations.state.automations ?? []).find((entry) => entry.id === id)
+  if (automation && isCoordinatedAutomation(automation)) {
+    throw new Error(
+      'Coordinated automations keep their run history; archive them through the coordinated path.'
+    )
+  }
   if (automation) {
     assertAutomationOwnerFence({
       automation,

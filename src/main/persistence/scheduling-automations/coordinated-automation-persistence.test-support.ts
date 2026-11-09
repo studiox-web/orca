@@ -9,6 +9,10 @@ import type { Repo } from '../../../shared/repo-types'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { AutomationDefinitionOperations } from './automation-definition-operations'
+import {
+  createCoordinatedAutomationRun,
+  type CreateCoordinatedAutomationRunInput
+} from './coordinated-automation-run-operations'
 import type { AutomationStorageAuthority } from './automation-owner-projection'
 import type {
   CoordinatedAutomationRunOperations,
@@ -162,4 +166,16 @@ export function fakeOrchestration(): CoordinatedOrchestrationRecordProbe & {
 
 export function coordinatedRuns(state: PersistedState, automation: Automation): AutomationRun[] {
   return (state.automationRuns ?? []).filter((run) => run.automationId === automation.id)
+}
+
+/** Create (or replay) a run and return the detached run row, failing loudly when absent. */
+export function createRun(
+  operations: CoordinatedAutomationRunOperations,
+  input: CreateCoordinatedAutomationRunInput
+): AutomationRun {
+  const { run } = createCoordinatedAutomationRun(operations, input)
+  if (!run) {
+    throw new Error('Expected the occurrence to resolve to a retained run row.')
+  }
+  return run
 }

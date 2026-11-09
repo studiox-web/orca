@@ -1,3 +1,4 @@
+import { normalizeLoadedCoordinatedAutomationLedger } from '../../../shared/coordinated-automation-ledger-schemas'
 import { normalizePersistedMobileClientTabSelections } from '../../runtime/client-session-tab-selection-persistence'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
@@ -106,6 +107,7 @@ export function normalizeLoadedProfileState(
     legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
     automations: Array.isArray(parsed.automations) ? parsed.automations : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
+    ...loadedCoordinatedAutomationLedger(parsed.coordinatedAutomationLedger),
     orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(
       parsed.orcadMigrationImportReceipts
     ),
@@ -117,4 +119,11 @@ export function normalizeLoadedProfileState(
     ),
     onboarding: normalizedOnboarding
   }
+}
+
+function loadedCoordinatedAutomationLedger(
+  value: unknown
+): Pick<PersistedState, 'coordinatedAutomationLedger'> {
+  const ledger = normalizeLoadedCoordinatedAutomationLedger(value)
+  return ledger ? { coordinatedAutomationLedger: ledger } : {}
 }

@@ -68,6 +68,11 @@ export class StateSerializationSecretHandlingOperations {
         case 'automationRuns':
           stateToSave[domain] = this.runtime.state[domain]
           break
+        case 'coordinatedAutomationLedger':
+          if (this.runtime.state.coordinatedAutomationLedger !== undefined) {
+            stateToSave[domain] = this.runtime.state.coordinatedAutomationLedger
+          }
+          break
         case 'featureInteractionTelemetryBuckets':
           stateToSave[domain] = this.runtime.state.featureInteractionTelemetryBuckets
           break

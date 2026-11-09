@@ -96,6 +96,10 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   automationRuns: moveDisposition(19, {
     note: "An in-flight run in scope blocks the move. The desktop's history stays as written, beside its automation."
   }),
+  coordinatedAutomationLedger: notApplicableDisposition(
+    19,
+    'Coordinated replay and tombstone records stay with the desktop copy; coordinated runs cannot execute before Phase 4, which must carry them.'
+  ),
   orcadMigrationImportReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationEvictedReceipts: notApplicableDisposition(67, 'Mover-owned.'),
   orcadMigrationStagedCatalogs: notApplicableDisposition(68, 'Mover-owned.'),

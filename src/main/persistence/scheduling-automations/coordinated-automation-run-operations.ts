@@ -22,47 +22,56 @@ import {
   type AutomationOwnerPrecondition
 } from '../../../shared/automation-owner-precondition'
 import { automationProjectionContext } from './automation-owner-projection'
-import { coordinatedDefinitionFingerprint } from './coordinated-automation-revisions'
+import {
+  assertPinnedSourceDigests,
+  coordinatedDefinitionFingerprint
+} from './coordinated-automation-revisions'
+import type { CoordinatedOccurrenceRecord } from '../../../shared/coordinated-automation-ledger-types'
+import {
+  detachCoordinatedRun,
+  sealCoordinatedRun
+} from '../../../shared/coordinated-automation-run-seal'
+import {
+  assertRevisionDigest,
+  coordinatedExecutionAuthority,
+  ledgerWithOccurrence,
+  lookupCoordinatedOccurrence,
+  readableLedger
+} from './coordinated-automation-occurrence-ledger'
 import {
   commitRuns,
   CoordinatedRunConflictError,
   type CoordinatedAutomationRunOperations
 } from './coordinated-automation-run-records'
 
-const MAX_IDEMPOTENCY_KEY_LENGTH = 128
-
-export function coordinatedOccurrenceIdempotencyKey(
-  trigger: AutomationRunTrigger,
-  scheduledFor: number
-): string {
-  return `${trigger}:${scheduledFor}`
-}
-
 export type CreateCoordinatedAutomationRunInput = {
   automationId: string
   scheduledFor: number
   trigger?: AutomationRunTrigger
-  /** Defaults to the occurrence identity `${trigger}:${scheduledFor}`. */
+  /** Optional caller key; defaults to the canonical occurrence fingerprint. */
   idempotencyKey?: string
   expectedDefinitionRevision?: number
   expectedOwner?: AutomationOwnerPrecondition
   promptResolver?: ResolvePromptFunction
 }
 
+export type CoordinatedRunCreation = {
+  created: boolean
+  occurrence: CoordinatedOccurrenceRecord
+  /** Detached copy; null when a replayed run's row was later pruned. */
+  run: AutomationRun | null
+}
+
 /**
- * Persist the run intent with its immutable snapshot in one write. A repeated delivery of the
- * same occurrence returns the existing run instead of creating a second one.
+ * Persist the run intent, its immutable snapshot, and the occurrence replay record in one
+ * write. A repeated delivery returns the original identity, even after the run row aged out.
  */
 export function createCoordinatedAutomationRun(
   operations: CoordinatedAutomationRunOperations,
   input: CreateCoordinatedAutomationRunInput
-): AutomationRun {
+): CoordinatedRunCreation {
   const trigger = input.trigger ?? 'scheduled'
-  const idempotencyKey =
-    input.idempotencyKey ?? coordinatedOccurrenceIdempotencyKey(trigger, input.scheduledFor)
-  if (!idempotencyKey || idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
-    throw new Error('Coordinated run idempotency key must be 1-128 characters.')
-  }
+  const ledger = readableLedger(operations.state)
   const stored = (operations.state.automations ?? []).find((a) => a.id === input.automationId)
   if (!stored) {
     throw new Error('Automation not found.')
@@ -77,11 +86,21 @@ export function createCoordinatedAutomationRun(
     context: automationProjectionContext(operations.state, operations.storageAuthority, false)
   })
   const runs = operations.state.automationRuns ?? []
-  const existing = runs.find(
-    (run) => run.automationId === stored.id && run.idempotencyKey === idempotencyKey
-  )
-  if (existing) {
-    return existing
+  const executionAuthority = coordinatedExecutionAuthority(stored)
+  const lookup = lookupCoordinatedOccurrence(ledger, {
+    automationId: stored.id,
+    trigger,
+    scheduledFor: input.scheduledFor,
+    executionAuthority,
+    idempotencyKey: input.idempotencyKey
+  })
+  if (lookup.kind === 'replay') {
+    const original = runs.find((run) => run.id === lookup.record.automationRunId)
+    return {
+      created: false,
+      occurrence: { ...lookup.record },
+      run: original ? detachCoordinatedRun(original) : null
+    }
   }
 
   const now = Date.now()
@@ -104,12 +123,14 @@ export function createCoordinatedAutomationRun(
       `Definition revision changed: expected ${input.expectedDefinitionRevision}, stored ${automation.definitionRevision}.`
     )
   }
+  assertPinnedSourceDigests(automation)
   const resolved = resolveAutomationSnapshot({
     automation,
     promptResolver: input.promptResolver,
     createdAt: now
   })
   ResolvedAutomationRunSnapshotSchema.parse(resolved)
+  assertRevisionDigest(ledger, stored.id, resolved.definitionRevision, resolved.canonicalDigest)
   // Store the exact digested content; a schema-parsed copy could strip keys the digest covers.
   const snapshot: ResolvedAutomationRunSnapshot = structuredClone(resolved)
   const runNumber = nextAutomationRunNumber(runs.filter((run) => run.automationId === stored.id))
@@ -146,17 +167,31 @@ export function createCoordinatedAutomationRun(
     replanReason: null,
     materializationPhase: 'intent_persisted',
     childMappings: [],
-    idempotencyKey,
+    idempotencyKey: lookup.idempotencyKey,
     materializationError: null
   }
+  const occurrence: CoordinatedOccurrenceRecord = {
+    automationId: stored.id,
+    occurrenceFingerprint: lookup.fingerprint,
+    idempotencyKey: lookup.idempotencyKey,
+    trigger,
+    scheduledFor: input.scheduledFor,
+    executionAuthority,
+    automationRunId: run.id,
+    definitionRevision: snapshot.definitionRevision,
+    canonicalDigest: snapshot.canonicalDigest,
+    recordedAt: now
+  }
+  const sealed = sealCoordinatedRun(run, true)
   commitRuns(operations, {
+    ledger: ledgerWithOccurrence(ledger, occurrence),
     automations:
       automation === stored
         ? undefined
         : operations.state.automations.map((entry) =>
             entry.id === stored.id ? automation : entry
           ),
-    automationRuns: pruneAutomationRuns([...runs, run])
+    automationRuns: pruneAutomationRuns([...runs, sealed])
   })
-  return run
+  return { created: true, occurrence: { ...occurrence }, run: detachCoordinatedRun(sealed) }
 }

@@ -1,3 +1,4 @@
+import { isCoordinatedAutomationRun } from '../../shared/coordinated-automation-ledger-types'
 import {
   isFinalAutomationRunStatus,
   type AutomationDispatchResult,
@@ -44,13 +45,17 @@ export class AutomationRunCompletionWatcher {
   private readonly markDispatchResult: (result: AutomationDispatchResult) => Promise<unknown>
   private readonly watching = new Map<string, AbortController>()
   private readonly reconciler: RetainedRunReconciler
+  private readonly recoverCoordinatedRuns: (runs: readonly AutomationRun[]) => void
   private disposed = false
 
   constructor(opts: {
     observer: AutomationRunTerminalObserver
     readRun: (automationId: string, runId: string) => AutomationRun | null
     markDispatchResult: (result: AutomationDispatchResult) => Promise<unknown>
+    /** Phase 4 reconciler hook; until then coordinated runs are left untouched, never stranded. */
+    recoverCoordinatedRuns?: (runs: readonly AutomationRun[]) => void
   }) {
+    this.recoverCoordinatedRuns = opts.recoverCoordinatedRuns ?? (() => {})
     this.observer = opts.observer
     this.readRun = opts.readRun
     this.markDispatchResult = opts.markDispatchResult
@@ -73,7 +78,7 @@ export class AutomationRunCompletionWatcher {
 
   /** Leave unresolved terminals for startup reconciliation. */
   watch(run: AutomationRun): void {
-    if (this.disposed || this.watching.has(run.id)) {
+    if (this.disposed || this.watching.has(run.id) || isCoordinatedAutomationRun(run)) {
       return
     }
     const handle = this.observer.resolveRunTerminal(run)
@@ -138,13 +143,20 @@ export class AutomationRunCompletionWatcher {
 
   /** Reattach surviving sessions; defer unresolved runs until the ready-surface grace expires. */
   reconcileRetainedRuns(runs: readonly AutomationRun[]): void {
+    // Coordinated runs have no single terminal; their saga owns recovery.
+    const coordinated = runs.filter(isCoordinatedAutomationRun)
+    if (coordinated.length > 0) {
+      this.recoverCoordinatedRuns(coordinated)
+    }
     this.reconciler.reconcile(
-      runs.filter(
-        (run) =>
-          run.status === 'dispatched' ||
-          run.status === 'dispatching' ||
-          (run.status === 'pending' && run.trigger === 'manual')
-      )
+      runs
+        .filter((run) => !isCoordinatedAutomationRun(run))
+        .filter(
+          (run) =>
+            run.status === 'dispatched' ||
+            run.status === 'dispatching' ||
+            (run.status === 'pending' && run.trigger === 'manual')
+        )
     )
   }
 

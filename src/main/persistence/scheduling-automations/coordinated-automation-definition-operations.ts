@@ -24,6 +24,7 @@ import {
 } from './automation-definition-operations'
 import {
   advanceCoordinatedRevisionIfResolutionChanged,
+  assertPinnedSourceDigests,
   CoordinatedAutomationExecutionRefusedError,
   coordinatedDefinitionFingerprint
 } from './coordinated-automation-revisions'
@@ -74,6 +75,7 @@ function splitDefinition<T extends object>(
 
 /** Store only schema-parsed, graph-validated definition content. */
 function parseDefinition(automation: Automation): CoordinatedAutomationDefinition {
+  assertPinnedSourceDigests(automation)
   const parsed = CoordinatedAutomationDefinitionSchema.safeParse({
     kind: 'coordinated',
     definitionRevision: automation.definitionRevision ?? 1,

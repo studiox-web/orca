@@ -8,14 +8,18 @@ import type {
 import type { CoordinatedRunChildMapping } from '../../../shared/coordinated-automation-saga-types'
 import type {
   AutomationDestination,
+  AutomationOwnerPrecondition,
   AutomationUpdatePreconditions
 } from '../../../shared/automation-owner-precondition'
+import type { CoordinatedParentTombstone } from '../../../shared/coordinated-automation-ledger-types'
+import { archiveCoordinatedAutomation as archiveCoordinatedAutomationOperation } from '../scheduling-automations/coordinated-automation-archive'
 import {
   createCoordinatedAutomation as createCoordinatedAutomationOperation,
   updateCoordinatedAutomation as updateCoordinatedAutomationOperation
 } from '../scheduling-automations/coordinated-automation-definition-operations'
 import {
   createCoordinatedAutomationRun as createCoordinatedAutomationRunOperation,
+  type CoordinatedRunCreation,
   type CreateCoordinatedAutomationRunInput
 } from '../scheduling-automations/coordinated-automation-run-operations'
 import {
@@ -65,7 +69,19 @@ export class CoordinatedAutomationPersistence {
     )
   }
 
-  createCoordinatedAutomationRun(input: CreateCoordinatedAutomationRunInput): AutomationRun {
+  archiveCoordinatedAutomation(input: {
+    automationId: string
+    expectedOwner?: AutomationOwnerPrecondition
+  }): CoordinatedParentTombstone {
+    return archiveCoordinatedAutomationOperation(
+      getCoordinatedAutomationRunOperations(this[coordinatedAutomationPersistenceContext]),
+      input
+    )
+  }
+
+  createCoordinatedAutomationRun(
+    input: CreateCoordinatedAutomationRunInput
+  ): CoordinatedRunCreation {
     return createCoordinatedAutomationRunOperation(
       getCoordinatedAutomationRunOperations(this[coordinatedAutomationPersistenceContext]),
       input

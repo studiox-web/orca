@@ -9,7 +9,6 @@ import {
   createCoordinatedAutomation,
   updateCoordinatedAutomation
 } from './coordinated-automation-definition-operations'
-import { createCoordinatedAutomationRun } from './coordinated-automation-run-operations'
 import {
   linkCoordinatedOrchestrationRun,
   markCoordinatedRunReadyForDispatch,
@@ -22,6 +21,7 @@ import {
   coordinatedCreateInput,
   coordinatedRuns,
   coordinatedTestState,
+  createRun,
   durableHarness,
   fakeOrchestration
 } from './coordinated-automation-persistence.test-support'
@@ -39,7 +39,7 @@ function materialize(
   automation: Automation,
   scheduledFor: number
 ) {
-  const run = createCoordinatedAutomationRun(harness.runs(), {
+  const run = createRun(harness.runs(), {
     automationId: automation.id,
     scheduledFor
   })
@@ -200,14 +200,14 @@ describe('coordinated run history', () => {
   it('bumps the revision in the run write when an out-of-band edit changed resolution', () => {
     const harness = durableHarness(coordinatedTestState())
     const created = createParent(harness)
-    const first = createCoordinatedAutomationRun(harness.runs(), {
+    const first = createRun(harness.runs(), {
       automationId: created.id,
       scheduledFor: 1
     })
     harness.state.automations = harness.state.automations.map((a) =>
       a.id === created.id ? { ...a, executionTargetGeneration: 9 } : a
     )
-    const second = createCoordinatedAutomationRun(harness.runs(), {
+    const second = createRun(harness.runs(), {
       automationId: created.id,
       scheduledFor: 2
     })
@@ -221,13 +221,11 @@ describe('coordinated run history', () => {
     const harness = durableHarness(coordinatedTestState())
     const created = createParent(harness)
     const input = { automationId: created.id, scheduledFor: 5000 }
-    const first = createCoordinatedAutomationRun(harness.runs(), input)
-    expect(createCoordinatedAutomationRun(harness.runs(), input).id).toBe(first.id)
+    const first = createRun(harness.runs(), input)
+    expect(createRun(harness.runs(), input).id).toBe(first.id)
     harness.restart()
-    expect(createCoordinatedAutomationRun(harness.runs(), input).id).toBe(first.id)
-    expect(
-      createCoordinatedAutomationRun(harness.runs(), { ...input, trigger: 'manual' }).id
-    ).not.toBe(first.id)
+    expect(createRun(harness.runs(), input).id).toBe(first.id)
+    expect(createRun(harness.runs(), { ...input, trigger: 'manual' }).id).not.toBe(first.id)
     expect(coordinatedRuns(harness.state, created)).toHaveLength(2)
   })
 
@@ -239,7 +237,7 @@ describe('coordinated run history', () => {
       recordManualRun: () => {}
     }
     expect(() => createAutomationRun(runOps, created, 1, 'manual')).toThrow(/cannot run yet/)
-    const run = createCoordinatedAutomationRun(harness.runs(), {
+    const run = createRun(harness.runs(), {
       automationId: created.id,
       scheduledFor: 1
     })
@@ -280,11 +278,11 @@ describe('materialization crash boundaries', () => {
     const harness = durableHarness(coordinatedTestState())
     const orchestration = fakeOrchestration()
     const created = createParent(harness)
-    const run = createCoordinatedAutomationRun(harness.runs(), {
+    const run = createRun(harness.runs(), {
       automationId: created.id,
       scheduledFor: 1
     })
-    const other = createCoordinatedAutomationRun(harness.runs(), {
+    const other = createRun(harness.runs(), {
       automationId: created.id,
       scheduledFor: 2
     })
@@ -357,7 +355,7 @@ describe('owner fencing and authority', () => {
     const created = sshParent(harness)
     expect(created).toMatchObject({ executionTargetType: 'ssh', executionTargetId: 'ssh-1' })
     const run = (expectedOwner?: AutomationOwnerPrecondition) =>
-      createCoordinatedAutomationRun(harness.runs(), {
+      createRun(harness.runs(), {
         automationId: created.id,
         scheduledFor: 1,
         expectedOwner
@@ -379,7 +377,7 @@ describe('owner fencing and authority', () => {
     const created = sshParent(harness)
     harness.state.sshTargets = []
     expect(() =>
-      createCoordinatedAutomationRun(harness.runs(), {
+      createRun(harness.runs(), {
         automationId: created.id,
         scheduledFor: 1,
         expectedOwner: { selector: { kind: 'orphan' } }
@@ -391,7 +389,7 @@ describe('owner fencing and authority', () => {
   it('freezes a local runtime-authority parent without a fence', () => {
     const harness = durableHarness(coordinatedTestState(), 'runtime')
     const created = createParent(harness)
-    const run = createCoordinatedAutomationRun(harness.runs(), {
+    const run = createRun(harness.runs(), {
       automationId: created.id,
       scheduledFor: 1
     })
@@ -409,7 +407,7 @@ describe('folder workspaces', () => {
       workspaceId,
       baseBranch: undefined
     })
-    const run = createCoordinatedAutomationRun(harness.runs(), {
+    const run = createRun(harness.runs(), {
       automationId: created.id,
       scheduledFor: 1
     })

@@ -1,4 +1,5 @@
 import type { AutomationRun } from '../../../shared/automations-types'
+import { detachCoordinatedRun } from '../../../shared/coordinated-automation-run-seal'
 import type { CoordinatedRunChildMapping } from '../../../shared/coordinated-automation-saga-types'
 import {
   assertPhase,
@@ -24,7 +25,7 @@ export function linkCoordinatedOrchestrationRun(
     if (run.orchestrationRunId !== input.orchestrationRunId) {
       throw new CoordinatedRunConflictError('Run is already linked to another orchestration Run.')
     }
-    return run
+    return detachCoordinatedRun(run)
   }
   assertPhase(run, ['intent_persisted'])
   if (!input.orchestrationRunId || !input.probe.hasRun(input.orchestrationRunId)) {
@@ -71,7 +72,7 @@ export function persistCoordinatedChildMappings(
       run.materializationPhase === 'ready_for_dispatch') &&
     sameMappings(run.childMappings ?? [], input.mappings)
   ) {
-    return run
+    return detachCoordinatedRun(run)
   }
   assertPhase(run, ['orchestration_run_created', 'tasks_created'])
   if (!orchestrationRunId || !run.resolvedSnapshot) {
@@ -108,7 +109,7 @@ export function markCoordinatedRunReadyForDispatch(
 ): AutomationRun {
   const run = requireCoordinatedRun(operations, input.automationRunId)
   if (run.materializationPhase === 'ready_for_dispatch') {
-    return run
+    return detachCoordinatedRun(run)
   }
   assertPhase(run, ['mappings_persisted'])
   const orchestrationRunId = run.orchestrationRunId

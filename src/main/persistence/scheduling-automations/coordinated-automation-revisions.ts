@@ -99,6 +99,20 @@ export function coordinatedDefinitionFingerprint(automation: Automation): string
   )}`
 }
 
+const PINNED_DIGEST = /^sha256:[0-9a-f]{64}$/
+
+/** Phase 2 fingerprints must be deterministic, so file-backed prompts need a pinned content digest. */
+export function assertPinnedSourceDigests(automation: Automation): void {
+  for (const child of automation.children ?? []) {
+    const source = child.promptSource
+    if (source.kind === 'source_reference' && !PINNED_DIGEST.test(source.digest ?? '')) {
+      throw new Error(
+        `Child "${child.id}" references "${source.path}" without a pinned sha256 content digest.`
+      )
+    }
+  }
+}
+
 export function assertCoordinatedAutomationNotEnabled(automation: Automation): void {
   if (isCoordinatedAutomation(automation) && automation.enabled) {
     throw new CoordinatedAutomationExecutionRefusedError(

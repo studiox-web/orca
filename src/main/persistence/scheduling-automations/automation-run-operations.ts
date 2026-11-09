@@ -1,3 +1,4 @@
+import { detachCoordinatedRun } from '../../../shared/coordinated-automation-run-seal'
 import { randomUUID } from 'node:crypto'
 import { isFinalAutomationRunStatus } from '../../../shared/automations-types'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
@@ -52,7 +53,7 @@ function sortedAutomationRuns(state: PersistedState, automationId?: string): Aut
   const runs = state.automationRuns ?? []
   return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
     .map((run) => ({
-      ...run,
+      ...detachCoordinatedRun(run),
       precheckResult: normalizeAutomationPrecheckResult(run.precheckResult)
     }))
     .sort(compareAutomationRunsNewestFirst)

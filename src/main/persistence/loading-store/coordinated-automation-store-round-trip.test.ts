@@ -87,6 +87,17 @@ const LEGACY_RUN: AutomationRun = {
 
 let opened = 0
 
+function runRow(
+  store: Awaited<ReturnType<typeof openStore>>,
+  input: Parameters<Awaited<ReturnType<typeof openStore>>['createCoordinatedAutomationRun']>[0]
+): AutomationRun {
+  const { run } = store.createCoordinatedAutomationRun(input)
+  if (!run) {
+    throw new Error('Expected a retained run row.')
+  }
+  return run
+}
+
 async function openStore() {
   opened += 1
   if (opened === 1) {
@@ -156,7 +167,7 @@ describe('coordinated automation profile persistence', () => {
     let store = await openStore()
     const orchestration = fakeOrchestration()
     const parent = store.createCoordinatedAutomation(coordinatedCreateInput())
-    const first = store.createCoordinatedAutomationRun({
+    const first = runRow(store, {
       automationId: parent.id,
       scheduledFor: 100
     })
@@ -201,10 +212,8 @@ describe('coordinated automation profile persistence', () => {
     expect(isCoordinatedRunDispatchable(reloadedFirst)).toBe(true)
 
     // The scheduler redelivers the same occurrence after restart.
-    expect(
-      store.createCoordinatedAutomationRun({ automationId: parent.id, scheduledFor: 100 }).id
-    ).toBe(first.id)
-    const second = store.createCoordinatedAutomationRun({
+    expect(runRow(store, { automationId: parent.id, scheduledFor: 100 }).id).toBe(first.id)
+    const second = runRow(store, {
       automationId: parent.id,
       scheduledFor: 200
     })
@@ -219,5 +228,40 @@ describe('coordinated automation profile persistence', () => {
       first.id,
       second.id
     ])
+  })
+
+  it('persists replay records and archive tombstones through SQLite restart', async () => {
+    let store = await openStore()
+    const parent = store.createCoordinatedAutomation(coordinatedCreateInput())
+    const first = store.createCoordinatedAutomationRun({
+      automationId: parent.id,
+      scheduledFor: 100
+    })
+    store.recordCoordinatedMaterializationFailure({
+      automationRunId: first.run!.id,
+      phase: 'materialization_failed',
+      error: 'settled for archive'
+    })
+    expect(() => store.deleteAutomation(parent.id)).toThrow(/archive them/)
+    const tombstone = store.archiveCoordinatedAutomation({ automationId: parent.id })
+    await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+
+    store = await restart()
+    const persisted = readPersistedState()
+    expect(persisted.coordinatedAutomationLedger).toMatchObject({
+      parentTombstones: [tombstone],
+      occurrences: [first.occurrence]
+    })
+    expect(store.listAutomations().map((a) => a.id)).toEqual(['legacy-1'])
+    const [history] = store.listAutomationRuns(parent.id)
+    expect(history).toMatchObject({
+      id: first.run!.id,
+      materializationPhase: 'materialization_failed',
+      resolvedSnapshot: first.run!.resolvedSnapshot
+    })
+    history.resolvedSnapshot!.resolvedChildren[0].name = 'caller edit'
+    expect(store.listAutomationRuns(parent.id)[0].resolvedSnapshot!.resolvedChildren[0].name).toBe(
+      'research worker'
+    )
   })
 })

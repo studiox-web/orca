@@ -8,6 +8,14 @@ import type {
   CoordinatedRunChildMapping,
   CoordinatedRunMaterializationPhase
 } from '../../../shared/coordinated-automation-saga-types'
+import {
+  isCoordinatedAutomationRun,
+  type CoordinatedAutomationLedger
+} from '../../../shared/coordinated-automation-ledger-types'
+import {
+  detachCoordinatedRun,
+  sealCoordinatedRun
+} from '../../../shared/coordinated-automation-run-seal'
 import type { AutomationStorageAuthority } from './automation-owner-projection'
 import { CoordinatedAutomationExecutionRefusedError } from './coordinated-automation-revisions'
 
@@ -33,7 +41,7 @@ export class CoordinatedRunConflictError extends Error {
 }
 
 export function isCoordinatedRun(run: AutomationRun): boolean {
-  return run.materializationPhase !== undefined
+  return isCoordinatedAutomationRun(run)
 }
 
 /** A run may dispatch only when every link the snapshot requires is durably recorded. */
@@ -80,12 +88,20 @@ export function mappingProblem(
 /** Write one in-memory change; restore it if the durable write throws so no half state survives. */
 export function commitRuns(
   operations: CoordinatedAutomationRunOperations,
-  next: { automations?: Automation[]; automationRuns: AutomationRun[] }
+  next: {
+    automations?: Automation[]
+    automationRuns: AutomationRun[]
+    ledger?: CoordinatedAutomationLedger
+  }
 ): void {
   const previousAutomations = operations.state.automations
   const previousRuns = operations.state.automationRuns
+  const previousLedger = operations.state.coordinatedAutomationLedger
   if (next.automations) {
     operations.state.automations = next.automations
+  }
+  if (next.ledger) {
+    operations.state.coordinatedAutomationLedger = next.ledger
   }
   operations.state.automationRuns = next.automationRuns
   try {
@@ -94,6 +110,7 @@ export function commitRuns(
   } catch (error) {
     operations.state.automations = previousAutomations
     operations.state.automationRuns = previousRuns
+    operations.state.coordinatedAutomationLedger = previousLedger
     operations.recordAutomationRunsMutation?.(previousRuns)
     throw error
   }
@@ -117,12 +134,13 @@ export function replaceRun(
   operations: CoordinatedAutomationRunOperations,
   updated: AutomationRun
 ): AutomationRun {
+  const sealed = sealCoordinatedRun(updated, true)
   commitRuns(operations, {
     automationRuns: operations.state.automationRuns.map((run) =>
-      run.id === updated.id ? updated : run
+      run.id === sealed.id ? sealed : run
     )
   })
-  return updated
+  return detachCoordinatedRun(sealed)
 }
 
 export function assertPhase(
