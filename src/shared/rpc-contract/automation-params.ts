@@ -14,6 +14,16 @@ import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../automation-precheck'
+import {
+  AutomationOutcomeContractSchema,
+  CoordinatedAutomationCeilingsSchema,
+  CoordinatedAutomationChildDefinitionSchema,
+  CoordinatedAutomationInheritedDefaultsSchema,
+  CoordinatedAutomationPublicationPolicySchema,
+  CoordinatedAutomationRetentionPolicySchema,
+  SemanticCompletionReceiptSchema,
+  StructuredWorkerResultSchema
+} from '../coordinated-automation-schemas'
 
 export const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
   message: 'Unknown provider'
@@ -193,6 +203,10 @@ export const AutomationLaunchSetupPatch = z
     message: 'Choose an automation launch change.'
   })
 
+export const AutomationKind = z.enum(['single', 'coordinated']).optional()
+
+export { SemanticCompletionReceiptSchema, StructuredWorkerResultSchema }
+
 export const AutomationCreate = z.object({
   creationKey: OptionalString,
   name: requiredString('Missing automation name'),
@@ -214,7 +228,15 @@ export const AutomationCreate = z.object({
   dtstart: requiredNumber('Missing trigger start time'),
   enabled: OptionalBoolean,
   missedRunGraceMinutes: OptionalPositiveInt,
-  destination: Destination
+  destination: Destination,
+  kind: AutomationKind,
+  definitionRevision: OptionalPositiveInt,
+  outcomeContract: AutomationOutcomeContractSchema.optional(),
+  children: z.array(CoordinatedAutomationChildDefinitionSchema).optional(),
+  inheritedDefaults: CoordinatedAutomationInheritedDefaultsSchema.optional(),
+  globalCeilings: CoordinatedAutomationCeilingsSchema.optional(),
+  publicationPolicy: CoordinatedAutomationPublicationPolicySchema.optional(),
+  retentionPolicy: CoordinatedAutomationRetentionPolicySchema.optional()
 })
 
 export const AutomationUpdateFields = z.object({
@@ -237,7 +259,15 @@ export const AutomationUpdateFields = z.object({
   rrule: AutomationSchedule.optional(),
   dtstart: requiredNumber('Missing trigger start time').optional(),
   enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
+  missedRunGraceMinutes: OptionalPositiveInt,
+  kind: AutomationKind,
+  definitionRevision: OptionalPositiveInt,
+  outcomeContract: AutomationOutcomeContractSchema.optional(),
+  children: z.array(CoordinatedAutomationChildDefinitionSchema).optional(),
+  inheritedDefaults: CoordinatedAutomationInheritedDefaultsSchema.optional(),
+  globalCeilings: CoordinatedAutomationCeilingsSchema.optional(),
+  publicationPolicy: CoordinatedAutomationPublicationPolicySchema.optional(),
+  retentionPolicy: CoordinatedAutomationRetentionPolicySchema.optional()
 })
 
 export const AutomationUpdate = z.object({

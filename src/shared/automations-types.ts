@@ -1,6 +1,14 @@
 import type { TuiAgent } from './tui-agent'
 import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
+import type {
+  CoordinatedAutomationDefinitionFields,
+  CoordinatedRunFields
+} from './coordinated-automation-types'
+
+export * from './coordinated-automation-types'
+export * from './coordinated-automation-receipt-types'
+export * from './coordinated-automation-saga-types'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
@@ -136,7 +144,7 @@ export type Automation = {
   missedRunGraceMinutes: number
   createdAt: number
   updatedAt: number
-}
+} & CoordinatedAutomationDefinitionFields
 
 export type AutomationRun = {
   id: string
@@ -172,7 +180,7 @@ export type AutomationRun = {
   occurrenceCount?: number
   /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
   lastOccurrenceAt?: number
-}
+} & Partial<CoordinatedRunFields>
 
 /** A bounded history response; older hosts may continue returning `runs` only. */
 export type AutomationRunsPage = {
@@ -205,7 +213,7 @@ export type AutomationCreateInput = {
   dtstart: number
   enabled?: boolean
   missedRunGraceMinutes?: number
-}
+} & CoordinatedAutomationDefinitionFields
 
 export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPatch } & Partial<
   Pick<
@@ -228,6 +236,14 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
     | 'dtstart'
     | 'enabled'
     | 'missedRunGraceMinutes'
+    | 'kind'
+    | 'definitionRevision'
+    | 'outcomeContract'
+    | 'children'
+    | 'inheritedDefaults'
+    | 'globalCeilings'
+    | 'publicationPolicy'
+    | 'retentionPolicy'
   >
 >
 
