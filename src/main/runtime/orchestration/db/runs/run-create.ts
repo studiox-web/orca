@@ -16,9 +16,25 @@ export function createRun(
   }
 ): RunRow {
   const coordinator = {
-    terminalHandle: params.coordinatorHandle,
-    paneKey: params.coordinatorPaneKey,
+    terminalHandle: params.coordinatorHandle ?? null,
+    paneKey: params.coordinatorPaneKey ?? null,
     orcaSessionId: params.coordinatorOrcaSessionId ?? null
+  }
+  if (params.id !== undefined) {
+    if (
+      typeof params.id !== 'string' ||
+      params.id.length < 5 ||
+      params.id.length > 64 ||
+      !/^run_[a-zA-Z0-9_-]+$/.test(params.id)
+    ) {
+      throw new Error(
+        `Invalid caller-supplied run ID "${params.id}". Must start with "run_", contain only [a-zA-Z0-9_-], and be between 5 and 64 characters.`
+      )
+    }
+    const existing = this.getRun(params.id)
+    if (existing) {
+      throw new Error(`Cannot create run "${params.id}": a run with this ID already exists.`)
+    }
   }
   const id = params.id ?? generateId('run')
   this.db.exec('BEGIN IMMEDIATE')

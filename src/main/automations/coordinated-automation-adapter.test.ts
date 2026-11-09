@@ -41,6 +41,12 @@ function makeReport(
   overrides?: Partial<StructuredWorkerResult>
 ): StructuredWorkerResult {
   const run = store.listAutomationRuns().find((r) => r.id === identity.automationRunId)
+  const criteria = run?.resolvedSnapshot?.outcomeContract.acceptanceCriteria ?? []
+  const defaultChecks = criteria.map((c) => ({
+    id: c.id,
+    outcome: 'passed' as const,
+    evidence: [`Criterion ${c.id} verified passed by fake worker`]
+  }))
   return {
     schemaVersion: 1,
     ...identity,
@@ -50,7 +56,7 @@ function makeReport(
     summary: `${identity.childDefinitionId} done`,
     reportMarkdown: `${identity.childDefinitionId} report`,
     artifacts: [],
-    checks: [],
+    checks: defaultChecks,
     effects: [],
     blockers: [],
     ...overrides
@@ -78,6 +84,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
       const executionOrder: string[] = []
 
       const workerProvider: CoordinatedWorkerProvider = {
+        capability: 'fake_no_effects',
         run: async (identity) => {
           executionOrder.push(identity.childDefinitionId)
           return makeReport(identity, store)
@@ -170,6 +177,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
       })
 
       const workerProvider: CoordinatedWorkerProvider = {
+        capability: 'fake_no_effects',
         run: async (identity) => {
           activeParallel.add(identity.childDefinitionId)
           maxParallelBranches = Math.max(maxParallelBranches, activeParallel.size)
@@ -247,6 +255,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
       let peakTotalActive = 0
 
       const workerProvider: CoordinatedWorkerProvider = {
+        capability: 'fake_no_effects',
         run: async (identity) => {
           totalActive += 1
           peakTotalActive = Math.max(peakTotalActive, totalActive)
@@ -387,6 +396,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
       })
 
       const workerProvider: CoordinatedWorkerProvider = {
+        capability: 'fake_no_effects',
         run: async (identity) => {
           unblockWorker()
           await allowFinish
@@ -433,6 +443,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
       let attempt = 0
 
       const workerProvider: CoordinatedWorkerProvider = {
+        capability: 'fake_no_effects',
         run: async (identity) => {
           if (identity.childDefinitionId === 'flake') {
             attempt += 1
@@ -543,6 +554,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
       // Now materialize and run the existing revision 1 run
       const executedNames: string[] = []
       const workerProvider: CoordinatedWorkerProvider = {
+        capability: 'fake_no_effects',
         run: async (identity) => {
           executedNames.push(identity.childDefinitionId)
           return makeReport(identity, store)
@@ -636,6 +648,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
     it('denies external effects reported by worker and settles task as failed', async () => {
       const store = createStore()
       const workerProvider: CoordinatedWorkerProvider = {
+        capability: 'fake_no_effects',
         run: async (identity) =>
           makeReport(identity, store, {
             summary: 'Attempted side effect',

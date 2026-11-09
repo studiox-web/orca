@@ -73,6 +73,19 @@ export async function executeCoordinatedTaskDispatch(input: {
     throw new CoordinatedAutomationLaunchRefusedError(policyCheck.reason)
   }
 
+  const hasFakeNoEffectCapability =
+    workerProvider.capability === 'fake_no_effects' ||
+    workerProvider.capability === 'shadow_fake_worker' ||
+    (Array.isArray(workerProvider.capabilities) &&
+      (workerProvider.capabilities.includes('fake_no_effects') ||
+        workerProvider.capabilities.includes('shadow_fake_worker')))
+
+  if (!hasFakeNoEffectCapability) {
+    throw new CoordinatedAutomationLaunchRefusedError(
+      'Provider rejected: Phase 4 disabled shadow implementation requires an explicit host-owned fake/no-effect provider capability.'
+    )
+  }
+
   const { dispatch } = orchestrationDb.createStartingWorkerDispatch({
     taskId,
     taskRunId: run.orchestrationRunId,
@@ -124,6 +137,14 @@ export async function executeCoordinatedTaskDispatch(input: {
     return { taskId, dispatchId: dispatch.id, outcome: 'failed' }
   }
 
+  const automation = store.listAutomations().find((a) => a.id === run.automationId)
+  const projectId =
+    automation && 'projectId' in automation && typeof automation.projectId === 'string'
+      ? automation.projectId
+      : snapshot.executionTarget.id
+  const repo = store.getRepo(projectId)
+  const workspacePath = repo?.path
+
   const validation = validateStructuredWorkerResult(rawReport, {
     automationRunId: run.id,
     orchestrationRunId: run.orchestrationRunId,
@@ -133,7 +154,8 @@ export async function executeCoordinatedTaskDispatch(input: {
     dispatchId: dispatch.id,
     canonicalDigest: snapshot.canonicalDigest,
     child,
-    snapshot
+    snapshot,
+    workspacePath
   })
 
   if (!validation.valid) {
@@ -151,7 +173,7 @@ export async function executeCoordinatedTaskDispatch(input: {
     taskId,
     dispatchId: dispatch.id,
     outcome,
-    result: validation.report.summary || JSON.stringify(validation.report)
+    result: JSON.stringify(validation.report)
   })
 
   return { taskId, dispatchId: dispatch.id, outcome: validation.report.outcome }

@@ -4,6 +4,10 @@ import { coordinatedRunProblem } from '../../shared/coordinated-automation-run-v
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import type { Store } from '../persistence/loading-store/store'
 import type { CoordinatedOrchestrationRecordProbe } from '../persistence/scheduling-automations/coordinated-automation-run-records'
+import {
+  deterministicCoordinatedRunId,
+  deterministicCoordinatedTaskId
+} from './coordinated-automation-deterministic-ids'
 
 export class CoordinatedAutomationLaunchRefusedError extends Error {
   constructor(message: string) {
@@ -90,13 +94,25 @@ export function materializeCoordinatedRun(
   }
 
   if (run.materializationPhase === 'intent_persisted') {
-    const exactRunId = run.orchestrationRunId ?? `run_${run.id}`
+    const exactRunId = run.orchestrationRunId ?? deterministicCoordinatedRunId(run.id)
     const existingRun = orchestrationDb.getRun(exactRunId)
-    if (!existingRun) {
-      const objective =
-        run.resolvedSnapshot?.outcomeContract.humanStatement ||
-        run.title ||
-        'Coordinated Automation Run'
+    const objective =
+      run.resolvedSnapshot?.outcomeContract.humanStatement ||
+      run.title ||
+      'Coordinated Automation Run'
+
+    if (existingRun) {
+      if (
+        existingRun.objective !== objective ||
+        existingRun.coordinator_handle !== null ||
+        existingRun.coordinator_pane_key !== null ||
+        existingRun.home_database !== 'this_database'
+      ) {
+        throw new CoordinatedAutomationLaunchRefusedError(
+          `Existing native Run "${exactRunId}" does not match coordinated run ownership or objective.`
+        )
+      }
+    } else {
       orchestrationDb.createRun({
         id: exactRunId,
         objective,
@@ -120,16 +136,41 @@ export function materializeCoordinatedRun(
     const createdTaskIds: string[] = []
 
     for (const child of includedChildren) {
-      const exactTaskId = `task_${run.orchestrationRunId}_${child.childDefinitionId}`
+      const exactTaskId = deterministicCoordinatedTaskId(
+        run.orchestrationRunId!,
+        child.childDefinitionId
+      )
       childToTask.set(child.childDefinitionId, exactTaskId)
       createdTaskIds.push(exactTaskId)
 
-      const existingTask = orchestrationDb.getTask(exactTaskId)
-      if (!existingTask) {
-        const deps = child.dependencies
-          .map((d) => childToTask.get(d.childId))
-          .filter((id): id is string => Boolean(id))
+      const deps = child.dependencies
+        .map((d) => childToTask.get(d.childId))
+        .filter((id): id is string => Boolean(id))
 
+      const existingTask = orchestrationDb.getTask(exactTaskId)
+      if (existingTask) {
+        let existingDeps: string[] = []
+        try {
+          existingDeps = JSON.parse(existingTask.deps ?? '[]')
+        } catch {
+          existingDeps = []
+        }
+        const depsMatch =
+          Array.isArray(existingDeps) &&
+          existingDeps.length === deps.length &&
+          existingDeps.every((d, i) => d === deps[i])
+
+        if (
+          existingTask.run_id !== run.orchestrationRunId ||
+          existingTask.spec !== child.prompt.text ||
+          existingTask.display_name !== child.name ||
+          !depsMatch
+        ) {
+          throw new CoordinatedAutomationLaunchRefusedError(
+            `Existing native Task "${exactTaskId}" does not match coordinated child definition "${child.childDefinitionId}".`
+          )
+        }
+      } else {
         orchestrationDb.createTask({
           id: exactTaskId,
           runId: run.orchestrationRunId!,
@@ -155,7 +196,7 @@ export function materializeCoordinatedRun(
     )
     const mappings = includedChildren.map((child) => ({
       childDefinitionId: child.childDefinitionId,
-      taskId: `task_${run.orchestrationRunId}_${child.childDefinitionId}`
+      taskId: deterministicCoordinatedTaskId(run.orchestrationRunId!, child.childDefinitionId)
     }))
 
     run = store.persistCoordinatedChildMappings({

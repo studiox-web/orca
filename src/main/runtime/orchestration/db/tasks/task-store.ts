@@ -40,6 +40,22 @@ export function createTask(
       throw new Error(`Dependency task ${depId} must belong to run ${runId}`)
     }
   }
+  if (task.id !== undefined) {
+    if (
+      typeof task.id !== 'string' ||
+      task.id.length < 6 ||
+      task.id.length > 64 ||
+      !/^task_[a-zA-Z0-9_-]+$/.test(task.id)
+    ) {
+      throw new Error(
+        `Invalid caller-supplied task ID "${task.id}". Must start with "task_", contain only [a-zA-Z0-9_-], and be between 6 and 64 characters.`
+      )
+    }
+    const existing = this.getTask(task.id)
+    if (existing) {
+      throw new Error(`Cannot create task "${task.id}": a task with this ID already exists.`)
+    }
+  }
   const id = task.id ?? generateId('task')
   const depsJson = JSON.stringify(task.deps ?? [])
   const display = buildOrchestrationTaskDisplayMetadata({

@@ -16,6 +16,7 @@ import {
 } from './coordinated-automation-materialization'
 import { selectEligibleTasksForDispatch } from './coordinated-automation-lane-scheduler'
 import { executeCoordinatedTaskDispatch } from './coordinated-automation-task-execution'
+import { evaluateParentOutcomeAcceptance } from './coordinated-automation-parent-acceptance'
 
 export { CoordinatedAutomationLaunchRefusedError, orchestrationRecordProbe }
 
@@ -28,6 +29,8 @@ export type CoordinatedWorkerIdentity = Readonly<{
 }>
 
 export type CoordinatedWorkerProvider = {
+  capability?: string
+  capabilities?: readonly string[]
   run: (identity: CoordinatedWorkerIdentity) => Promise<StructuredWorkerResult>
 }
 
@@ -52,10 +55,17 @@ export class CoordinatedAutomationAdapter {
     this.#orchestrationDb = ctx.orchestrationDb
     this.#probe = orchestrationRecordProbe(ctx.orchestrationDb)
     this.#workerProvider = ctx.workerProvider ?? {
+      capability: 'fake_no_effects',
       run: async (identity) => {
         const run = this.#store.listAutomationRuns().find((r) => r.id === identity.automationRunId)
         const revision = run?.resolvedSnapshot?.definitionRevision ?? 1
         const digest = run?.resolvedSnapshot?.canonicalDigest ?? `sha256:${'0'.repeat(64)}`
+        const criteria = run?.resolvedSnapshot?.outcomeContract.acceptanceCriteria ?? []
+        const defaultChecks = criteria.map((c) => ({
+          id: c.id,
+          outcome: 'passed' as const,
+          evidence: [`Criterion ${c.id} verified passed by fake worker`]
+        }))
         return {
           schemaVersion: 1,
           ...identity,
@@ -65,7 +75,7 @@ export class CoordinatedAutomationAdapter {
           summary: `Fake worker ${identity.childDefinitionId} completed`,
           reportMarkdown: `Fake worker ${identity.childDefinitionId} report`,
           artifacts: [],
-          checks: [],
+          checks: defaultChecks,
           effects: [],
           blockers: []
         }
@@ -173,10 +183,35 @@ export class CoordinatedAutomationAdapter {
       const allSettled = tasks.every((t) => t.status === 'completed' || t.status === 'failed')
       if (allSettled) {
         const anyFailed = tasks.some((t) => t.status === 'failed')
+        if (anyFailed) {
+          run = this.#store.recordCoordinatedRunSettlement({
+            automationRunId: run.id,
+            status: 'dispatch_failed',
+            error: 'One or more tasks failed.'
+          })
+          break
+        }
+
+        const acceptance = evaluateParentOutcomeAcceptance({
+          run,
+          snapshot: run.resolvedSnapshot!,
+          orchestrationDb: this.#orchestrationDb,
+          probe: this.#probe
+        })
+
+        if (!acceptance.accepted) {
+          run = this.#store.recordCoordinatedRunSettlement({
+            automationRunId: run.id,
+            status: 'dispatch_failed',
+            error: `Parent outcome acceptance validation failed: ${acceptance.errors.join('; ')}`
+          })
+          break
+        }
+
         run = this.#store.recordCoordinatedRunSettlement({
           automationRunId: run.id,
-          status: anyFailed ? 'dispatch_failed' : 'completed',
-          error: anyFailed ? 'One or more tasks failed.' : null
+          status: 'completed',
+          error: null
         })
         break
       }

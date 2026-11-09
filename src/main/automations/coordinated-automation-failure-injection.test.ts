@@ -21,6 +21,10 @@ import {
   type CoordinatedWorkerProvider
 } from './coordinated-automation-adapter'
 import type { StructuredWorkerResult } from '../../shared/coordinated-automation-receipt-types'
+import {
+  deterministicCoordinatedRunId,
+  deterministicCoordinatedTaskId
+} from './coordinated-automation-deterministic-ids'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -35,6 +39,12 @@ function makeReport(
   overrides?: Partial<StructuredWorkerResult>
 ): StructuredWorkerResult {
   const run = store.listAutomationRuns().find((r) => r.id === identity.automationRunId)
+  const criteria = run?.resolvedSnapshot?.outcomeContract.acceptanceCriteria ?? []
+  const defaultChecks = criteria.map((c) => ({
+    id: c.id,
+    outcome: 'passed' as const,
+    evidence: [`Criterion ${c.id} verified passed by fake worker`]
+  }))
   return {
     schemaVersion: 1,
     ...identity,
@@ -44,7 +54,7 @@ function makeReport(
     summary: `${identity.childDefinitionId} done`,
     reportMarkdown: `${identity.childDefinitionId} report`,
     artifacts: [],
-    checks: [],
+    checks: defaultChecks,
     effects: [],
     blockers: [],
     ...overrides
@@ -82,7 +92,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const adapter = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
-        workerProvider: { run: async (id) => makeReport(id, store) }
+        workerProvider: { capability: 'fake_no_effects', run: async (id) => makeReport(id, store) }
       })
 
       const origLink = store.linkCoordinatedOrchestrationRun.bind(store)
@@ -99,13 +109,14 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         'Simulated crash / store write failure after native run create'
       )
 
+      const expectedRunId = deterministicCoordinatedRunId(run!.id)
       const runsInDbAfterFailure = db.listRuns().runs.filter((r) => r.id !== 'run_legacy_local')
       expect(runsInDbAfterFailure).toHaveLength(1)
-      expect(runsInDbAfterFailure[0].id).toBe(`run_${run!.id}`)
+      expect(runsInDbAfterFailure[0].id).toBe(expectedRunId)
 
       const materialized = await adapter.materializeRun(run!.id)
       expect(materialized.materializationPhase).toBe('ready_for_dispatch')
-      expect(materialized.orchestrationRunId).toBe(`run_${run!.id}`)
+      expect(materialized.orchestrationRunId).toBe(expectedRunId)
 
       const runsInDbAfterRetry = db.listRuns().runs.filter((r) => r.id !== 'run_legacy_local')
       expect(runsInDbAfterRetry).toHaveLength(1)
@@ -126,7 +137,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const adapter = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
-        workerProvider: { run: async (id) => makeReport(id, store) }
+        workerProvider: { capability: 'fake_no_effects', run: async (id) => makeReport(id, store) }
       })
 
       const origCreateTask = db.createTask.bind(db)
@@ -143,19 +154,25 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         'Simulated crash during second task creation'
       )
 
-      const tasksAfterFailure = db.listTasks({ runId: `run_${run!.id}` })
+      const expectedRunId = deterministicCoordinatedRunId(run!.id)
+      const tasksAfterFailure = db.listTasks({ runId: expectedRunId })
       expect(tasksAfterFailure).toHaveLength(1)
-      expect(tasksAfterFailure[0].id).toBe(`task_run_${run!.id}_child_1`)
+      expect(tasksAfterFailure[0].id).toBe(deterministicCoordinatedTaskId(expectedRunId, 'child_1'))
 
       vi.restoreAllMocks()
 
       const materialized = await adapter.materializeRun(run!.id)
       expect(materialized.materializationPhase).toBe('ready_for_dispatch')
 
-      const tasksAfterRetry = db.listTasks({ runId: `run_${run!.id}` })
+      const tasksAfterRetry = db.listTasks({ runId: expectedRunId })
       expect(tasksAfterRetry).toHaveLength(2)
       const taskIds = tasksAfterRetry.map((t) => t.id).sort()
-      expect(taskIds).toEqual([`task_run_${run!.id}_child_1`, `task_run_${run!.id}_child_2`])
+      expect(taskIds).toEqual(
+        [
+          deterministicCoordinatedTaskId(expectedRunId, 'child_1'),
+          deterministicCoordinatedTaskId(expectedRunId, 'child_2')
+        ].sort()
+      )
     })
 
     it('idempotently reconciles across intermediate phases (tasks_created and mappings_persisted)', async () => {
@@ -173,7 +190,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const adapter = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
-        workerProvider: { run: async (id) => makeReport(id, store) }
+        workerProvider: { capability: 'fake_no_effects', run: async (id) => makeReport(id, store) }
       })
 
       const run1 = await adapter.materializeRun(run!.id)
@@ -204,7 +221,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const adapter = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
-        workerProvider: { run: async (id) => makeReport(id, store) }
+        workerProvider: { capability: 'fake_no_effects', run: async (id) => makeReport(id, store) }
       })
 
       await expect(adapter.dispatchTask(run!.id, 'task_any')).rejects.toThrow(
@@ -229,7 +246,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const adapter = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
-        workerProvider: { run: async (id) => makeReport(id, store) }
+        workerProvider: { capability: 'fake_no_effects', run: async (id) => makeReport(id, store) }
       })
 
       await adapter.materializeRun(run!.id)
@@ -274,11 +291,11 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const adapter = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
-        workerProvider: { run: providerRun }
+        workerProvider: { capability: 'fake_no_effects', run: providerRun }
       })
 
-      await adapter.materializeRun(run!.id)
-      const taskId = `task_run_${run!.id}_worker`
+      const materialized = await adapter.materializeRun(run!.id)
+      const taskId = materialized.childMappings![0].taskId
 
       await expect(adapter.dispatchTask(run!.id, taskId)).rejects.toThrow(
         CoordinatedAutomationLaunchRefusedError
@@ -322,6 +339,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         store,
         orchestrationDb: db,
         workerProvider: {
+          capability: 'fake_no_effects',
           run: async (id) => {
             receivedIdentity = id
             return makeReport(id, store)
@@ -376,6 +394,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         store,
         orchestrationDb: db,
         workerProvider: {
+          capability: 'fake_no_effects',
           run: (async () => ({
             not: 'a valid schema'
           })) as unknown as CoordinatedWorkerProvider['run']
@@ -385,13 +404,17 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const settled = await adapter.runUntilSettled(run!.id)
       expect(settled.status).toBe('dispatch_failed')
 
-      const step1Task = db.getTask(`task_run_${run!.id}_step_1`)
+      const expectedRunId = deterministicCoordinatedRunId(run!.id)
+      const step1TaskId = deterministicCoordinatedTaskId(expectedRunId, 'step_1')
+      const step2TaskId = deterministicCoordinatedTaskId(expectedRunId, 'step_2')
+
+      const step1Task = db.getTask(step1TaskId)
       expect(step1Task?.status).toBe('failed')
       expect(step1Task?.result).toContain('Structured worker result schema invalid')
 
-      const step2Task = db.getTask(`task_run_${run!.id}_step_2`)
+      const step2Task = db.getTask(step2TaskId)
       expect(step2Task?.status).toBe('pending')
-      expect(db.getDispatchContext(`task_run_${run!.id}_step_2`)).toBeFalsy()
+      expect(db.getDispatchContext(step2TaskId)).toBeFalsy()
     })
 
     it('fails closed when identity is mismatched or foreign', async () => {
@@ -410,6 +433,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         store,
         orchestrationDb: db,
         workerProvider: {
+          capability: 'fake_no_effects',
           run: async (id) =>
             makeReport(id, store, {
               automationRunId: 'foreign_run_id'
@@ -420,7 +444,9 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const settled = await adapter.runUntilSettled(run!.id)
       expect(settled.status).toBe('dispatch_failed')
 
-      const task = db.getTask(`task_run_${run!.id}_step_1`)
+      const expectedRunId = deterministicCoordinatedRunId(run!.id)
+      const step1TaskId = deterministicCoordinatedTaskId(expectedRunId, 'step_1')
+      const task = db.getTask(step1TaskId)
       expect(task?.status).toBe('failed')
       expect(task?.result).toContain('does not match')
     })
@@ -441,6 +467,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         store,
         orchestrationDb: db,
         workerProvider: {
+          capability: 'fake_no_effects',
           run: async (id) =>
             makeReport(id, store, {
               definitionRevision: 999
@@ -451,7 +478,9 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const settled = await adapter.runUntilSettled(run!.id)
       expect(settled.status).toBe('dispatch_failed')
 
-      const task = db.getTask(`task_run_${run!.id}_step_1`)
+      const expectedRunId = deterministicCoordinatedRunId(run!.id)
+      const step1TaskId = deterministicCoordinatedTaskId(expectedRunId, 'step_1')
+      const task = db.getTask(step1TaskId)
       expect(task?.status).toBe('failed')
       expect(task?.result).toContain('definitionRevision (999) does not match snapshot')
     })
@@ -472,6 +501,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         store,
         orchestrationDb: db,
         workerProvider: {
+          capability: 'fake_no_effects',
           run: async (id) =>
             makeReport(id, store, {
               resolvedConfigDigest: `sha256:${'f'.repeat(64)}`
@@ -482,7 +512,9 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const settled = await adapter.runUntilSettled(run!.id)
       expect(settled.status).toBe('dispatch_failed')
 
-      const task = db.getTask(`task_run_${run!.id}_step_1`)
+      const expectedRunId = deterministicCoordinatedRunId(run!.id)
+      const step1TaskId = deterministicCoordinatedTaskId(expectedRunId, 'step_1')
+      const task = db.getTask(step1TaskId)
       expect(task?.status).toBe('failed')
       expect(task?.result).toContain(
         `resolvedConfigDigest "sha256:${'f'.repeat(64)}" does not match`
@@ -505,6 +537,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         store,
         orchestrationDb: db,
         workerProvider: {
+          capability: 'fake_no_effects',
           run: async (id) =>
             makeReport(id, store, {
               artifacts: [
@@ -524,7 +557,9 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const settled = await adapter.runUntilSettled(run!.id)
       expect(settled.status).toBe('dispatch_failed')
 
-      const task = db.getTask(`task_run_${run!.id}_step_1`)
+      const expectedRunId = deterministicCoordinatedRunId(run!.id)
+      const step1TaskId = deterministicCoordinatedTaskId(expectedRunId, 'step_1')
+      const task = db.getTask(step1TaskId)
       expect(task?.status).toBe('failed')
       expect(task?.result).toContain('Artifact producerAttempt mismatch')
     })
@@ -552,6 +587,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         store,
         orchestrationDb: db,
         workerProvider: {
+          capability: 'fake_no_effects',
           run: async (id) =>
             makeReport(id, store, {
               checks: [
@@ -567,7 +603,9 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const settled = await adapter.runUntilSettled(run!.id)
       expect(settled.status).toBe('dispatch_failed')
 
-      const task = db.getTask(`task_run_${run!.id}_step_1`)
+      const expectedRunId = deterministicCoordinatedRunId(run!.id)
+      const step1TaskId = deterministicCoordinatedTaskId(expectedRunId, 'step_1')
+      const task = db.getTask(step1TaskId)
       expect(task?.status).toBe('failed')
       expect(task?.result).toContain('Required stage check "lint_check" outcome was "failed"')
     })
@@ -588,6 +626,7 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         store,
         orchestrationDb: db,
         workerProvider: {
+          capability: 'fake_no_effects',
           run: async (id) =>
             makeReport(id, store, {
               outcome: 'succeeded',
@@ -604,7 +643,9 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
       const settled = await adapter.runUntilSettled(run!.id)
       expect(settled.status).toBe('dispatch_failed')
 
-      const task = db.getTask(`task_run_${run!.id}_step_1`)
+      const expectedRunId = deterministicCoordinatedRunId(run!.id)
+      const step1TaskId = deterministicCoordinatedTaskId(expectedRunId, 'step_1')
+      const task = db.getTask(step1TaskId)
       expect(task?.status).toBe('failed')
       expect(task?.result).toContain(
         'Worker result outcome cannot be "succeeded" when blockers are present'
