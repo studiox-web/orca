@@ -61,8 +61,12 @@ export type SemanticReceiptIdentityChain = {
   automationRunId: string
   orchestrationRunId: string
   hostId: string
-  targetExecutionAuthority?: string
-  taskMappings?: CoordinatedRunChildMapping[]
+  /** Exact `<type>:<executionTargetId>` authority, e.g. `local:local-1` or `ssh:prod`. */
+  targetExecutionAuthority: string
+  /** The coordinator attempt that produced this receipt. */
+  activeAttempt: { taskId: string; dispatchId: string }
+  /** One mapping per enabled resolved child; must equal the host-persisted mappings exactly. */
+  taskMappings: CoordinatedRunChildMapping[]
 }
 
 export type SemanticReceiptWaiver = {
@@ -79,14 +83,39 @@ export type SemanticReceiptAcceptanceResult = {
   waiver?: SemanticReceiptWaiver
 }
 
+export type TrustedWaiverAuthority = {
+  identity: string
+  role: string
+}
+
+export type TrustedProductionDecision = {
+  approverIdentity: string
+  role: string
+  decidedAt: number
+}
+
+/**
+ * Host-owned facts the receipt is checked against. Nothing here may be sourced from the
+ * receipt itself; validation never falls back to receipt-supplied identity or authority.
+ */
 export type ReceiptValidationContext = {
-  trustedAuthorIdentity?: string
-  trustedHostId?: string
-  trustedExecutionAuthority?: string
-  activeAttempt?: {
+  trustedAuthorIdentity: string
+  trustedHostId: string
+  trustedExecutionAuthority: string
+  automationRunId: string
+  orchestrationRunId: string
+  activeAttempt: {
     taskId: string
     dispatchId: string
   }
+  trustedTaskMappings: readonly CoordinatedRunChildMapping[]
+  /** Absent means no waiver is acceptable. */
+  waiverPolicy?: {
+    allowedRoles: readonly string[]
+    authorities: readonly TrustedWaiverAuthority[]
+  }
+  /** Required for published_verified when requireHumanDecisionForProduction is true. */
+  productionDecision?: TrustedProductionDecision
 }
 
 export type SemanticReceiptApproval = {
@@ -100,6 +129,7 @@ export type SemanticReceiptApproval = {
 
 export type SemanticReceiptEffect = {
   kind: string
+  namespace?: string
   status: 'verified' | 'applied' | 'denied' | 'uncertain'
   receipt: string
   verifiedAt: number

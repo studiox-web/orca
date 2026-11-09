@@ -28,7 +28,12 @@ import {
   CoordinatedAutomationPublicationPolicySchema,
   CoordinatedAutomationRetentionPolicySchema
 } from '../coordinated-automation-schemas'
-import { validateCoordinatedAutomationDefinition } from '../coordinated-automation-validation'
+import {
+  validateChildGraph,
+  validateCoordinatedAutomationDefinition,
+  type CoordinatedAutomationValidationError
+} from '../coordinated-automation-validation'
+import { validateOutcomeContractIds } from '../coordinated-automation-contract-validation'
 import {
   COORDINATED_AUTOMATION_CONTRACT_VERSION,
   type CoordinatedHostCapabilities
@@ -112,32 +117,51 @@ export const CoordinatedAutomationCreate = z
     }
   })
 
-export const CoordinatedAutomationUpdateFields = z.strictObject({
-  name: OptionalString,
-  prompt: OptionalString.pipe(z.string().max(200_000, 'Prompt too long').optional()),
-  precheck: AutomationPrecheck,
-  agentId: TuiAgent.optional(),
-  extraAgentArgs: ExtraAgentArgs,
-  launchSetupPatch: AutomationLaunchSetupPatch.optional(),
-  runContext: WorkspaceRunContext,
-  sourceContext: TaskSourceContext,
-  repo: OptionalString,
-  workspace: OptionalString,
-  workspaceMode: AutomationWorkspaceMode,
-  baseBranch: OptionalNullablePlainString,
-  setupDecision: SetupDecision,
-  reuseSession: OptionalBoolean,
-  timezone: OptionalString,
-  rrule: AutomationSchedule.optional(),
-  dtstart: requiredNumber('Missing trigger start time').optional(),
-  enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt,
-  kind: z.literal('coordinated').optional(),
-  expectedDefinitionRevision: OptionalPositiveInt,
-  outcomeContract: AutomationOutcomeContractSchema.optional(),
-  children: z.array(CoordinatedAutomationChildDefinitionSchema).max(100).optional(),
-  inheritedDefaults: CoordinatedAutomationInheritedDefaultsSchema.optional(),
-  globalCeilings: CoordinatedAutomationCeilingsSchema.optional(),
-  publicationPolicy: CoordinatedAutomationPublicationPolicySchema.optional(),
-  retentionPolicy: CoordinatedAutomationRetentionPolicySchema.optional()
-})
+export const CoordinatedAutomationUpdateFields = z
+  .strictObject({
+    name: OptionalString,
+    prompt: OptionalString.pipe(z.string().max(200_000, 'Prompt too long').optional()),
+    precheck: AutomationPrecheck,
+    agentId: TuiAgent.optional(),
+    extraAgentArgs: ExtraAgentArgs,
+    launchSetupPatch: AutomationLaunchSetupPatch.optional(),
+    runContext: WorkspaceRunContext,
+    sourceContext: TaskSourceContext,
+    repo: OptionalString,
+    workspace: OptionalString,
+    workspaceMode: AutomationWorkspaceMode,
+    baseBranch: OptionalNullablePlainString,
+    setupDecision: SetupDecision,
+    reuseSession: OptionalBoolean,
+    timezone: OptionalString,
+    rrule: AutomationSchedule.optional(),
+    dtstart: requiredNumber('Missing trigger start time').optional(),
+    enabled: OptionalBoolean,
+    missedRunGraceMinutes: OptionalPositiveInt,
+    kind: z.literal('coordinated').optional(),
+    expectedDefinitionRevision: OptionalPositiveInt,
+    outcomeContract: AutomationOutcomeContractSchema.optional(),
+    children: z.array(CoordinatedAutomationChildDefinitionSchema).max(100).optional(),
+    inheritedDefaults: CoordinatedAutomationInheritedDefaultsSchema.optional(),
+    globalCeilings: CoordinatedAutomationCeilingsSchema.optional(),
+    publicationPolicy: CoordinatedAutomationPublicationPolicySchema.optional(),
+    retentionPolicy: CoordinatedAutomationRetentionPolicySchema.optional()
+  })
+  .superRefine((val, ctx) => {
+    // Why: a partial update may rely on stored policies, so only checks that are decidable
+    // from the payload alone run here; the host re-validates the merged definition.
+    const errors: CoordinatedAutomationValidationError[] = []
+    if (val.children) {
+      validateChildGraph(val.children, errors)
+    }
+    if (val.outcomeContract) {
+      validateOutcomeContractIds(val.outcomeContract, errors)
+    }
+    for (const err of errors) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: err.message,
+        path: err.path ? [err.path] : []
+      })
+    }
+  })

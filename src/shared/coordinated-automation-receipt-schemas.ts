@@ -56,7 +56,8 @@ export function isValidArtifactUri(uri: string): boolean {
     return false
   }
   for (const segment of segments) {
-    if (segment === '.' || segment === '..') {
+    // All-dot segments ('.', '..', '...') are traversal-like on some resolvers; never allow them.
+    if (/^\.+$/.test(segment)) {
       return false
     }
     if (!/^[a-zA-Z0-9_\-.@]+$/.test(segment)) {
@@ -147,8 +148,12 @@ export const SemanticReceiptIdentityChainSchema: z.ZodType<SemanticReceiptIdenti
     automationRunId: z.string().min(1).max(64),
     orchestrationRunId: z.string().min(1).max(64),
     hostId: z.string().min(1).max(128),
-    targetExecutionAuthority: z.string().max(256).optional(),
-    taskMappings: z.array(CoordinatedRunChildMappingSchema).max(100).optional()
+    targetExecutionAuthority: z.string().min(1).max(256),
+    activeAttempt: z.object({
+      taskId: z.string().min(1).max(64),
+      dispatchId: z.string().min(1).max(64)
+    }),
+    taskMappings: z.array(CoordinatedRunChildMappingSchema).max(100)
   }
 )
 
@@ -178,6 +183,7 @@ export const SemanticReceiptApprovalSchema: z.ZodType<SemanticReceiptApproval> =
 
 export const SemanticReceiptEffectSchema: z.ZodType<SemanticReceiptEffect> = z.object({
   kind: z.string().min(1).max(100),
+  namespace: z.string().min(1).max(100).optional(),
   status: z.enum(['verified', 'applied', 'denied', 'uncertain']),
   receipt: z.string().min(1).max(2048),
   verifiedAt: z.number()

@@ -1,8 +1,49 @@
 import type {
+  AutomationOutcomeContract,
   CoordinatedAutomationChildDefinition,
   CoordinatedAutomationDefinition
 } from './coordinated-automation-types'
 import type { CoordinatedAutomationValidationError } from './coordinated-automation-validation'
+import { getEffectCriterionKind } from './coordinated-automation-receipt-effect-validation'
+
+/**
+ * Criterion and approval IDs key receipt results; duplicates would let one result satisfy
+ * several requirements, so they are rejected wherever a contract is accepted.
+ */
+export function validateOutcomeContractIds(
+  contract: Pick<AutomationOutcomeContract, 'acceptanceCriteria' | 'requiredApprovals'>,
+  errors: CoordinatedAutomationValidationError[]
+): void {
+  const seenCriteria = new Set<string>()
+  for (const c of contract.acceptanceCriteria) {
+    if (seenCriteria.has(c.id)) {
+      errors.push({
+        code: 'INVALID_OUTCOME_CONTRACT',
+        message: `Duplicate acceptance criterion ID "${c.id}".`,
+        path: `outcomeContract.acceptanceCriteria.${c.id}`
+      })
+    }
+    seenCriteria.add(c.id)
+    if (c.kind === 'effect' && getEffectCriterionKind(c.details) === null) {
+      errors.push({
+        code: 'INVALID_OUTCOME_CONTRACT',
+        message: `Effect acceptance criterion "${c.id}" must declare a non-empty details.effectKind.`,
+        path: `outcomeContract.acceptanceCriteria.${c.id}.details.effectKind`
+      })
+    }
+  }
+  const seenApprovals = new Set<string>()
+  for (const a of contract.requiredApprovals) {
+    if (seenApprovals.has(a.id)) {
+      errors.push({
+        code: 'INVALID_OUTCOME_CONTRACT',
+        message: `Duplicate required approval ID "${a.id}".`,
+        path: `outcomeContract.requiredApprovals.${a.id}`
+      })
+    }
+    seenApprovals.add(a.id)
+  }
+}
 
 export function validateOutcomeContract(
   definition: CoordinatedAutomationDefinition,
@@ -24,6 +65,8 @@ export function validateOutcomeContract(
       path: 'outcomeContract.allowedFinalStates'
     })
   }
+
+  validateOutcomeContractIds(contract, errors)
 
   for (const c of contract.acceptanceCriteria) {
     if (c.targetChildId) {

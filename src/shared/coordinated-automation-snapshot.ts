@@ -147,9 +147,12 @@ export function resolveAutomationSnapshot(
     )
   }
 
-  const effectiveCeilings: CoordinatedAutomationCeilings = { ...automation.globalCeilings }
+  // Why: snapshot content must come from the schema's parsed (trimmed, stripped) output so the
+  // digest covers exactly what was validated, not the caller's raw payload.
+  const parsed = schemaParsed.data
+  const effectiveCeilings: CoordinatedAutomationCeilings = { ...parsed.globalCeilings }
   const validationResult = validateCoordinatedAutomationDefinition(
-    definitionPayload,
+    parsed,
     undefined,
     effectiveCeilings
   )
@@ -160,29 +163,32 @@ export function resolveAutomationSnapshot(
   }
 
   const publicationPolicy: CoordinatedAutomationPublicationPolicy = {
-    allowExternalMutation: automation.publicationPolicy?.allowExternalMutation ?? false,
+    allowExternalMutation: parsed.publicationPolicy?.allowExternalMutation ?? false,
     requireHumanDecisionForProduction:
-      automation.publicationPolicy?.requireHumanDecisionForProduction ?? true,
-    allowedFinalStates: automation.publicationPolicy?.allowedFinalStates
-      ? [...automation.publicationPolicy.allowedFinalStates]
+      parsed.publicationPolicy?.requireHumanDecisionForProduction ?? true,
+    allowedFinalStates: parsed.publicationPolicy?.allowedFinalStates
+      ? [...parsed.publicationPolicy.allowedFinalStates]
       : ['completed']
   }
   const retentionPolicy: CoordinatedAutomationRetentionPolicy = {
-    preserveCompletionReceipt: automation.retentionPolicy?.preserveCompletionReceipt ?? true,
-    preserveSnapshot: automation.retentionPolicy?.preserveSnapshot,
-    preserveMappings: automation.retentionPolicy?.preserveMappings,
-    artifactRetentionDays: automation.retentionPolicy?.artifactRetentionDays,
-    defaultRetentionClass: automation.retentionPolicy?.defaultRetentionClass,
-    minimumEvidenceReferences: automation.retentionPolicy?.minimumEvidenceReferences
-      ? [...automation.retentionPolicy.minimumEvidenceReferences]
+    preserveCompletionReceipt: parsed.retentionPolicy?.preserveCompletionReceipt ?? true,
+    preserveSnapshot: parsed.retentionPolicy?.preserveSnapshot,
+    preserveMappings: parsed.retentionPolicy?.preserveMappings,
+    artifactRetentionDays: parsed.retentionPolicy?.artifactRetentionDays,
+    defaultRetentionClass: parsed.retentionPolicy?.defaultRetentionClass,
+    minimumEvidenceReferences: parsed.retentionPolicy?.minimumEvidenceReferences
+      ? [...parsed.retentionPolicy.minimumEvidenceReferences]
       : undefined
   }
   const outcomeContract: AutomationOutcomeContract = JSON.parse(
-    JSON.stringify(automation.outcomeContract)
+    JSON.stringify(parsed.outcomeContract)
   )
 
-  const parentDefaults = resolveParentDefaults(automation, effectiveCeilings)
-  const resolvedChildren: ResolvedChildSnapshot[] = automation.children.map((child) => {
+  const parentDefaults = resolveParentDefaults(
+    { ...automation, inheritedDefaults: parsed.inheritedDefaults },
+    effectiveCeilings
+  )
+  const resolvedChildren: ResolvedChildSnapshot[] = parsed.children.map((child) => {
     const { resolved: launchConfig, provenance } = resolveChildLaunchConfig(child, parentDefaults)
     return {
       childDefinitionId: child.id,

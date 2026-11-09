@@ -43,16 +43,19 @@ export type CoordinatedAutomationValidationResult = {
   errors: CoordinatedAutomationValidationError[]
 }
 
-export function validateCoordinatedAutomationDefinition(
-  definition: CoordinatedAutomationDefinition,
-  parentDefaults?: CoordinatedAutomationInheritedDefaults,
-  parentCeilings?: CoordinatedAutomationCeilings
-): CoordinatedAutomationValidationResult {
-  const errors: CoordinatedAutomationValidationError[] = []
+/**
+ * Graph-only checks over a child list: unique IDs, no child schedules, known dependencies,
+ * no cycles, and no enabled child depending on a disabled one. Shared by full definition
+ * validation and by partial update payloads that replace the children array.
+ */
+export function validateChildGraph(
+  children: CoordinatedAutomationChildDefinition[],
+  errors: CoordinatedAutomationValidationError[]
+): { childMap: Map<string, CoordinatedAutomationChildDefinition>; cycles: string[][] } {
   const seenChildIds = new Set<string>()
   const childMap = new Map<string, CoordinatedAutomationChildDefinition>()
 
-  for (const child of definition.children) {
+  for (const child of children) {
     if (seenChildIds.has(child.id)) {
       errors.push({
         code: 'DUPLICATE_CHILD_ID',
@@ -77,7 +80,7 @@ export function validateCoordinatedAutomationDefinition(
     }
   }
 
-  for (const child of definition.children) {
+  for (const child of children) {
     for (const dep of child.dependencies) {
       if (!childMap.has(dep.childId)) {
         errors.push({
@@ -90,7 +93,7 @@ export function validateCoordinatedAutomationDefinition(
     }
   }
 
-  const cycles = detectCycles(definition.children)
+  const cycles = detectCycles(children)
   for (const cycle of cycles) {
     errors.push({
       code: 'DEPENDENCY_CYCLE',
@@ -100,7 +103,7 @@ export function validateCoordinatedAutomationDefinition(
     })
   }
 
-  for (const child of definition.children) {
+  for (const child of children) {
     if (child.enabled) {
       for (const dep of child.dependencies) {
         const depChild = childMap.get(dep.childId)
@@ -115,6 +118,17 @@ export function validateCoordinatedAutomationDefinition(
       }
     }
   }
+
+  return { childMap, cycles }
+}
+
+export function validateCoordinatedAutomationDefinition(
+  definition: CoordinatedAutomationDefinition,
+  parentDefaults?: CoordinatedAutomationInheritedDefaults,
+  parentCeilings?: CoordinatedAutomationCeilings
+): CoordinatedAutomationValidationResult {
+  const errors: CoordinatedAutomationValidationError[] = []
+  const { childMap, cycles } = validateChildGraph(definition.children, errors)
 
   const effectiveCeilings = { ...parentCeilings, ...definition.globalCeilings }
 

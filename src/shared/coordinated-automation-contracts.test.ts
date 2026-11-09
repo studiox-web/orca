@@ -27,6 +27,7 @@ import {
   isTerminalMaterializationPhase
 } from './coordinated-automation-saga-types'
 import { validateReceiptAgainstSnapshot } from './coordinated-automation-validation'
+import type { ReceiptValidationContext } from './coordinated-automation-receipt-types'
 
 const SAMPLE_WRITER_PROMPT_TEXT = 'Resolved goal text for content writer'
 const SAMPLE_WRITER_PROMPT_DIGEST =
@@ -35,6 +36,32 @@ const SAMPLE_WRITER_PROMPT_DIGEST =
 const samplePromptResolver: ResolvePromptFunction = () => ({
   text: SAMPLE_WRITER_PROMPT_TEXT
 })
+
+const SAMPLE_TASK_MAPPINGS = [
+  { childDefinitionId: 'child-research', taskId: 'task-research', dispatchId: 'ctx-research' },
+  { childDefinitionId: 'child-writer', taskId: 'task-writer', dispatchId: 'ctx-writer' },
+  { childDefinitionId: 'child-editor', taskId: 'task-editor', dispatchId: 'ctx-editor' }
+]
+
+function sampleIdentityExtras() {
+  return {
+    targetExecutionAuthority: 'local:local',
+    activeAttempt: { taskId: 'task-coord', dispatchId: 'ctx-coord' },
+    taskMappings: SAMPLE_TASK_MAPPINGS.map((m) => ({ ...m }))
+  }
+}
+
+function sampleTrustedContext(trustedAuthorIdentity: string): ReceiptValidationContext {
+  return {
+    trustedAuthorIdentity,
+    trustedHostId: 'local',
+    trustedExecutionAuthority: 'local:local',
+    automationRunId: 'run-123',
+    orchestrationRunId: 'orch-456',
+    activeAttempt: { taskId: 'task-coord', dispatchId: 'ctx-coord' },
+    trustedTaskMappings: SAMPLE_TASK_MAPPINGS.map((m) => ({ ...m }))
+  }
+}
 
 function createSampleSingleAutomation(): Automation {
   return {
@@ -407,7 +434,8 @@ describe('Coordinated Automation Shared Contracts', () => {
           definitionRevision: snapshot.definitionRevision,
           automationRunId: 'run-123',
           orchestrationRunId: 'orch-456',
-          hostId: 'local'
+          hostId: 'local',
+          ...sampleIdentityExtras()
         },
         frozenConfigDigest: snapshot.canonicalDigest,
         finalState: 'ready_to_publish' as const,
@@ -446,7 +474,11 @@ describe('Coordinated Automation Shared Contracts', () => {
         unresolvedWarnings: []
       }
 
-      const receiptValidation = validateReceiptAgainstSnapshot(validReceipt, snapshot)
+      const receiptValidation = validateReceiptAgainstSnapshot(
+        validReceipt,
+        snapshot,
+        sampleTrustedContext('term_writer_1')
+      )
       expect(receiptValidation.valid).toBe(true)
       expect(receiptValidation.errors).toHaveLength(0)
     })
@@ -465,7 +497,8 @@ describe('Coordinated Automation Shared Contracts', () => {
           definitionRevision: 999,
           automationRunId: 'run-123',
           orchestrationRunId: 'orch-456',
-          hostId: 'host-local-1'
+          hostId: 'host-local-1',
+          ...sampleIdentityExtras()
         },
         frozenConfigDigest:
           'sha256:0000000000000000000000000000000000000000000000000000000000000000',
@@ -477,7 +510,11 @@ describe('Coordinated Automation Shared Contracts', () => {
         unresolvedWarnings: []
       }
 
-      const res = validateReceiptAgainstSnapshot(receipt, snapshot)
+      const res = validateReceiptAgainstSnapshot(
+        receipt,
+        snapshot,
+        sampleTrustedContext('term_writer_1')
+      )
       expect(res.valid).toBe(false)
       expect(res.errors.some((e) => e.includes('does not match snapshot canonicalDigest'))).toBe(
         true
@@ -499,7 +536,8 @@ describe('Coordinated Automation Shared Contracts', () => {
           definitionRevision: snapshot.definitionRevision,
           automationRunId: 'run-123',
           orchestrationRunId: 'orch-456',
-          hostId: 'local'
+          hostId: 'local',
+          ...sampleIdentityExtras()
         },
         frozenConfigDigest: snapshot.canonicalDigest,
         finalState: 'ready_to_publish' as const,
@@ -537,7 +575,11 @@ describe('Coordinated Automation Shared Contracts', () => {
         unresolvedWarnings: []
       }
 
-      const res = validateReceiptAgainstSnapshot(selfApprovalReceipt, snapshot)
+      const res = validateReceiptAgainstSnapshot(
+        selfApprovalReceipt,
+        snapshot,
+        sampleTrustedContext('term_same_user')
+      )
       expect(res.valid).toBe(false)
       expect(
         res.errors.some((e) => e.includes('disallows author approval, but was approved by author'))
@@ -558,7 +600,8 @@ describe('Coordinated Automation Shared Contracts', () => {
           definitionRevision: snapshot.definitionRevision,
           automationRunId: 'run-123',
           orchestrationRunId: 'orch-456',
-          hostId: 'local'
+          hostId: 'local',
+          ...sampleIdentityExtras()
         },
         frozenConfigDigest: snapshot.canonicalDigest,
         finalState: 'published_verified' as const,
@@ -569,7 +612,11 @@ describe('Coordinated Automation Shared Contracts', () => {
         unresolvedWarnings: []
       }
 
-      const res = validateReceiptAgainstSnapshot(receipt, snapshot)
+      const res = validateReceiptAgainstSnapshot(
+        receipt,
+        snapshot,
+        sampleTrustedContext('term_writer_1')
+      )
       expect(res.valid).toBe(false)
       expect(
         res.errors.some((e) => e.includes('is not permitted by snapshot outcomeContract'))

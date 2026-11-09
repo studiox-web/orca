@@ -10,6 +10,7 @@ import type {
   CoordinatedAutomationDefinition
 } from './coordinated-automation-types'
 import { validateReceiptAgainstSnapshot } from './coordinated-automation-validation'
+import type { ReceiptValidationContext } from './coordinated-automation-receipt-types'
 import { AutomationCreate, AutomationUpdateFields } from './rpc-contract/automation-params'
 import {
   CoordinatedAutomationCreate,
@@ -68,6 +69,21 @@ function createBaseAutomation(): CoordinatedTestAutomation {
   }
 }
 
+const PROBE_MAPPINGS = [{ childDefinitionId: 'child-1', taskId: 't1', dispatchId: 'd1' }]
+const PROBE_ATTEMPT = { taskId: 'tc', dispatchId: 'dc' }
+
+function probeContext(trustedAuthorIdentity: string): ReceiptValidationContext {
+  return {
+    trustedAuthorIdentity,
+    trustedHostId: 'local-1',
+    trustedExecutionAuthority: 'local:local-1',
+    automationRunId: 'r',
+    orchestrationRunId: 'o',
+    activeAttempt: { ...PROBE_ATTEMPT },
+    trustedTaskMappings: PROBE_MAPPINGS.map((m) => ({ ...m }))
+  }
+}
+
 describe('Re-review Behavioral Probes R*, S*, A*, G*', () => {
   describe('Receipt Probes R1 - R4', () => {
     it('R1: fails closed when author is omitted with disallowAuthorApproval, same approver is used, and hostId/authority mismatches', () => {
@@ -81,7 +97,9 @@ describe('Re-review Behavioral Probes R*, S*, A*, G*', () => {
           automationRunId: 'r',
           orchestrationRunId: 'o',
           hostId: 'some-other-host',
-          targetExecutionAuthority: 'ssh:evil'
+          targetExecutionAuthority: 'ssh:evil',
+          activeAttempt: { ...PROBE_ATTEMPT },
+          taskMappings: PROBE_MAPPINGS.map((m) => ({ ...m }))
         },
         frozenConfigDigest: snap.canonicalDigest,
         finalState: 'completed' as const,
@@ -97,7 +115,7 @@ describe('Re-review Behavioral Probes R*, S*, A*, G*', () => {
         unresolvedWarnings: []
       }
 
-      const res = validateReceiptAgainstSnapshot(rcpt, snap)
+      const res = validateReceiptAgainstSnapshot(rcpt, snap, probeContext('alice'))
       expect(res.valid).toBe(false)
       expect(res.errors.some((e) => e.includes('hostId') && e.includes('does not match'))).toBe(
         true
@@ -123,7 +141,10 @@ describe('Re-review Behavioral Probes R*, S*, A*, G*', () => {
           definitionRevision: 1,
           automationRunId: 'r',
           orchestrationRunId: 'o',
-          hostId: 'local-1'
+          hostId: 'local-1',
+          targetExecutionAuthority: 'local:local-1',
+          activeAttempt: { ...PROBE_ATTEMPT },
+          taskMappings: PROBE_MAPPINGS.map((m) => ({ ...m }))
         },
         frozenConfigDigest: snap.canonicalDigest,
         finalState: 'completed' as const,
@@ -151,7 +172,7 @@ describe('Re-review Behavioral Probes R*, S*, A*, G*', () => {
         unresolvedWarnings: []
       }
 
-      const res = validateReceiptAgainstSnapshot(rcpt, snap)
+      const res = validateReceiptAgainstSnapshot(rcpt, snap, probeContext('charlie'))
       expect(res.valid).toBe(false)
       expect(res.errors.some((e) => e.includes('requires waiver authority'))).toBe(true)
       expect(res.errors.some((e) => e.includes('must include non-empty evidence references'))).toBe(
@@ -169,7 +190,10 @@ describe('Re-review Behavioral Probes R*, S*, A*, G*', () => {
           definitionRevision: 1,
           automationRunId: 'r',
           orchestrationRunId: 'o',
-          hostId: 'local-1'
+          hostId: 'local-1',
+          targetExecutionAuthority: 'local:local-1',
+          activeAttempt: { ...PROBE_ATTEMPT },
+          taskMappings: PROBE_MAPPINGS.map((m) => ({ ...m }))
         },
         frozenConfigDigest: snap.canonicalDigest,
         finalState: 'completed' as const,
@@ -198,7 +222,7 @@ describe('Re-review Behavioral Probes R*, S*, A*, G*', () => {
         unresolvedWarnings: []
       }
 
-      const res = validateReceiptAgainstSnapshot(rcpt, snap)
+      const res = validateReceiptAgainstSnapshot(rcpt, snap, probeContext('charlie'))
       expect(res.valid).toBe(false)
       expect(res.errors.some((e) => e.includes('Duplicate acceptance result'))).toBe(true)
     })
@@ -213,7 +237,10 @@ describe('Re-review Behavioral Probes R*, S*, A*, G*', () => {
           definitionRevision: 1,
           automationRunId: 'r',
           orchestrationRunId: 'o',
-          hostId: 'local-1'
+          hostId: 'local-1',
+          targetExecutionAuthority: 'local:local-1',
+          activeAttempt: { ...PROBE_ATTEMPT },
+          taskMappings: PROBE_MAPPINGS.map((m) => ({ ...m }))
         },
         frozenConfigDigest: snap.canonicalDigest,
         finalState: 'completed' as const,
@@ -241,7 +268,7 @@ describe('Re-review Behavioral Probes R*, S*, A*, G*', () => {
         unresolvedWarnings: []
       }
 
-      const res = validateReceiptAgainstSnapshot(rcpt, snap)
+      const res = validateReceiptAgainstSnapshot(rcpt, snap, probeContext('charlie'))
       expect(res.valid).toBe(false)
       expect(
         res.errors.some((e) =>
