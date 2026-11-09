@@ -110,11 +110,9 @@ function AutomationWorkerEditorForm({
           }
 
     const nextTimeoutSeconds = launchConfigState.overrideTimeout
-      ? launchConfigState.timeoutExplicitNone
-        ? null
-        : Number(launchConfigState.timeoutMinutes) > 0
-          ? Number(launchConfigState.timeoutMinutes) * 60
-          : null
+      ? Number(launchConfigState.timeoutMinutes) > 0
+        ? Number(launchConfigState.timeoutMinutes) * 60
+        : undefined
       : undefined
 
     const nextRetries = launchConfigState.overrideRetries
@@ -166,7 +164,10 @@ function AutomationWorkerEditorForm({
           model: launchConfigState.overrideModel ? 'overridden' : 'inherited',
           reasoningEffort: launchConfigState.overrideEffort ? 'overridden' : 'inherited',
           workspaceMode: launchConfigState.overrideWorkspace ? 'overridden' : 'inherited',
-          timeoutSeconds: launchConfigState.overrideTimeout ? 'overridden' : 'inherited',
+          timeoutSeconds:
+            launchConfigState.overrideTimeout && typeof nextTimeoutSeconds === 'number'
+              ? 'overridden'
+              : 'inherited',
           maxRetries: launchConfigState.overrideRetries ? 'overridden' : 'inherited',
           maxReviewIterations: launchConfigState.overrideReviewIterations
             ? 'overridden'

@@ -106,10 +106,8 @@ export function WorkerConfigGrid({
 
   // Timeout Seconds
   const isTimeoutOverridden = child.launchConfig.provenance?.timeoutSeconds === 'overridden'
-  const isTimeoutExplicitNone = child.launchConfig.timeoutSeconds === null
-  const effectiveTimeout = isTimeoutExplicitNone
-    ? null
-    : (child.launchConfig.timeoutSeconds ?? parentDefaults?.timeoutSeconds ?? null)
+  const effectiveTimeout =
+    child.launchConfig.timeoutSeconds ?? parentDefaults?.timeoutSeconds ?? null
 
   return (
     <div className="mt-3 grid grid-cols-1 gap-2 @md:grid-cols-2 @2xl:grid-cols-3">
@@ -270,14 +268,12 @@ export function WorkerConfigGrid({
           <div className="flex items-center gap-1 text-2xs text-muted-foreground">
             <Clock className="size-3 shrink-0" aria-hidden="true" />
             <span>
-              {isTimeoutExplicitNone
-                ? translate('auto.components.automations.workers.none', 'None')
-                : effectiveTimeout != null
-                  ? `${Math.round(effectiveTimeout / 60)}m`
-                  : translate(
-                      'auto.components.automations.workers.defaultTimeout',
-                      'default timeout'
-                    )}
+              {effectiveTimeout != null
+                ? `${Math.round(effectiveTimeout / 60)}m`
+                : translate(
+                    'auto.components.automations.workers.defaultTimeout',
+                    'default timeout'
+                  )}
             </span>
           </div>
         </div>
@@ -288,7 +284,7 @@ export function WorkerConfigGrid({
             isExplicitNone={isWorkspaceExplicitNone}
           />
           {isTimeoutOverridden ? (
-            <ProvenanceBadge isOverridden={true} isExplicitNone={isTimeoutExplicitNone} />
+            <ProvenanceBadge isOverridden={true} isExplicitNone={false} />
           ) : null}
         </div>
       </div>

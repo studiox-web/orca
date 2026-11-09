@@ -247,12 +247,10 @@ describe('AutomationWorkersSection', () => {
         agentId: 'claude',
         model: null, // Explicit none
         reasoningEffort: null, // Explicit none
-        timeoutSeconds: null, // Explicit none
         provenance: {
           agentId: 'inherited',
           model: 'overridden',
-          reasoningEffort: 'overridden',
-          timeoutSeconds: 'overridden'
+          reasoningEffort: 'overridden'
         }
       }
     }
@@ -264,6 +262,43 @@ describe('AutomationWorkersSection', () => {
 
     expect(container.textContent).toContain('/(none)')
     expect(container.textContent).toContain('Overridden (None)')
+  })
+
+  it('renders timeout override in minutes and supports resetting it to inherited', async () => {
+    const onWorkersChange = vi.fn()
+    const timeoutChild: CoordinatedAutomationChildDefinition = {
+      ...baseChild1,
+      id: 'worker-timeout',
+      launchConfig: {
+        agentId: 'claude',
+        timeoutSeconds: 1800,
+        provenance: {
+          timeoutSeconds: 'overridden'
+        }
+      }
+    }
+
+    const container = await renderWorkersSection({
+      workers: [timeoutChild],
+      isEditing: true,
+      onWorkersChange
+    })
+
+    expect(container.textContent).toContain('30m')
+
+    const resetTimeoutBtn = container.querySelector(
+      'button[aria-label="Reset timeout to inherited"]'
+    ) as HTMLButtonElement
+    expect(resetTimeoutBtn).not.toBeNull()
+
+    await act(async () => {
+      resetTimeoutBtn.click()
+    })
+
+    expect(onWorkersChange).toHaveBeenCalledTimes(1)
+    const updated = onWorkersChange.mock.calls[0][0][0]
+    expect(updated.launchConfig.timeoutSeconds).toBeUndefined()
+    expect(updated.launchConfig.provenance.timeoutSeconds).toBe('inherited')
   })
 
   it('handles duplicate names with distinct stable IDs', async () => {

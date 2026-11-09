@@ -33,7 +33,6 @@ export type LaunchConfigFormState = {
   overrideWorkspace: boolean
   workspaceMode: AutomationWorkspaceMode
   overrideTimeout: boolean
-  timeoutExplicitNone: boolean
   timeoutMinutes: string
   overrideRetries: boolean
   maxRetries: string
@@ -59,7 +58,6 @@ export function createInitialLaunchConfigFormState(
     overrideWorkspace: prov?.workspaceMode === 'overridden',
     workspaceMode: cfg.workspaceMode ?? parentDefaults?.workspaceMode ?? 'existing',
     overrideTimeout: prov?.timeoutSeconds === 'overridden',
-    timeoutExplicitNone: cfg.timeoutSeconds === null,
     timeoutMinutes:
       typeof cfg.timeoutSeconds === 'number' && cfg.timeoutSeconds > 0
         ? String(Math.round(cfg.timeoutSeconds / 60))

@@ -39,7 +39,6 @@ export function AutomationWorkerExecutionPolicyFields({
               id="worker-timeout-override-input"
               type="number"
               min="1"
-              disabled={state.timeoutExplicitNone}
               value={state.timeoutMinutes}
               onChange={(e) => {
                 const val = e.target.value
@@ -53,24 +52,6 @@ export function AutomationWorkerExecutionPolicyFields({
               className="text-xs"
             />
             <span className="text-2xs text-muted-foreground">min</span>
-            <button
-              type="button"
-              aria-pressed={state.timeoutExplicitNone}
-              aria-label={translate(
-                'auto.components.automations.workers.timeoutExplicitNoneLabel',
-                'Set timeout to none (no timeout limit)'
-              )}
-              className={`text-2xs px-2 py-1 rounded border transition-colors ${
-                state.timeoutExplicitNone
-                  ? 'bg-status-warning-background border-status-warning-border text-status-warning-text font-medium'
-                  : 'border-border text-muted-foreground hover:bg-muted'
-              }`}
-              onClick={() =>
-                onChange((prev) => ({ ...prev, timeoutExplicitNone: !prev.timeoutExplicitNone }))
-              }
-            >
-              {translate('auto.components.automations.workers.none', 'None')}
-            </button>
           </div>
         ) : (
           <div className="text-2xs text-muted-foreground italic">
@@ -81,8 +62,8 @@ export function AutomationWorkerExecutionPolicyFields({
                   { minutes: Math.round(parentDefaults.timeoutSeconds / 60) }
                 )
               : translate(
-                  'auto.components.automations.workers.inheritingTimeoutNone',
-                  'Inherited (no timeout limit)'
+                  'auto.components.automations.workers.inheritingTimeoutDefault',
+                  'Inherited (default)'
                 )}
           </div>
         )}
