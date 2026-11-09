@@ -15,6 +15,7 @@ function snapshot(
     automationId: 'a1',
     definitionRevision: 3,
     canonicalDigest: `sha256:${'a'.repeat(64)}`,
+    executionTarget: { type: 'local', id: 'local' },
     resolvedChildren: [{ childDefinitionId: 'writer', name: 'Writer', role: 'author' }],
     retentionPolicy
   } as unknown as ResolvedAutomationRunSnapshot
@@ -79,6 +80,7 @@ describe('coordinated run retention', () => {
       retainedEvidence: {
         definitionRevision: 3,
         canonicalDigest: `sha256:${'a'.repeat(64)}`,
+        executionAuthority: 'local:local',
         children: [{ childDefinitionId: 'writer', name: 'Writer', role: 'author' }],
         minimumEvidenceReferences: ['receipt:article']
       }

@@ -12,6 +12,13 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 export const ORCAD_MIGRATION_COORDINATED_STATE_REFUSAL =
   'orcad_migration_coordinated_automation_state'
 
+/**
+ * Counts coordinated identities a move would touch or cannot prove it leaves alone. A ledger
+ * record or tombstone is out of scope only when provably so: its automation still exists and
+ * the move does not touch it, or (SSH moves) the tombstone names a different SSH target.
+ * Orphan records (archived or missing parents) are otherwise unscopable and count, so a
+ * null-target local move cannot report zero just because the identity is unscopable.
+ */
 export function coordinatedStateTouchedByOrcadMigration(input: {
   state: PersistedState
   automations: readonly Automation[]
@@ -23,21 +30,31 @@ export function coordinatedStateTouchedByOrcadMigration(input: {
     // An unreadable ledger cannot prove none of its records belong to this scope.
     return 1
   }
-  const automationIds = new Set([
+  const touched = new Set([
     ...input.automations.map((entry) => entry.id),
     ...input.runs.map((entry) => entry.automationId)
   ])
+  const existing = new Set(input.state.automations.map((entry) => entry.id))
+  const unprovable = (automationId: string): boolean =>
+    touched.has(automationId) || !existing.has(automationId)
+  const revisionOwners = Object.keys(ledger?.revisionDigests ?? {}).map((key) =>
+    key.slice(0, key.lastIndexOf(':'))
+  )
   return (
     input.automations.filter(isCoordinatedAutomation).length +
     input.runs.filter(isCoordinatedAutomationRun).length +
     (ledger?.parentTombstones ?? []).filter(
       (tombstone) =>
-        automationIds.has(tombstone.automationId) ||
-        (input.sshTargetId !== null &&
+        !(
+          input.sshTargetId !== null &&
           tombstone.executionTarget.type === 'ssh' &&
-          tombstone.executionTarget.id === input.sshTargetId)
+          tombstone.executionTarget.id !== input.sshTargetId &&
+          !touched.has(tombstone.automationId)
+        )
     ).length +
-    (ledger?.occurrences ?? []).filter((record) => automationIds.has(record.automationId)).length
+    (ledger?.occurrences ?? []).filter((record) => unprovable(record.automationId)).length +
+    Object.keys(ledger?.replayHorizons ?? {}).filter(unprovable).length +
+    revisionOwners.filter(unprovable).length
   )
 }
 

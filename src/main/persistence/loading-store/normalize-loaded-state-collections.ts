@@ -63,10 +63,18 @@ export function normalizeLoadedAutomationRuns(
   if (!Array.isArray(parsed.automationRuns)) {
     return []
   }
+  let repairedCoordinatedRun = false
   const runs = pruneAutomationRuns(backfillAutomationRunNumbers(parsed.automationRuns)).map(
-    // Reloaded coordinated history is validated, then frozen like a fresh write; invalid rows are quarantined.
-    (run) => sealLoadedCoordinatedRun(run)
+    (run) => {
+      // Coordinated history is revalidated before sealing; invalid rows become inert quarantines.
+      const loaded = sealLoadedCoordinatedRun(run)
+      repairedCoordinatedRun ||= loaded.repaired
+      return loaded.run
+    }
   )
+  if (repairedCoordinatedRun) {
+    markNeedsSave()
+  }
   // Persist pruning even when no unrelated save follows startup.
   if (runs.length !== parsed.automationRuns.length) {
     markNeedsSave()

@@ -25,6 +25,7 @@ export function compactCoordinatedRun(run: AutomationRun): AutomationRun {
     retainedEvidence: {
       definitionRevision: snapshot.definitionRevision,
       canonicalDigest: snapshot.canonicalDigest,
+      executionAuthority: `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}`,
       children: snapshot.resolvedChildren.map((child) => ({
         childDefinitionId: child.childDefinitionId,
         name: child.name,

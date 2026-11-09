@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationRun } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { CoordinatedRunQuarantine } from '../../../shared/coordinated-automation-types'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import {
   MAX_QUARANTINED_PAYLOAD_BYTES,
@@ -87,6 +88,15 @@ describe('occurrence authority incarnation', () => {
   })
 })
 
+/** The store-private quarantine record (never returned by list/get). */
+function storedQuarantine(run: AutomationRun): CoordinatedRunQuarantine {
+  const record = run.coordinatedQuarantine
+  if (!record || !('payload' in record)) {
+    throw new Error('Expected a store-private quarantine record.')
+  }
+  return record
+}
+
 /** Reload a stored profile's runs through the real loader normalization. */
 function reload(runs: AutomationRun[]): AutomationRun[] {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: run normalization reads only automationRuns.
@@ -166,7 +176,7 @@ describe('validated reload', () => {
       (run: AutomationRun) => {
         run.materializationPhase = 'intent_persisted'
       },
-      /before its orchestration Run/
+      /forbids an orchestration Run link/
     ]
   ])('quarantines %s and keeps it inert', (_label, corrupt, reason) => {
     const harness = durableHarness(coordinatedTestState())
@@ -183,7 +193,7 @@ describe('validated reload', () => {
       orchestrationRunId: null,
       materializationPhase: 'materialization_failed'
     })
-    expect(JSON.parse(quarantined.coordinatedQuarantine!.payload!)).toMatchObject({
+    expect(JSON.parse(storedQuarantine(quarantined).payload!)).toMatchObject({
       materializationPhase: stored[0].materializationPhase
     })
     expect(isCoordinatedRunDispatchable(quarantined)).toBe(false)
@@ -208,7 +218,8 @@ describe('validated reload', () => {
     const harness = durableHarness(coordinatedTestState())
     const stored = structuredClone(linkedRun(harness))
     stored.resolvedSnapshot!.resolvedChildren[0].name = 'x'.repeat(MAX_QUARANTINED_PAYLOAD_BYTES)
-    const quarantined = sealLoadedCoordinatedRun(stored)
+    const { run: quarantined, repaired } = sealLoadedCoordinatedRun(stored)
+    expect(repaired).toBe(true)
     expect(quarantined.coordinatedQuarantine).toMatchObject({
       payload: null,
       payloadDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/)

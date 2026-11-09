@@ -8,6 +8,7 @@ import { closeTestStores, createSqliteTestStore } from '../persistence-test-harn
 import { Store } from '../loading-store/store'
 import { createOrcadMigrationManifest } from '../../ssh/orcad-migration-manifest-export'
 import {
+  COORDINATED_REPOS,
   coordinatedCreateInput,
   coordinatedTestState,
   durableHarness
@@ -15,7 +16,13 @@ import {
 import { createCoordinatedAutomation } from '../scheduling-automations/coordinated-automation-definition-operations'
 import { subtractOrcadMigrationSourceAutomationState } from './orcad-source-automation-subtraction'
 import { prepareOrcadMigrationAutomationState } from './orcad-destination-automation-state'
-import { ORCAD_MIGRATION_COORDINATED_STATE_REFUSAL } from './orcad-coordinated-automation-refusal'
+import {
+  coordinatedStateTouchedByOrcadMigration,
+  ORCAD_MIGRATION_COORDINATED_STATE_REFUSAL
+} from './orcad-coordinated-automation-refusal'
+import { collectOrcadMigrationSourceAutomationState } from './orcad-source-automation-state'
+import type { CoordinatedAutomationLedger } from '../../../shared/coordinated-automation-ledger-types'
+import { emptyCoordinatedAutomationLedger } from '../../../shared/coordinated-automation-ledger-schemas'
 
 const TARGET: SshTarget = {
   id: 'ssh-prod',
@@ -177,5 +184,78 @@ describe('Orcad migration with coordinated automation state', () => {
     ).toThrow(refusal)
     expect(harness.state).toEqual(before)
     expect(harness.state.automations.map((a) => a.id)).toEqual([parent.id])
+  })
+
+  describe('unscopable coordinated identity', () => {
+    const DIGEST = `sha256:${'a'.repeat(64)}`
+    const ledger = (
+      overrides: Partial<CoordinatedAutomationLedger>
+    ): CoordinatedAutomationLedger => ({
+      ...emptyCoordinatedAutomationLedger(),
+      ...overrides
+    })
+    const tombstone = (target: { type: 'local' | 'ssh'; id: string }) => ({
+      automationId: 'archived-1',
+      name: 'Archived',
+      lastDefinitionRevision: 1,
+      definitionFingerprint: null,
+      executionTarget: target,
+      children: [],
+      archivedAt: 1
+    })
+    const occurrence = (automationId: string) => ({
+      automationId,
+      occurrenceFingerprint: DIGEST,
+      idempotencyKey: 'k',
+      trigger: 'scheduled' as const,
+      scheduledFor: 1,
+      executionAuthority: 'local:local',
+      automationRunId: 'run-1',
+      definitionRevision: 1,
+      canonicalDigest: DIGEST,
+      recordedAt: 1
+    })
+    const census = (state: PersistedState, sshTargetId: string | null) =>
+      coordinatedStateTouchedByOrcadMigration({ state, automations: [], runs: [], sshTargetId })
+
+    it.each<[string, CoordinatedAutomationLedger]>([
+      ['tombstone-only', ledger({ parentTombstones: [tombstone({ type: 'local', id: 'local' })] })],
+      ['orphan occurrence-only', ledger({ occurrences: [occurrence('gone')] })],
+      ['orphan replay-horizon-only', ledger({ replayHorizons: { gone: 5 } })],
+      ['orphan revision-only', ledger({ revisionDigests: { 'gone:1': DIGEST } })],
+      ['unreadable', ledger({ unreadable: true })]
+    ])('refuses a null-target local WSL move over %s state', (_label, coordinatedLedger) => {
+      const state = coordinatedTestState({ coordinatedAutomationLedger: coordinatedLedger })
+      expect(census(state, null)).toBeGreaterThan(0)
+      expect(() =>
+        collectOrcadMigrationSourceAutomationState(
+          state,
+          {
+            kind: 'local-wsl',
+            distro: 'Ubuntu',
+            scopeRepoIds: ['repo-local'],
+            scopeFolderWorkspaceIds: [],
+            generation: 1
+          },
+          { repositories: [COORDINATED_REPOS[0]], projectGroups: [], folderWorkspaces: [] }
+        )
+      ).toThrow(refusal)
+    })
+
+    it('counts only identity it can prove is outside the move', () => {
+      const harness = durableHarness(coordinatedTestState())
+      const untouched = createCoordinatedAutomation(harness.definitions(), coordinatedCreateInput())
+      const state = {
+        ...harness.state,
+        coordinatedAutomationLedger: ledger({
+          occurrences: [occurrence(untouched.id)],
+          parentTombstones: [tombstone({ type: 'ssh', id: 'other-host' })]
+        })
+      }
+      // An existing, untouched parent's records and another SSH host's tombstone are provable.
+      expect(census(state, 'ssh-1')).toBe(0)
+      // A local move cannot attribute an SSH tombstone, so it refuses.
+      expect(census(state, null)).toBe(1)
+    })
   })
 })

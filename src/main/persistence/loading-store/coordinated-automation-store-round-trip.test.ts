@@ -291,9 +291,25 @@ describe('coordinated automation profile persistence', () => {
       materializationPhase: 'materialization_failed',
       coordinatedQuarantine: { reason: expect.stringMatching(/canonical digest/) }
     })
-    expect(
-      JSON.parse(reloaded.coordinatedQuarantine!.payload!).resolvedSnapshot.resolvedChildren[0].name
-    ).toBe('edited on disk')
+    // Callers only ever see the bounded summary; the rejected payload stays store-private.
+    expect(reloaded.coordinatedQuarantine).toEqual({
+      reason: expect.any(String),
+      payloadDigest: expect.stringMatching(/^sha256:/),
+      payloadRetained: true
+    })
+    expect(JSON.stringify(store.listAutomationRuns())).not.toContain('edited on disk')
     expect(store.listAutomationRuns('legacy-1')).toEqual([LEGACY_RUN])
+
+    // The repair is persisted, and the private payload survives on disk only.
+    await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+    await restart()
+    const persisted = readPersistedState().automationRuns.find((run) => run.id === created.id)!
+    const privateRecord = persisted.coordinatedQuarantine
+    const payload = privateRecord && 'payload' in privateRecord ? privateRecord.payload : null
+    expect(payload).not.toBeNull()
+    expect(JSON.parse(payload ?? 'null').resolvedSnapshot.resolvedChildren[0].name).toBe(
+      'edited on disk'
+    )
+    expect(persisted.resolvedSnapshot).toBeNull()
   })
 })

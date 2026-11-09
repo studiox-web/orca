@@ -6,6 +6,19 @@ import type {
   CoordinatedRunMaterializationPhase
 } from './coordinated-automation-saga-types'
 import type { SemanticCompletionReceipt } from './coordinated-automation-receipt-types'
+import type {
+  CoordinatedCompletionTrust,
+  CoordinatedRunQuarantine,
+  CoordinatedRunQuarantineSummary,
+  CoordinatedRunRetainedEvidence
+} from './coordinated-automation-run-integrity-types'
+
+export type {
+  CoordinatedCompletionTrust,
+  CoordinatedRunQuarantine,
+  CoordinatedRunQuarantineSummary,
+  CoordinatedRunRetainedEvidence
+}
 
 export type AutomationKind = 'single' | 'coordinated'
 
@@ -41,14 +54,6 @@ export type CoordinatedChildTombstone = {
   removedAt: number
 }
 
-/** What retention keeps when a coordinated run's full snapshot is evicted. */
-export type CoordinatedRunRetainedEvidence = {
-  definitionRevision: number
-  canonicalDigest: string
-  children: { childDefinitionId: string; name: string; role: string }[]
-  minimumEvidenceReferences: string[]
-}
-
 export type CoordinatedRunFields = {
   automationDefinitionRevision: number
   orchestrationRunId: string | null
@@ -63,16 +68,16 @@ export type CoordinatedRunFields = {
   idempotencyKey?: string
   materializationError?: string | null
   retainedEvidence?: CoordinatedRunRetainedEvidence
-  /** Set on reload when stored coordinated fields failed validation; the row is inert. */
-  coordinatedQuarantine?: CoordinatedRunQuarantine
-}
-
-export type CoordinatedRunQuarantine = {
-  reason: string
-  /** sha256 of the rejected coordinated payload as it was stored. */
-  payloadDigest: string
-  /** The rejected payload, kept verbatim when it fits the bound. */
-  payload: string | null
+  /**
+   * Host-owned acceptance facts a stored receipt is validated against (written only by the
+   * acceptance phase, never taken from the receipt). Present exactly when a receipt is.
+   */
+  completionTrust?: CoordinatedCompletionTrust | null
+  /**
+   * Set on reload when stored coordinated fields failed validation; the row is inert. The
+   * store keeps the full record; list/get callers only ever see the summary.
+   */
+  coordinatedQuarantine?: CoordinatedRunQuarantine | CoordinatedRunQuarantineSummary
 }
 
 export type OverrideProvenance = 'inherited' | 'overridden'

@@ -10,7 +10,10 @@ import {
   detachCoordinatedRun,
   sealCoordinatedRun
 } from '../../../shared/coordinated-automation-run-seal'
-import { mappingProblem } from '../../../shared/coordinated-automation-run-validation'
+import {
+  coordinatedRunProblem,
+  mappingProblem
+} from '../../../shared/coordinated-automation-run-validation'
 import type { AutomationStorageAuthority } from './automation-owner-projection'
 import { CoordinatedAutomationExecutionRefusedError } from './coordinated-automation-revisions'
 
@@ -43,6 +46,9 @@ export function isCoordinatedRun(run: AutomationRun): boolean {
 
 /** A run may dispatch only when every link the snapshot requires is durably recorded. */
 export function isCoordinatedRunDispatchable(run: AutomationRun): boolean {
+  if (run.coordinatedQuarantine !== undefined) {
+    return false
+  }
   if (
     run.materializationPhase !== 'ready_for_dispatch' ||
     !run.orchestrationRunId ||
@@ -52,7 +58,7 @@ export function isCoordinatedRunDispatchable(run: AutomationRun): boolean {
   ) {
     return false
   }
-  return mappingProblem(run.resolvedSnapshot, run.childMappings ?? []) === null
+  return coordinatedRunProblem(run) === null
 }
 
 /** Write one in-memory change; restore it if the durable write throws so no half state survives. */
