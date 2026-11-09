@@ -1,0 +1,152 @@
+import type { Automation, AutomationRun } from '../../../shared/automations-types'
+import type { PersistedState } from '../../../shared/persisted-state-types'
+import {
+  isCoordinatedAutomation,
+  type ResolvedAutomationRunSnapshot
+} from '../../../shared/coordinated-automation-types'
+import type {
+  CoordinatedRunChildMapping,
+  CoordinatedRunMaterializationPhase
+} from '../../../shared/coordinated-automation-saga-types'
+import type { AutomationStorageAuthority } from './automation-owner-projection'
+import { CoordinatedAutomationExecutionRefusedError } from './coordinated-automation-revisions'
+
+export type CoordinatedAutomationRunOperations = {
+  state: PersistedState
+  storageAuthority: AutomationStorageAuthority
+  flush: () => void
+  recordAutomationRunsMutation?: (runs: readonly AutomationRun[]) => void
+  getWorkspaceDisplayName: (workspaceId: string | null | undefined) => string | null
+}
+
+/** Read-only view of the orchestration store; links are written only to records it confirms. */
+export type CoordinatedOrchestrationRecordProbe = {
+  hasRun: (orchestrationRunId: string) => boolean
+  hasTask: (orchestrationRunId: string, taskId: string) => boolean
+}
+
+export class CoordinatedRunConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CoordinatedRunConflictError'
+  }
+}
+
+export function isCoordinatedRun(run: AutomationRun): boolean {
+  return run.materializationPhase !== undefined
+}
+
+/** A run may dispatch only when every link the snapshot requires is durably recorded. */
+export function isCoordinatedRunDispatchable(run: AutomationRun): boolean {
+  if (
+    run.materializationPhase !== 'ready_for_dispatch' ||
+    !run.orchestrationRunId ||
+    !run.resolvedSnapshot ||
+    run.resolvedSnapshot.automationId !== run.automationId ||
+    run.resolvedSnapshot.definitionRevision !== run.automationDefinitionRevision
+  ) {
+    return false
+  }
+  return mappingProblem(run.resolvedSnapshot, run.childMappings ?? []) === null
+}
+
+export function mappingProblem(
+  snapshot: ResolvedAutomationRunSnapshot,
+  mappings: readonly CoordinatedRunChildMapping[]
+): string | null {
+  const required = new Set(
+    snapshot.resolvedChildren.filter((child) => child.enabled).map((c) => c.childDefinitionId)
+  )
+  const seenChildren = new Set<string>()
+  const seenTasks = new Set<string>()
+  for (const mapping of mappings) {
+    if (!required.has(mapping.childDefinitionId)) {
+      return `Child "${mapping.childDefinitionId}" is not an enabled child of this run's snapshot.`
+    }
+    if (seenChildren.has(mapping.childDefinitionId)) {
+      return `Child "${mapping.childDefinitionId}" is mapped more than once.`
+    }
+    if (!mapping.taskId || seenTasks.has(mapping.taskId)) {
+      return `Task "${mapping.taskId}" is missing or mapped to more than one child.`
+    }
+    seenChildren.add(mapping.childDefinitionId)
+    seenTasks.add(mapping.taskId)
+  }
+  return seenChildren.size === required.size
+    ? null
+    : 'Every enabled child needs exactly one Task mapping.'
+}
+
+/** Write one in-memory change; restore it if the durable write throws so no half state survives. */
+export function commitRuns(
+  operations: CoordinatedAutomationRunOperations,
+  next: { automations?: Automation[]; automationRuns: AutomationRun[] }
+): void {
+  const previousAutomations = operations.state.automations
+  const previousRuns = operations.state.automationRuns
+  if (next.automations) {
+    operations.state.automations = next.automations
+  }
+  operations.state.automationRuns = next.automationRuns
+  try {
+    operations.recordAutomationRunsMutation?.(next.automationRuns)
+    operations.flush()
+  } catch (error) {
+    operations.state.automations = previousAutomations
+    operations.state.automationRuns = previousRuns
+    operations.recordAutomationRunsMutation?.(previousRuns)
+    throw error
+  }
+}
+
+export function requireCoordinatedRun(
+  operations: CoordinatedAutomationRunOperations,
+  automationRunId: string
+): AutomationRun {
+  const run = (operations.state.automationRuns ?? []).find((entry) => entry.id === automationRunId)
+  if (!run) {
+    throw new Error('Automation run not found.')
+  }
+  if (!isCoordinatedRun(run) || !run.resolvedSnapshot) {
+    throw new Error('Automation run is not a coordinated run.')
+  }
+  return run
+}
+
+export function replaceRun(
+  operations: CoordinatedAutomationRunOperations,
+  updated: AutomationRun
+): AutomationRun {
+  commitRuns(operations, {
+    automationRuns: operations.state.automationRuns.map((run) =>
+      run.id === updated.id ? updated : run
+    )
+  })
+  return updated
+}
+
+export function assertPhase(
+  run: AutomationRun,
+  allowed: readonly CoordinatedRunMaterializationPhase[]
+): void {
+  if (!run.materializationPhase || !allowed.includes(run.materializationPhase)) {
+    throw new CoordinatedRunConflictError(
+      `Coordinated run is in phase "${run.materializationPhase}", expected ${allowed.join(' or ')}.`
+    )
+  }
+}
+
+/** Single-run writers must not rewrite coordinated runs, whose lifecycle the saga owns. */
+export function assertNotCoordinatedRunWrite(run: AutomationRun | undefined): void {
+  if (run && isCoordinatedRun(run)) {
+    throw new CoordinatedAutomationExecutionRefusedError(
+      'Coordinated runs are updated only through the coordinated materialization path.'
+    )
+  }
+}
+
+export function assertNotCoordinatedAutomationExecution(automation: Automation): void {
+  if (isCoordinatedAutomation(automation)) {
+    throw new CoordinatedAutomationExecutionRefusedError()
+  }
+}

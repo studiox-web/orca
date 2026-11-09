@@ -14,6 +14,8 @@ import type {
   AutomationUpdateInput
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import * as kindGuards from './coordinated-automation-revisions'
+import { mergeAutomationWorkspaceFields } from './automation-workspace-field-merge'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
 import {
   assertAutomationExtraAgentArgs,
@@ -64,13 +66,16 @@ export function listAutomations(state: PersistedState): Automation[] {
 export function createAutomation(
   operations: AutomationDefinitionOperations,
   input: AutomationCreateInput,
-  options?: { destination?: AutomationDestination; resolvedRepo?: Repo }
+  options?: { destination?: AutomationDestination; resolvedRepo?: Repo },
+  decorate?: (automation: Automation) => Automation
 ): Automation {
+  kindGuards.assertKindWrite(input, decorate)
   if (input.creationKey) {
     const existing = (operations.state.automations ?? []).find(
       (automation) => automation.creationKey === input.creationKey
     )
     if (existing) {
+      kindGuards.assertCreationKeyKind(existing, decorate)
       return automationWithLaunchSetup(existing)
     }
   }
@@ -137,19 +142,22 @@ export function createAutomation(
     createdAt: now,
     updatedAt: now
   }
-  assertAutomationExtraAgentArgs(automation)
-  operations.state.automations = [...(operations.state.automations ?? []), automation]
+  const record = decorate ? decorate(automation) : automation
+  assertAutomationExtraAgentArgs(record)
+  operations.state.automations = [...(operations.state.automations ?? []), record]
   operations.recordCreated()
   operations.flush()
-  return automationWithLaunchSetup(automation)
+  return automationWithLaunchSetup(record)
 }
 
 export function updateAutomation(
   operations: AutomationDefinitionOperations,
   id: string,
-  updates: AutomationUpdateInput,
-  options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo }
+  rawUpdates: AutomationUpdateInput,
+  options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo },
+  decorate?: (current: Automation, merged: Automation) => Automation
 ): Automation {
+  const updates = kindGuards.guardSingleUpdates(rawUpdates, decorate)
   const index = (operations.state.automations ?? []).findIndex((entry) => entry.id === id)
   if (index === -1) {
     throw new Error('Automation not found.')
@@ -233,32 +241,7 @@ export function updateAutomation(
           selectorMoveRequested
         ),
     schedulerOwner,
-    workspaceMode,
-    workspaceId:
-      workspaceMode === 'existing'
-        ? Object.hasOwn(definedUpdates, 'workspaceId')
-          ? (definedUpdates.workspaceId ?? null)
-          : current.workspaceId
-        : null,
-    baseBranch:
-      workspaceMode === 'new_per_run'
-        ? Object.hasOwn(definedUpdates, 'baseBranch')
-          ? (definedUpdates.baseBranch ?? null)
-          : (current.baseBranch ?? null)
-        : null,
-    setupDecision:
-      workspaceMode === 'new_per_run'
-        ? Object.hasOwn(definedUpdates, 'setupDecision')
-          ? normalizeAutomationSetupDecisionForWorkspaceMode(
-              workspaceMode,
-              definedUpdates.setupDecision
-            )
-          : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
-        : undefined,
-    reuseSession:
-      workspaceMode === 'existing'
-        ? (updates.reuseSession ?? current.reuseSession ?? false)
-        : false,
+    ...mergeAutomationWorkspaceFields(current, definedUpdates, workspaceMode),
     rrule,
     dtstart,
     nextRunAt: scheduleChanged
@@ -292,10 +275,14 @@ export function updateAutomation(
   if (options?.destination) {
     assertExecutionTargetMatchesDestination(executionTarget, options.destination, workspaceSshPin)
   }
-  const updated = applyAutomationExecutionTarget(
-    merged,
-    executionTarget,
-    workspaceSshPinMoved ? undefined : workspaceSshPin
+  // `decorate` is the coordinated path's hook; generic writes may only advance a revision.
+  const updated = (decorate ?? kindGuards.advanceRevisionIfChanged)(
+    current,
+    applyAutomationExecutionTarget(
+      merged,
+      executionTarget,
+      workspaceSshPinMoved ? undefined : workspaceSshPin
+    )
   )
   // Replace the array to invalidate identity-keyed list projections.
   operations.state.automations = operations.state.automations.map((entry) =>
@@ -306,5 +293,4 @@ export function updateAutomation(
 }
 
 export { stampLegacyAutomationRunContext } from './automation-context-migration'
-
 export { deleteAutomation } from './automation-definition-removal'

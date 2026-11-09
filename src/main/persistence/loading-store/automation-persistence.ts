@@ -40,6 +40,7 @@ import {
   updateAutomationRun as updateAutomationRunOperation,
   type AutomationRunOperations
 } from '../scheduling-automations/automation-run-operations'
+import type { CoordinatedAutomationRunOperations } from '../scheduling-automations/coordinated-automation-run-records'
 import {
   advanceAutomationNextRun as advanceAutomationNextRunOperation,
   disableAutomations as disableAutomationsOperation,
@@ -274,6 +275,24 @@ export function getAutomationRunOperations(owner: AutomationPersistence): Automa
     },
     recordManualRun: () =>
       owner[automationPersistenceContext].preferences.recordFeatureInteraction('automation-run'),
+    getWorkspaceDisplayName: (workspaceId) =>
+      getAutomationRunWorkspaceDisplayName(owner, workspaceId)
+  }
+}
+
+export function getCoordinatedAutomationRunOperations(
+  owner: AutomationPersistence
+): CoordinatedAutomationRunOperations {
+  return {
+    state: owner[automationPersistenceContext].runtime.state,
+    storageAuthority: owner[automationPersistenceContext].runtime.storageAuthority,
+    flush: () => {
+      markAutomationDomains(owner)
+      owner[automationPersistenceContext].flushBarriers.flush()
+    },
+    recordAutomationRunsMutation: (runs) => {
+      owner[automationPersistenceContext].runtime.pendingAutomationRunsAfter = runs
+    },
     getWorkspaceDisplayName: (workspaceId) =>
       getAutomationRunWorkspaceDisplayName(owner, workspaceId)
   }

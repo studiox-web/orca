@@ -1,13 +1,20 @@
 import { isFinalAutomationRunStatus, type AutomationRun } from './automations-types'
+import {
+  compactCoordinatedRun,
+  MAX_COMPACTED_COORDINATED_RUNS_PER_AUTOMATION,
+  retainsCompletionReceipt
+} from './coordinated-automation-run-compaction'
 
 export const MAX_AUTOMATION_RUNS_PER_AUTOMATION = 100
 
 // Bound runs because every save serializes the whole blob (28.5MB once blocked flush for 210ms).
 export function pruneAutomationRuns(
   runs: readonly AutomationRun[],
-  maxPerAutomation: number = MAX_AUTOMATION_RUNS_PER_AUTOMATION
+  maxPerAutomation: number = MAX_AUTOMATION_RUNS_PER_AUTOMATION,
+  maxCompactedPerAutomation: number = MAX_COMPACTED_COORDINATED_RUNS_PER_AUTOMATION
 ): AutomationRun[] {
   const kept = new Set<string>()
+  const compacted = new Set<string>()
   // Evict only final runs; delayed dispatched completion still needs its row.
   const finalRuns = runs.filter((run) => isFinalAutomationRunStatus(run.status))
   for (const automationRuns of Map.groupBy(finalRuns, (run) => run.automationId).values()) {
@@ -19,10 +26,22 @@ export function pruneAutomationRuns(
     for (const run of automationRuns.slice(0, Math.max(0, maxPerAutomation))) {
       kept.add(run.id)
     }
+    // Why: a historical outcome stays explainable after its full row ages out.
+    for (const run of automationRuns
+      .slice(Math.max(0, maxPerAutomation))
+      .filter(retainsCompletionReceipt)
+      .slice(0, Math.max(0, maxCompactedPerAutomation))) {
+      compacted.add(run.id)
+    }
   }
 
   // Survivors keep their original append order — callers index by position.
-  return runs.filter((run) => kept.has(run.id) || !isFinalAutomationRunStatus(run.status))
+  return runs.flatMap((run) => {
+    if (kept.has(run.id) || !isFinalAutomationRunStatus(run.status)) {
+      return [run]
+    }
+    return compacted.has(run.id) ? [compactCoordinatedRun(run)] : []
+  })
 }
 
 /** Number legacy runs before pruning. Continue above retained maximums, never append positions: pre-runNumber downgrades can append blanks after pruned 101+ survivors and would reissue titles. */

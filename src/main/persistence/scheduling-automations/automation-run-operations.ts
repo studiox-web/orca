@@ -26,6 +26,10 @@ import {
   normalizeAutomationRunTerminalPtyId,
   normalizeAutomationRunWorkspaceDisplayName
 } from './automation-context-migration'
+import {
+  assertNotCoordinatedAutomationExecution,
+  assertNotCoordinatedRunWrite
+} from './coordinated-automation-run-records'
 
 export type AutomationRunOperations = {
   state: PersistedState
@@ -73,6 +77,7 @@ export function createAutomationRun(
   scheduledFor: number,
   trigger: AutomationRunTrigger = 'scheduled'
 ): AutomationRun {
+  assertNotCoordinatedAutomationExecution(automation)
   const existing = (operations.state.automationRuns ?? []).find(
     (run) => run.automationId === automation.id && run.scheduledFor === scheduledFor
   )
@@ -190,6 +195,7 @@ export function updateAutomationRun(
   }
   const now = Date.now()
   const previous = operations.state.automationRuns[index]
+  assertNotCoordinatedRunWrite(previous)
   const { errorCode: _code, errorParams: _params, ...current } = previous
   const workspaceId = result.workspaceId ?? current.workspaceId
   const workspaceDisplayName = Object.hasOwn(result, 'workspaceDisplayName')

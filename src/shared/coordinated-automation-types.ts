@@ -26,6 +26,27 @@ export type CoordinatedAutomationDefinitionFields = {
   globalCeilings?: CoordinatedAutomationCeilings
   publicationPolicy?: CoordinatedAutomationPublicationPolicy
   retentionPolicy?: CoordinatedAutomationRetentionPolicy
+  /** Host-managed: children removed by later revisions; their IDs are never reissued. */
+  childTombstones?: CoordinatedChildTombstone[]
+  /** Host-managed digest of every input snapshot resolution reads at `definitionRevision`. */
+  definitionFingerprint?: string
+}
+
+export type CoordinatedChildTombstone = {
+  childDefinitionId: string
+  name: string
+  role: string
+  lastDefinitionRevision: number
+  removedInRevision: number
+  removedAt: number
+}
+
+/** What retention keeps when a coordinated run's full snapshot is evicted. */
+export type CoordinatedRunRetainedEvidence = {
+  definitionRevision: number
+  canonicalDigest: string
+  children: { childDefinitionId: string; name: string; role: string }[]
+  minimumEvidenceReferences: string[]
 }
 
 export type CoordinatedRunFields = {
@@ -38,6 +59,10 @@ export type CoordinatedRunFields = {
   replanReason: string | null
   materializationPhase: CoordinatedRunMaterializationPhase
   childMappings: CoordinatedRunChildMapping[]
+  /** Occurrence identity; a second delivery with the same key returns the existing run. */
+  idempotencyKey?: string
+  materializationError?: string | null
+  retainedEvidence?: CoordinatedRunRetainedEvidence
 }
 
 export type OverrideProvenance = 'inherited' | 'overridden'

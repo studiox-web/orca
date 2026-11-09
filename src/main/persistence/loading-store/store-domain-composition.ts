@@ -16,6 +16,7 @@ import { SessionSnapshotOperations } from './session-snapshot-operations'
 import { MetadataLineageOperations } from './metadata-lineage-operations'
 import { ProjectCollectionOperations } from './project-collection-operations'
 import { AutomationPersistence } from './automation-persistence'
+import { CoordinatedAutomationPersistence } from './coordinated-automation-persistence'
 import { MobileTabSelectionPersistence } from './mobile-tab-selection-persistence'
 import { RemoteLayoutSnapshotPersistence } from '../../remote-layout-snapshot/remote-layout-snapshot-persistence'
 import { HostRepoCatalogSnapshotPersistence } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-persistence'
@@ -38,6 +39,7 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   HostRepoCatalogSnapshotPersistence &
   SparsePresetPersistence &
   AutomationPersistence &
+  CoordinatedAutomationPersistence &
   MetadataLineageOperations &
   ProfilePreferences &
   SessionHostPartitionOperations &
@@ -68,6 +70,7 @@ export type StoreDomains = {
   metadata: MetadataLineageOperations
   projects: ProjectCollectionOperations
   automations: AutomationPersistence
+  coordinatedAutomations: CoordinatedAutomationPersistence
   mobileTabSelections: MobileTabSelectionPersistence
   remoteLayoutSnapshots: RemoteLayoutSnapshotPersistence
   hostRepoCatalogSnapshots: HostRepoCatalogSnapshotPersistence
@@ -92,6 +95,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   HostRepoCatalogSnapshotPersistence,
   SparsePresetPersistence,
   AutomationPersistence,
+  CoordinatedAutomationPersistence,
   MetadataLineageOperations,
   ProfilePreferences,
   SessionHostPartitionOperations,
@@ -167,6 +171,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     metadata,
     projects,
     automations,
+    coordinatedAutomations: new CoordinatedAutomationPersistence(automations),
     mobileTabSelections,
     remoteLayoutSnapshots,
     hostRepoCatalogSnapshots: new HostRepoCatalogSnapshotPersistence(runtime, scheduling),
