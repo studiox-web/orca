@@ -85,7 +85,7 @@ export type ChildLaunchConfig = {
   timeoutSeconds?: number
   maxRetries?: number
   maxReviewIterations?: number
-  provenance?: Partial<Record<string, OverrideProvenance>>
+  provenance?: Partial<Record<ChildLaunchConfigField, OverrideProvenance>>
 }
 
 export type CoordinatedAutomationInheritedDefaults = {
@@ -113,12 +113,14 @@ export type StageArtifactRequirement = {
 
 export type StageCheckRequirement = {
   id: string
+  namespace?: string
   description?: string
   required?: boolean
 }
 
 export type StageEffectRequirement = {
   kind: string
+  namespace?: string
   allowedStatuses: ('applied' | 'verified')[]
   description?: string
   required?: boolean
@@ -180,6 +182,8 @@ export type OutcomeAcceptanceCriterion = {
   required: boolean
   targetChildId?: string
   kind: OutcomeAcceptanceCriterionKind
+  namespace?: string
+  details?: Record<string, unknown>
 }
 
 export type OutcomeRequiredApproval = {
@@ -191,12 +195,13 @@ export type OutcomeRequiredApproval = {
 }
 
 export type OutcomeFinalState =
+  | 'completed'
+  | 'failed'
+  | 'blocked'
+  | 'outcome_uncertain'
+  | 'ready_for_review'
   | 'ready_to_publish'
   | 'published_verified'
-  | 'completed'
-  | 'blocked'
-  | 'failed'
-  | 'outcome_uncertain'
 
 export type AutomationOutcomeContract = {
   humanStatement: string
@@ -220,12 +225,15 @@ export type CoordinatedAutomationPublicationPolicy = {
   requireHumanDecisionForProduction: boolean
 }
 
+export type ArtifactRetentionClass = 'transient' | 'run' | 'audit' | 'pinned'
+
 export type CoordinatedAutomationRetentionPolicy = {
   preserveCompletionReceipt: boolean
   preserveSnapshot?: boolean
   preserveMappings?: boolean
   minimumEvidenceReferences?: string[]
   artifactRetentionDays?: number
+  defaultRetentionClass?: ArtifactRetentionClass
 }
 
 export type CoordinatedAutomationDefinition = {

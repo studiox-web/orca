@@ -1,68 +1,28 @@
-import { sha256 } from './sha256'
 import type { Automation } from './automations-types'
-import type {
-  ChildLaunchConfig,
-  ChildLaunchConfigField,
-  CoordinatedAutomationCeilings,
-  CoordinatedAutomationChildDefinition,
-  CoordinatedAutomationPublicationPolicy,
-  CoordinatedAutomationRetentionPolicy,
-  OverrideProvenance,
-  ResolvedAutomationRunSnapshot,
-  ResolvedChildLaunchConfig,
-  ResolvedChildSnapshot,
-  ResolvedPrompt
+import {
+  isCoordinatedAutomation,
+  type ChildLaunchConfig,
+  type ChildLaunchConfigField,
+  type CoordinatedAutomationCeilings,
+  type CoordinatedAutomationChildDefinition,
+  type CoordinatedAutomationPublicationPolicy,
+  type CoordinatedAutomationRetentionPolicy,
+  type OverrideProvenance,
+  type ResolvedAutomationRunSnapshot,
+  type ResolvedChildLaunchConfig,
+  type ResolvedChildSnapshot,
+  type ResolvedPrompt
 } from './coordinated-automation-types'
+import { validateCoordinatedAutomationDefinition } from './coordinated-automation-validation'
+import { deepFreeze, sha256Hex, toCanonicalJson } from './coordinated-automation-canonical-digest'
 
-function sha256Hex(text: string): string {
-  const bytes = new TextEncoder().encode(text)
-  const digest = sha256(bytes)
-  let hex = ''
-  for (let i = 0; i < digest.length; i++) {
-    hex += digest[i].toString(16).padStart(2, '0')
-  }
-  return hex
-}
-
-export function deepFreeze<T>(obj: T): Readonly<T> {
-  if (obj === null || typeof obj !== 'object') {
-    return obj
-  }
-  if (Array.isArray(obj)) {
-    for (let i = 0; i < obj.length; i++) {
-      deepFreeze(obj[i])
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Object.freeze recursively freezes array contents
-    return Object.freeze(obj) as unknown as Readonly<T>
-  }
-  for (const [, val] of Object.entries(obj)) {
-    if (val !== null && typeof val === 'object') {
-      deepFreeze(val)
-    }
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Object.freeze freezes all properties
-  return Object.freeze(obj) as Readonly<T>
-}
-
-export function toCanonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value)
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(toCanonicalJson).join(',')}]`
-  }
-  const entries = Object.entries(value)
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => `${JSON.stringify(k)}:${toCanonicalJson(v)}`)
-  return `{${entries.join(',')}}`
-}
+export { deepFreeze, sha256Hex, toCanonicalJson }
 
 export type ResolvePromptFunction = (source: {
   path: string
   authority?: string
   digest?: string
-}) => { text: string; digest: string }
+}) => { text: string; digest?: string }
 
 export type ResolveAutomationSnapshotOptions = {
   automation: Automation
@@ -86,9 +46,13 @@ function resolveParentDefaults(
     workspaceId: d?.workspaceId ?? automation.workspaceId ?? null,
     baseBranch: d?.baseBranch ?? automation.baseBranch ?? null,
     setupDecision: d?.setupDecision ?? automation.setupDecision ?? 'inherit',
-    timeoutSeconds: d?.timeoutSeconds ?? ceilings.maxWallClockSeconds ?? 1800,
+    timeoutSeconds:
+      d?.timeoutSeconds ??
+      (ceilings.maxWallClockSeconds ? Math.min(1800, ceilings.maxWallClockSeconds) : 1800),
     maxRetries: d?.maxRetries ?? 3,
-    maxReviewIterations: d?.maxReviewIterations ?? ceilings.maxReviewIterations ?? 2
+    maxReviewIterations:
+      d?.maxReviewIterations ??
+      (ceilings.maxReviewIterations !== undefined ? Math.min(2, ceilings.maxReviewIterations) : 2)
   }
 }
 
@@ -108,9 +72,11 @@ function resolveChildLaunchConfig(
     defaultValue: ResolvedChildLaunchConfig[K]
   ): { value: ResolvedChildLaunchConfig[K]; prov: OverrideProvenance } {
     if (explicitProv[field] === 'overridden') {
-      const val = childValue !== undefined ? childValue : defaultValue
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: val conforms to ResolvedChildLaunchConfig[K]
-      return { value: val as ResolvedChildLaunchConfig[K], prov: 'overridden' }
+      if (childValue !== undefined) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: childValue conforms to ResolvedChildLaunchConfig[K]
+        return { value: childValue as ResolvedChildLaunchConfig[K], prov: 'overridden' }
+      }
+      return { value: defaultValue, prov: 'inherited' }
     }
     if (explicitProv[field] === 'inherited') {
       return { value: defaultValue, prov: 'inherited' }
@@ -164,30 +130,48 @@ function resolveChildPrompt(
       digest: `sha256:${sha256Hex(promptSource.text)}`
     }
   }
-  if (promptResolver) {
-    const resolved = promptResolver(promptSource)
-    const digest = resolved.digest.startsWith('sha256:')
-      ? resolved.digest
-      : `sha256:${resolved.digest}`
-    return {
-      kind: 'source_reference',
-      path: promptSource.path,
-      authority: promptSource.authority,
-      text: resolved.text,
-      digest
-    }
+  if (!promptResolver) {
+    throw new Error(
+      `Cannot resolve source_reference prompt "${promptSource.path}": promptResolver is required`
+    )
   }
-  const digest = promptSource.digest
-    ? promptSource.digest.startsWith('sha256:')
+  const resolved = promptResolver(promptSource)
+  const computedHex = sha256Hex(resolved.text)
+  const computedDigest = `sha256:${computedHex}`
+
+  if (promptSource.digest) {
+    const pinned = promptSource.digest.startsWith('sha256:')
       ? promptSource.digest
       : `sha256:${promptSource.digest}`
-    : `sha256:${sha256Hex(promptSource.path)}`
+    if (!/^sha256:[0-9a-f]{64}$/.test(pinned)) {
+      throw new Error(
+        `Invalid pinned prompt digest format "${promptSource.digest}": expected sha256:[0-9a-f]{64}`
+      )
+    }
+    if (pinned !== computedDigest) {
+      throw new Error(
+        `Pinned prompt digest mismatch for "${promptSource.path}": expected ${pinned}, resolved content computed to ${computedDigest}`
+      )
+    }
+  }
+
+  if (resolved.digest) {
+    const resolverDigest = resolved.digest.startsWith('sha256:')
+      ? resolved.digest
+      : `sha256:${resolved.digest}`
+    if (!/^sha256:[0-9a-f]{64}$/.test(resolverDigest)) {
+      throw new Error(
+        `Resolver returned invalid digest format "${resolved.digest}": expected sha256:[0-9a-f]{64}`
+      )
+    }
+  }
+
   return {
     kind: 'source_reference',
     path: promptSource.path,
     authority: promptSource.authority,
-    text: '',
-    digest
+    text: resolved.text,
+    digest: computedDigest
   }
 }
 
@@ -195,10 +179,58 @@ export function resolveAutomationSnapshot(
   options: ResolveAutomationSnapshotOptions
 ): ResolvedAutomationRunSnapshot {
   const { automation, promptResolver, createdAt = Date.now() } = options
+  if (!isCoordinatedAutomation(automation)) {
+    throw new Error('Cannot resolve snapshot for single automation: kind must be "coordinated"')
+  }
+  if (
+    typeof automation.definitionRevision !== 'number' ||
+    automation.definitionRevision <= 0 ||
+    !Number.isInteger(automation.definitionRevision)
+  ) {
+    throw new Error(
+      'Cannot resolve snapshot: definitionRevision must be a positive integer on coordinated automations'
+    )
+  }
+  if (!automation.outcomeContract) {
+    throw new Error(
+      'Cannot resolve snapshot: outcomeContract is required on coordinated automations'
+    )
+  }
+  if (!automation.children || automation.children.length === 0) {
+    throw new Error(
+      'Cannot resolve snapshot: coordinated automation must define at least one child'
+    )
+  }
+  if (!automation.executionTargetType || !automation.executionTargetId) {
+    throw new Error(
+      'Cannot resolve snapshot: executionTargetType and executionTargetId must be explicitly qualified'
+    )
+  }
+
   const effectiveCeilings: CoordinatedAutomationCeilings = { ...automation.globalCeilings }
+  const validationResult = validateCoordinatedAutomationDefinition(
+    {
+      kind: 'coordinated',
+      definitionRevision: automation.definitionRevision,
+      outcomeContract: automation.outcomeContract,
+      children: automation.children,
+      inheritedDefaults: automation.inheritedDefaults,
+      globalCeilings: automation.globalCeilings,
+      publicationPolicy: automation.publicationPolicy,
+      retentionPolicy: automation.retentionPolicy
+    },
+    automation.inheritedDefaults,
+    effectiveCeilings
+  )
+  if (!validationResult.valid) {
+    throw new Error(
+      `Cannot resolve snapshot: coordinated automation definition failed validation: ${validationResult.errors.map((e) => e.message).join('; ')}`
+    )
+  }
+
   const publicationPolicy: CoordinatedAutomationPublicationPolicy = {
     allowExternalMutation: false,
-    allowedFinalStates: ['ready_to_publish'],
+    allowedFinalStates: ['completed'],
     requireHumanDecisionForProduction: true,
     ...automation.publicationPolicy
   }
@@ -207,7 +239,7 @@ export function resolveAutomationSnapshot(
     ...automation.retentionPolicy
   }
   const parentDefaults = resolveParentDefaults(automation, effectiveCeilings)
-  const resolvedChildren: ResolvedChildSnapshot[] = (automation.children ?? []).map((child) => {
+  const resolvedChildren: ResolvedChildSnapshot[] = automation.children.map((child) => {
     const { resolved: launchConfig, provenance } = resolveChildLaunchConfig(child, parentDefaults)
     return {
       childDefinitionId: child.id,
@@ -226,24 +258,27 @@ export function resolveAutomationSnapshot(
       enabled: child.enabled
     }
   })
-  const outcomeContract = automation.outcomeContract ?? {
-    humanStatement: '',
-    acceptanceCriteria: [],
-    requiredApprovals: [],
-    allowedFinalStates: ['ready_to_publish']
-  }
+
+  const outcomeContract = automation.outcomeContract
   const executionTarget = {
-    type: automation.executionTargetType ?? 'local',
-    id: automation.executionTargetId ?? 'local',
+    type: automation.executionTargetType,
+    id: automation.executionTargetId,
     generation: automation.executionTargetGeneration
   }
+
   const configDigestPayload = {
     automationId: automation.id,
-    definitionRevision: automation.definitionRevision ?? 1,
+    definitionRevision: automation.definitionRevision,
     outcomeContract,
     resolvedChildren: resolvedChildren
       .slice()
-      .sort((a, b) => a.childDefinitionId.localeCompare(b.childDefinitionId)),
+      .sort((a, b) =>
+        a.childDefinitionId < b.childDefinitionId
+          ? -1
+          : a.childDefinitionId > b.childDefinitionId
+            ? 1
+            : 0
+      ),
     executionTarget,
     inheritedDefaults: parentDefaults,
     globalCeilings: effectiveCeilings,
@@ -253,7 +288,7 @@ export function resolveAutomationSnapshot(
   const canonicalDigest = `sha256:${sha256Hex(toCanonicalJson(configDigestPayload))}`
   const snapshot: ResolvedAutomationRunSnapshot = {
     automationId: automation.id,
-    definitionRevision: automation.definitionRevision ?? 1,
+    definitionRevision: automation.definitionRevision,
     createdAt,
     outcomeContract: JSON.parse(JSON.stringify(outcomeContract)),
     resolvedChildren,

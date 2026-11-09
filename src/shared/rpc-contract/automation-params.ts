@@ -15,12 +15,6 @@ import {
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../automation-precheck'
 import {
-  AutomationOutcomeContractSchema,
-  CoordinatedAutomationCeilingsSchema,
-  CoordinatedAutomationChildDefinitionSchema,
-  CoordinatedAutomationInheritedDefaultsSchema,
-  CoordinatedAutomationPublicationPolicySchema,
-  CoordinatedAutomationRetentionPolicySchema,
   SemanticCompletionReceiptSchema,
   StructuredWorkerResultSchema
 } from '../coordinated-automation-schemas'
@@ -192,7 +186,9 @@ export const AutomationRuns = z.object({
 })
 
 // Why strict: null or a non-string must fail rather than fall back to "omitted", which preserves.
-const ExtraAgentArgs = z.string({ message: 'Extra agent arguments must be text.' }).optional()
+export const ExtraAgentArgs = z
+  .string({ message: 'Extra agent arguments must be text.' })
+  .optional()
 
 export const AutomationLaunchSetupPatch = z
   .strictObject({
@@ -203,7 +199,27 @@ export const AutomationLaunchSetupPatch = z
     message: 'Choose an automation launch change.'
   })
 
-export const AutomationKind = z.enum(['single', 'coordinated']).optional()
+export const AutomationKindSchema = z.enum(['single', 'coordinated'])
+
+export const GenericAutomationKind = z
+  .union([z.literal('single'), z.literal('coordinated')])
+  .optional()
+  .superRefine((val, ctx) => {
+    if (val === 'coordinated') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Coordinated automations cannot be created or updated via generic automation RPC in Phase 1. Coordinated writes require confirmed host capability "coordinated_v1" and dedicated coordinated methods.'
+      })
+    }
+  })
+
+const ForbiddenCoordinatedParam = z
+  .never({
+    message:
+      'Coordinated automation fields cannot be created or updated via generic automation RPC in Phase 1. Coordinated writes require confirmed host capability "coordinated_v1" and dedicated coordinated methods.'
+  })
+  .optional()
 
 export { SemanticCompletionReceiptSchema, StructuredWorkerResultSchema }
 
@@ -229,14 +245,14 @@ export const AutomationCreate = z.object({
   enabled: OptionalBoolean,
   missedRunGraceMinutes: OptionalPositiveInt,
   destination: Destination,
-  kind: AutomationKind,
-  definitionRevision: OptionalPositiveInt,
-  outcomeContract: AutomationOutcomeContractSchema.optional(),
-  children: z.array(CoordinatedAutomationChildDefinitionSchema).optional(),
-  inheritedDefaults: CoordinatedAutomationInheritedDefaultsSchema.optional(),
-  globalCeilings: CoordinatedAutomationCeilingsSchema.optional(),
-  publicationPolicy: CoordinatedAutomationPublicationPolicySchema.optional(),
-  retentionPolicy: CoordinatedAutomationRetentionPolicySchema.optional()
+  kind: GenericAutomationKind,
+  definitionRevision: ForbiddenCoordinatedParam,
+  outcomeContract: ForbiddenCoordinatedParam,
+  children: ForbiddenCoordinatedParam,
+  inheritedDefaults: ForbiddenCoordinatedParam,
+  globalCeilings: ForbiddenCoordinatedParam,
+  publicationPolicy: ForbiddenCoordinatedParam,
+  retentionPolicy: ForbiddenCoordinatedParam
 })
 
 export const AutomationUpdateFields = z.object({
@@ -260,14 +276,14 @@ export const AutomationUpdateFields = z.object({
   dtstart: requiredNumber('Missing trigger start time').optional(),
   enabled: OptionalBoolean,
   missedRunGraceMinutes: OptionalPositiveInt,
-  kind: AutomationKind,
-  definitionRevision: OptionalPositiveInt,
-  outcomeContract: AutomationOutcomeContractSchema.optional(),
-  children: z.array(CoordinatedAutomationChildDefinitionSchema).optional(),
-  inheritedDefaults: CoordinatedAutomationInheritedDefaultsSchema.optional(),
-  globalCeilings: CoordinatedAutomationCeilingsSchema.optional(),
-  publicationPolicy: CoordinatedAutomationPublicationPolicySchema.optional(),
-  retentionPolicy: CoordinatedAutomationRetentionPolicySchema.optional()
+  kind: GenericAutomationKind,
+  definitionRevision: ForbiddenCoordinatedParam,
+  outcomeContract: ForbiddenCoordinatedParam,
+  children: ForbiddenCoordinatedParam,
+  inheritedDefaults: ForbiddenCoordinatedParam,
+  globalCeilings: ForbiddenCoordinatedParam,
+  publicationPolicy: ForbiddenCoordinatedParam,
+  retentionPolicy: ForbiddenCoordinatedParam
 })
 
 export const AutomationUpdate = z.object({

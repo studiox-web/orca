@@ -213,7 +213,10 @@ export type AutomationCreateInput = {
   dtstart: number
   enabled?: boolean
   missedRunGraceMinutes?: number
-} & CoordinatedAutomationDefinitionFields
+}
+
+export type CoordinatedAutomationCreateInput = AutomationCreateInput &
+  CoordinatedAutomationDefinitionFields
 
 export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPatch } & Partial<
   Pick<
@@ -236,16 +239,11 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
     | 'dtstart'
     | 'enabled'
     | 'missedRunGraceMinutes'
-    | 'kind'
-    | 'definitionRevision'
-    | 'outcomeContract'
-    | 'children'
-    | 'inheritedDefaults'
-    | 'globalCeilings'
-    | 'publicationPolicy'
-    | 'retentionPolicy'
   >
 >
+
+export type CoordinatedAutomationUpdateInput = AutomationUpdateInput &
+  Partial<CoordinatedAutomationDefinitionFields>
 
 export type AutomationDispatchRequest = {
   automation: Automation

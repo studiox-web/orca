@@ -5,6 +5,19 @@ import type {
   CoordinatedAutomationDefinition,
   CoordinatedAutomationInheritedDefaults
 } from './coordinated-automation-types'
+import {
+  buildTransitiveDependencyMap,
+  detectCycles
+} from './coordinated-automation-graph-validation'
+import { validateMutationLanes } from './coordinated-automation-lane-validation'
+import { validateOutcomeContract } from './coordinated-automation-contract-validation'
+
+export * from './coordinated-automation-receipt-validation'
+export * from './coordinated-automation-lane-validation'
+export {
+  buildTransitiveDependencyMap,
+  detectCycles
+} from './coordinated-automation-graph-validation'
 
 export type CoordinatedAutomationValidationErrorCode =
   | 'DUPLICATE_CHILD_ID'
@@ -30,89 +43,9 @@ export type CoordinatedAutomationValidationResult = {
   errors: CoordinatedAutomationValidationError[]
 }
 
-function buildTransitiveDependencyMap(
-  children: CoordinatedAutomationChildDefinition[]
-): Map<string, Set<string>> {
-  const directDeps = new Map<string, Set<string>>()
-  for (const child of children) {
-    directDeps.set(child.id, new Set(child.dependencies.map((d) => d.childId)))
-  }
-  const transitiveDeps = new Map<string, Set<string>>()
-
-  function getTransitive(childId: string, visited: Set<string>): Set<string> {
-    if (transitiveDeps.has(childId)) {
-      return transitiveDeps.get(childId)!
-    }
-    const result = new Set<string>()
-    visited.add(childId)
-    const direct = directDeps.get(childId)
-    if (direct) {
-      for (const depId of direct) {
-        result.add(depId)
-        if (!visited.has(depId)) {
-          for (const indirect of getTransitive(depId, visited)) {
-            result.add(indirect)
-          }
-        }
-      }
-    }
-    visited.delete(childId)
-    transitiveDeps.set(childId, result)
-    return result
-  }
-
-  for (const child of children) {
-    getTransitive(child.id, new Set())
-  }
-  return transitiveDeps
-}
-
-function detectCycles(children: CoordinatedAutomationChildDefinition[]): string[][] {
-  const childMap = new Map(children.map((c) => [c.id, c]))
-  const cycles: string[][] = []
-  const state = new Map<string, number>()
-  for (const child of children) {
-    state.set(child.id, 0)
-  }
-
-  function dfs(currentId: string, path: string[]) {
-    state.set(currentId, 1) // GRAY
-    path.push(currentId)
-    const child = childMap.get(currentId)
-    if (child) {
-      for (const dep of child.dependencies) {
-        const depId = dep.childId
-        if (!childMap.has(depId)) {
-          continue
-        }
-        const depState = state.get(depId) ?? 0
-        if (depState === 1) {
-          const idx = path.indexOf(depId)
-          if (idx !== -1) {
-            const cyclePath = path.slice(idx)
-            cyclePath.push(depId)
-            cycles.push(cyclePath)
-          }
-        } else if (depState === 0) {
-          dfs(depId, path)
-        }
-      }
-    }
-    path.pop()
-    state.set(currentId, 2) // BLACK
-  }
-
-  for (const child of children) {
-    if (state.get(child.id) === 0) {
-      dfs(child.id, [])
-    }
-  }
-  return cycles
-}
-
 export function validateCoordinatedAutomationDefinition(
   definition: CoordinatedAutomationDefinition,
-  _parentDefaults?: CoordinatedAutomationInheritedDefaults,
+  parentDefaults?: CoordinatedAutomationInheritedDefaults,
   parentCeilings?: CoordinatedAutomationCeilings
 ): CoordinatedAutomationValidationResult {
   const errors: CoordinatedAutomationValidationError[] = []
@@ -184,6 +117,26 @@ export function validateCoordinatedAutomationDefinition(
   }
 
   const effectiveCeilings = { ...parentCeilings, ...definition.globalCeilings }
+
+  if (effectiveCeilings.maxConcurrency !== undefined && effectiveCeilings.maxConcurrency < 1) {
+    errors.push({
+      code: 'LIMIT_EXCEEDS_CEILING',
+      message: 'maxConcurrency ceiling must be at least 1.',
+      path: 'globalCeilings.maxConcurrency'
+    })
+  }
+
+  if (
+    effectiveCeilings.maxDispatchStartFailures !== undefined &&
+    effectiveCeilings.maxDispatchStartFailures < 1
+  ) {
+    errors.push({
+      code: 'LIMIT_EXCEEDS_CEILING',
+      message: 'maxDispatchStartFailures ceiling must be at least 1.',
+      path: 'globalCeilings.maxDispatchStartFailures'
+    })
+  }
+
   for (const child of definition.children) {
     const cfg = child.launchConfig
     if (cfg.agentId && !isTuiAgent(cfg.agentId)) {
@@ -194,6 +147,38 @@ export function validateCoordinatedAutomationDefinition(
         path: `children.${child.id}.launchConfig.agentId`
       })
     }
+
+    if (cfg.workspaceMode === 'new_per_run' && cfg.reuseSession === true) {
+      errors.push({
+        code: 'INCOMPATIBLE_LAUNCH_SETTINGS',
+        message: `Child "${child.id}" specifies workspaceMode "new_per_run" but reuseSession is true. New per-run workspaces cannot reuse sessions.`,
+        childId: child.id,
+        path: `children.${child.id}.launchConfig.reuseSession`
+      })
+    }
+
+    if (cfg.workspaceMode === 'existing' && cfg.baseBranch) {
+      errors.push({
+        code: 'INCOMPATIBLE_LAUNCH_SETTINGS',
+        message: `Child "${child.id}" specifies workspaceMode "existing" but also sets baseBranch. baseBranch is only valid for new workspaces.`,
+        childId: child.id,
+        path: `children.${child.id}.launchConfig.baseBranch`
+      })
+    }
+
+    if (
+      cfg.workspaceMode === 'existing' &&
+      cfg.workspaceId === null &&
+      !parentDefaults?.workspaceId
+    ) {
+      errors.push({
+        code: 'INCOMPATIBLE_LAUNCH_SETTINGS',
+        message: `Child "${child.id}" specifies workspaceMode "existing" without a valid workspaceId.`,
+        childId: child.id,
+        path: `children.${child.id}.launchConfig.workspaceId`
+      })
+    }
+
     if (
       effectiveCeilings.maxWallClockSeconds &&
       cfg.timeoutSeconds &&
@@ -206,6 +191,7 @@ export function validateCoordinatedAutomationDefinition(
         path: `children.${child.id}.launchConfig.timeoutSeconds`
       })
     }
+
     if (
       effectiveCeilings.maxReviewIterations !== undefined &&
       cfg.maxReviewIterations !== undefined &&
@@ -218,94 +204,51 @@ export function validateCoordinatedAutomationDefinition(
         path: `children.${child.id}.launchConfig.maxReviewIterations`
       })
     }
+
+    if (child.mutationClass === 'read_only' && child.stageAcceptance?.requiredEffects?.length) {
+      errors.push({
+        code: 'UNATTAINABLE_ACCEPTANCE_CRITERIA',
+        message: `Child "${child.id}" is declared as read_only but defines requiredEffects in stageAcceptance.`,
+        childId: child.id,
+        path: `children.${child.id}.stageAcceptance.requiredEffects`
+      })
+    }
+  }
+
+  if (parentDefaults) {
+    if (
+      effectiveCeilings.maxWallClockSeconds &&
+      parentDefaults.timeoutSeconds &&
+      parentDefaults.timeoutSeconds > effectiveCeilings.maxWallClockSeconds
+    ) {
+      errors.push({
+        code: 'LIMIT_EXCEEDS_CEILING',
+        message: `Inherited default timeout (${parentDefaults.timeoutSeconds}s) exceeds parent ceiling maxWallClockSeconds (${effectiveCeilings.maxWallClockSeconds}s).`,
+        path: 'inheritedDefaults.timeoutSeconds'
+      })
+    }
+  }
+
+  if (definition.inheritedDefaults) {
+    if (
+      effectiveCeilings.maxWallClockSeconds &&
+      definition.inheritedDefaults.timeoutSeconds &&
+      definition.inheritedDefaults.timeoutSeconds > effectiveCeilings.maxWallClockSeconds
+    ) {
+      errors.push({
+        code: 'LIMIT_EXCEEDS_CEILING',
+        message: `Inherited default timeout (${definition.inheritedDefaults.timeoutSeconds}s) exceeds parent ceiling maxWallClockSeconds (${effectiveCeilings.maxWallClockSeconds}s).`,
+        path: 'inheritedDefaults.timeoutSeconds'
+      })
+    }
   }
 
   if (cycles.length === 0) {
     const transitiveDeps = buildTransitiveDependencyMap(definition.children)
-    const writers = definition.children.filter(
-      (c) => c.enabled && c.mutationClass === 'exclusive_writer'
-    )
-    const laneGroups = new Map<string, CoordinatedAutomationChildDefinition[]>()
-    for (const w of writers) {
-      const lane = w.mutationLane ?? '__default__'
-      const group = laneGroups.get(lane) ?? []
-      group.push(w)
-      laneGroups.set(lane, group)
-    }
-    for (const [lane, group] of laneGroups.entries()) {
-      if (group.length > 1) {
-        for (let i = 0; i < group.length; i++) {
-          for (let j = i + 1; j < group.length; j++) {
-            const a = group[i]
-            const b = group[j]
-            const aHasB = transitiveDeps.get(a.id)?.has(b.id) ?? false
-            const bHasA = transitiveDeps.get(b.id)?.has(a.id) ?? false
-            if (!aHasB && !bHasA) {
-              const display = lane === '__default__' ? 'default' : lane
-              errors.push({
-                code: 'UNSAFE_WRITER_LANE',
-                message: `Children "${a.id}" and "${b.id}" both declare exclusive writes to mutation lane "${display}" without a dependency relationship, creating a concurrency conflict.`,
-                childId: a.id,
-                path: `children.${a.id}.mutationLane`
-              })
-            }
-          }
-        }
-      }
-    }
+    validateMutationLanes(definition, transitiveDeps, errors)
   }
 
-  const contract = definition.outcomeContract
-  if (!contract.humanStatement?.trim()) {
-    errors.push({
-      code: 'INVALID_OUTCOME_CONTRACT',
-      message: 'Outcome contract must contain a non-empty human statement.',
-      path: 'outcomeContract.humanStatement'
-    })
-  }
-  if (!contract.allowedFinalStates?.length) {
-    errors.push({
-      code: 'INVALID_OUTCOME_CONTRACT',
-      message: 'Outcome contract must specify at least one allowed final state.',
-      path: 'outcomeContract.allowedFinalStates'
-    })
-  }
-  for (const c of contract.acceptanceCriteria) {
-    if (c.targetChildId) {
-      const target = childMap.get(c.targetChildId)
-      if (!target) {
-        errors.push({
-          code: 'UNATTAINABLE_ACCEPTANCE_CRITERIA',
-          message: `Acceptance criterion "${c.id}" targets unknown child ID "${c.targetChildId}".`,
-          path: `outcomeContract.acceptanceCriteria.${c.id}`
-        })
-      } else if (!target.enabled) {
-        errors.push({
-          code: 'UNATTAINABLE_ACCEPTANCE_CRITERIA',
-          message: `Acceptance criterion "${c.id}" targets disabled child "${c.targetChildId}".`,
-          path: `outcomeContract.acceptanceCriteria.${c.id}`
-        })
-      }
-    }
-  }
-  for (const a of contract.requiredApprovals) {
-    if (a.targetChildId) {
-      const target = childMap.get(a.targetChildId)
-      if (!target) {
-        errors.push({
-          code: 'UNATTAINABLE_ACCEPTANCE_CRITERIA',
-          message: `Required approval "${a.id}" targets unknown child ID "${a.targetChildId}".`,
-          path: `outcomeContract.requiredApprovals.${a.id}`
-        })
-      } else if (!target.enabled) {
-        errors.push({
-          code: 'UNATTAINABLE_ACCEPTANCE_CRITERIA',
-          message: `Required approval "${a.id}" targets disabled child "${a.targetChildId}".`,
-          path: `outcomeContract.requiredApprovals.${a.id}`
-        })
-      }
-    }
-  }
+  validateOutcomeContract(definition, childMap, errors)
 
   return { valid: errors.length === 0, errors }
 }

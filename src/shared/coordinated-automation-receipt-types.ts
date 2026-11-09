@@ -1,10 +1,12 @@
-import type { OutcomeFinalState } from './coordinated-automation-types'
+import type { ArtifactRetentionClass, OutcomeFinalState } from './coordinated-automation-types'
+import type { CoordinatedRunChildMapping } from './coordinated-automation-saga-types'
 
 export type StructuredWorkerArtifact = {
   kind: string
   uri: string
   authority?: string
   sha256?: string
+  retentionClass?: ArtifactRetentionClass
   producerAttempt?: { taskId: string; dispatchId: string }
   metadata?: Record<string, unknown>
 }
@@ -58,6 +60,9 @@ export type SemanticReceiptIdentityChain = {
   definitionRevision: number
   automationRunId: string
   orchestrationRunId: string
+  hostId: string
+  targetExecutionAuthority?: string
+  taskMappings?: CoordinatedRunChildMapping[]
 }
 
 export type SemanticReceiptAcceptanceResult = {
@@ -113,6 +118,10 @@ export type StageAcceptanceStatus =
   | 'waived'
 
 export type StageAcceptanceRecord = {
+  automationRunId: string
+  orchestrationRunId: string
+  definitionRevision: number
+  resolvedConfigDigest: string
   childDefinitionId: string
   taskId: string
   dispatchId: string

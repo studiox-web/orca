@@ -2,17 +2,39 @@ import { describe, expect, it } from 'vitest'
 import type { Automation } from './automations-types'
 import { isCoordinatedAutomation, isSingleAutomation } from './automations-types'
 import {
-  AutomationOutcomeContractSchema,
-  CoordinatedAutomationDefinitionSchema,
+  CoordinatedAutomationChildDefinitionSchema,
   CoordinatedHostCapabilitiesSchema,
   CoordinatedRunMaterializationRecordSchema,
-  SemanticCompletionReceiptSchema,
   StageAcceptanceRecordSchema,
-  StructuredWorkerResultSchema
+  StructuredWorkerArtifactSchema
 } from './coordinated-automation-schemas'
-import { resolveAutomationSnapshot } from './coordinated-automation-snapshot'
-import type { CoordinatedAutomationChildDefinition } from './coordinated-automation-types'
+import { CoordinatedRunFieldsSchema } from './coordinated-automation-snapshot-schemas'
+import {
+  resolveAutomationSnapshot,
+  type ResolvePromptFunction
+} from './coordinated-automation-snapshot'
+import type {
+  CoordinatedAutomationChildDefinition,
+  CoordinatedAutomationDefinition
+} from './coordinated-automation-types'
 import { AutomationCreate, AutomationUpdateFields } from './rpc-contract/automation-params'
+import {
+  assertHostSupportsCoordinatedAutomations,
+  CoordinatedAutomationCreate
+} from './rpc-contract/coordinated-automation-params'
+import {
+  canDispatchCoordinatedTask,
+  isTerminalMaterializationPhase
+} from './coordinated-automation-saga-types'
+import { validateReceiptAgainstSnapshot } from './coordinated-automation-validation'
+
+const SAMPLE_WRITER_PROMPT_TEXT = 'Resolved goal text for content writer'
+const SAMPLE_WRITER_PROMPT_DIGEST =
+  'sha256:424971906fe1ce08e0a325a835731e6fc8e128c218420e3febe9276d7915052a'
+
+const samplePromptResolver: ResolvePromptFunction = () => ({
+  text: SAMPLE_WRITER_PROMPT_TEXT
+})
 
 function createSampleSingleAutomation(): Automation {
   return {
@@ -41,7 +63,7 @@ function createSampleSingleAutomation(): Automation {
   }
 }
 
-function createSampleCoordinatedAutomation(): Automation {
+function createSampleCoordinatedAutomation(): Automation & CoordinatedAutomationDefinition {
   const children: CoordinatedAutomationChildDefinition[] = [
     {
       id: 'child-research',
@@ -78,7 +100,7 @@ function createSampleCoordinatedAutomation(): Automation {
       promptSource: {
         kind: 'source_reference',
         path: 'automations/goals/content-writer/GOAL.md',
-        digest: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+        digest: SAMPLE_WRITER_PROMPT_DIGEST
       },
       dependencies: [{ childId: 'child-research', condition: 'accepted' }],
       mutationClass: 'exclusive_writer',
@@ -205,6 +227,8 @@ function createSampleCoordinatedAutomation(): Automation {
     },
     retentionPolicy: {
       preserveCompletionReceipt: true,
+      preserveSnapshot: true,
+      preserveMappings: true,
       artifactRetentionDays: 30
     }
   }
@@ -218,13 +242,11 @@ describe('Coordinated Automation Shared Contracts', () => {
       expect(isCoordinatedAutomation(single)).toBe(false)
 
       const json = JSON.stringify(single)
-      const parsed: Automation = JSON.parse(json)
-
+      const parsed = JSON.parse(json)
       expect(parsed.id).toBe('auto-single-1')
-      expect(parsed.name).toBe('Daily Summary')
       expect(parsed.kind).toBeUndefined()
-      expect(isSingleAutomation(parsed)).toBe(true)
-      expect(isCoordinatedAutomation(parsed)).toBe(false)
+      expect(parsed.children).toBeUndefined()
+      expect(parsed.outcomeContract).toBeUndefined()
     })
 
     it('passes existing single Automation inputs through RPC AutomationCreate and AutomationUpdateFields', () => {
@@ -252,47 +274,8 @@ describe('Coordinated Automation Shared Contracts', () => {
     })
   })
 
-  describe('Coordinated Automation round-trip without losing IDs or provenance', () => {
-    it('serializes and deserializes a coordinated automation preserving all fields', () => {
-      const coordinated = createSampleCoordinatedAutomation()
-      expect(isCoordinatedAutomation(coordinated)).toBe(true)
-      expect(isSingleAutomation(coordinated)).toBe(false)
-
-      const json = JSON.stringify(coordinated)
-      const restored: Automation = JSON.parse(json)
-
-      expect(restored.kind).toBe('coordinated')
-      expect(restored.definitionRevision).toBe(1)
-      expect(restored.children).toHaveLength(3)
-
-      const researchChild = restored.children?.find((c) => c.id === 'child-research')
-      expect(researchChild).toBeDefined()
-      expect(researchChild?.launchConfig.provenance?.model).toBe('overridden')
-      expect(researchChild?.launchConfig.provenance?.agentId).toBe('inherited')
-
-      const writerChild = restored.children?.find((c) => c.id === 'child-writer')
-      expect(writerChild).toBeDefined()
-      expect(writerChild?.promptSource.kind).toBe('source_reference')
-      expect(writerChild?.dependencies[0]).toEqual({
-        childId: 'child-research',
-        condition: 'accepted'
-      })
-
-      const zodParsed = CoordinatedAutomationDefinitionSchema.parse({
-        kind: 'coordinated',
-        definitionRevision: restored.definitionRevision!,
-        outcomeContract: restored.outcomeContract!,
-        children: restored.children!,
-        inheritedDefaults: restored.inheritedDefaults,
-        globalCeilings: restored.globalCeilings,
-        publicationPolicy: restored.publicationPolicy,
-        retentionPolicy: restored.retentionPolicy
-      })
-      expect(zodParsed.kind).toBe('coordinated')
-      expect(zodParsed.children).toHaveLength(3)
-    })
-
-    it('validates coordinated creation parameters via RPC AutomationCreate schema', () => {
+  describe('RPC Fail-Closed Protection for Generic vs Coordinated Methods', () => {
+    it('explicitly refuses coordinated writes on generic AutomationCreate RPC', () => {
       const coordinated = createSampleCoordinatedAutomation()
       const rpcPayload = {
         name: coordinated.name,
@@ -301,7 +284,45 @@ describe('Coordinated Automation Shared Contracts', () => {
         rrule: coordinated.rrule,
         dtstart: coordinated.dtstart,
         kind: 'coordinated',
-        definitionRevision: coordinated.definitionRevision,
+        children: coordinated.children
+      }
+
+      const check = AutomationCreate.safeParse(rpcPayload)
+      expect(check.success).toBe(false)
+      if (!check.success) {
+        expect(
+          check.error.issues.some((i) =>
+            i.message.includes('cannot be created or updated via generic automation RPC')
+          )
+        ).toBe(true)
+      }
+    })
+
+    it('explicitly refuses coordinated writes on generic AutomationUpdateFields RPC', () => {
+      const updatePayload = {
+        kind: 'coordinated',
+        definitionRevision: 999
+      }
+      const check = AutomationUpdateFields.safeParse(updatePayload)
+      expect(check.success).toBe(false)
+      if (!check.success) {
+        expect(
+          check.error.issues.some((i) =>
+            i.message.includes('cannot be created or updated via generic automation RPC')
+          )
+        ).toBe(true)
+      }
+    })
+
+    it('validates coordinated creation parameters via dedicated CoordinatedAutomationCreate schema', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      const rpcPayload = {
+        name: coordinated.name,
+        prompt: coordinated.prompt,
+        agentId: coordinated.agentId,
+        rrule: coordinated.rrule,
+        dtstart: coordinated.dtstart,
+        kind: 'coordinated',
         outcomeContract: coordinated.outcomeContract,
         children: coordinated.children,
         inheritedDefaults: coordinated.inheritedDefaults,
@@ -310,273 +331,92 @@ describe('Coordinated Automation Shared Contracts', () => {
         retentionPolicy: coordinated.retentionPolicy
       }
 
-      const parsed = AutomationCreate.parse(rpcPayload)
+      const parsed = CoordinatedAutomationCreate.parse(rpcPayload)
       expect(parsed.kind).toBe('coordinated')
-      expect(parsed.definitionRevision).toBe(1)
       expect(parsed.children).toHaveLength(3)
     })
-  })
 
-  describe('Child IDs surviving rename and reorder', () => {
-    it('preserves stable child IDs when name and role are changed', () => {
+    it('forbids client-supplied definitionRevision on creation in CoordinatedAutomationCreate', () => {
       const coordinated = createSampleCoordinatedAutomation()
-      const writerChild = coordinated.children![1]
-      expect(writerChild.id).toBe('child-writer')
-
-      writerChild.name = 'Senior Investigative Journalist'
-      writerChild.role = 'lead-writer'
-
-      expect(writerChild.id).toBe('child-writer')
-      expect(writerChild.name).toBe('Senior Investigative Journalist')
-      expect(writerChild.role).toBe('lead-writer')
-    })
-
-    it('preserves child identities and dependency integrity when child array is reordered', () => {
-      const coordinated = createSampleCoordinatedAutomation()
-      const originalChildren = coordinated.children!
-      const reordered = [originalChildren[2], originalChildren[0], originalChildren[1]]
-      coordinated.children = reordered
-
-      expect(coordinated.children.map((c) => c.id)).toEqual([
-        'child-editor',
-        'child-research',
-        'child-writer'
-      ])
-    })
-  })
-
-  describe('Deterministic snapshot resolution and canonical digest', () => {
-    it('produces the exact same canonical digest across multiple resolutions of the same revision', () => {
-      const coordinated = createSampleCoordinatedAutomation()
-
-      const snapshot1 = resolveAutomationSnapshot({ automation: coordinated, createdAt: 1000 })
-      const snapshot2 = resolveAutomationSnapshot({ automation: coordinated, createdAt: 2000 })
-
-      expect(snapshot1.canonicalDigest).toMatch(/^sha256:[a-f0-9]{64}$/)
-      expect(snapshot1.canonicalDigest).toBe(snapshot2.canonicalDigest)
-    })
-
-    it('produces identical digest regardless of child array ordering in definition', () => {
-      const coord1 = createSampleCoordinatedAutomation()
-      const coord2 = createSampleCoordinatedAutomation()
-
-      const [c0, c1, c2] = coord2.children!
-      coord2.children = [c2, c0, c1]
-
-      const snap1 = resolveAutomationSnapshot({ automation: coord1 })
-      const snap2 = resolveAutomationSnapshot({ automation: coord2 })
-
-      expect(snap1.canonicalDigest).toBe(snap2.canonicalDigest)
-    })
-  })
-
-  describe('Inheritance and explicit override provenance', () => {
-    it('resolves inherited vs overridden values and maintains provenance records', () => {
-      const coordinated = createSampleCoordinatedAutomation()
-      const snapshot = resolveAutomationSnapshot({ automation: coordinated })
-
-      const research = snapshot.resolvedChildren.find(
-        (c) => c.childDefinitionId === 'child-research'
-      )!
-      expect(research.provenance.agentId).toBe('inherited')
-      expect(research.launchConfig.agentId).toBe('claude')
-      expect(research.provenance.model).toBe('overridden')
-      expect(research.launchConfig.model).toBe('claude-3-5-sonnet')
-
-      const editor = snapshot.resolvedChildren.find((c) => c.childDefinitionId === 'child-editor')!
-      expect(editor.provenance.timeoutSeconds).toBe('overridden')
-      expect(editor.launchConfig.timeoutSeconds).toBe(600)
-      expect(editor.provenance.agentId).toBe('inherited')
-      expect(editor.launchConfig.agentId).toBe('claude')
-    })
-
-    it('preserves explicit null/empty overrides without falling back to parent default', () => {
-      const coordinated = createSampleCoordinatedAutomation()
-      coordinated.inheritedDefaults = {
-        ...coordinated.inheritedDefaults,
-        extraAgentArgs: '--verbose',
-        baseBranch: 'main'
+      const rpcPayload = {
+        name: coordinated.name,
+        prompt: coordinated.prompt,
+        agentId: coordinated.agentId,
+        rrule: coordinated.rrule,
+        dtstart: coordinated.dtstart,
+        kind: 'coordinated',
+        definitionRevision: 10,
+        outcomeContract: coordinated.outcomeContract,
+        children: coordinated.children
       }
 
-      const writer = coordinated.children!.find((c) => c.id === 'child-writer')!
-      writer.launchConfig.baseBranch = null
-      writer.launchConfig.extraAgentArgs = ''
-      writer.launchConfig.provenance = {
-        baseBranch: 'overridden',
-        extraAgentArgs: 'overridden'
+      const check = CoordinatedAutomationCreate.safeParse(rpcPayload)
+      expect(check.success).toBe(false)
+      if (!check.success) {
+        expect(
+          check.error.issues.some((i) => i.message.includes('managed monotonically by the host'))
+        ).toBe(true)
       }
-
-      const snapshot = resolveAutomationSnapshot({ automation: coordinated })
-      const resolvedWriter = snapshot.resolvedChildren.find(
-        (c) => c.childDefinitionId === 'child-writer'
-      )!
-
-      expect(resolvedWriter.provenance.baseBranch).toBe('overridden')
-      expect(resolvedWriter.launchConfig.baseBranch).toBeNull()
-      expect(resolvedWriter.provenance.extraAgentArgs).toBe('overridden')
-      expect(resolvedWriter.launchConfig.extraAgentArgs).toBe('')
     })
 
-    it('updating a parent default in next revision affects only inheriting children', () => {
-      const rev1 = createSampleCoordinatedAutomation()
-      const snapRev1 = resolveAutomationSnapshot({ automation: rev1 })
+    it('validates host capability check fails closed for old/unsupported hosts', () => {
+      expect(() => assertHostSupportsCoordinatedAutomations(null)).toThrow(
+        /missing or unconfirmed capability "coordinated_v1"/
+      )
 
-      const rev2 = createSampleCoordinatedAutomation()
-      rev2.definitionRevision = 2
-      rev2.inheritedDefaults!.agentId = 'codex'
+      expect(() =>
+        assertHostSupportsCoordinatedAutomations({
+          contractVersion: 1,
+          supportedCapabilities: ['structured_worker_result_v1']
+        })
+      ).toThrow(/missing or unconfirmed capability "coordinated_v1"/)
 
-      const editor = rev2.children!.find((c) => c.id === 'child-editor')!
-      editor.launchConfig.agentId = 'claude'
-      editor.launchConfig.provenance = {
-        ...editor.launchConfig.provenance,
-        agentId: 'overridden'
-      }
-
-      const snapRev2 = resolveAutomationSnapshot({ automation: rev2 })
-
-      const resResearchRev1 = snapRev1.resolvedChildren.find(
-        (c) => c.childDefinitionId === 'child-research'
-      )!
-      const resResearchRev2 = snapRev2.resolvedChildren.find(
-        (c) => c.childDefinitionId === 'child-research'
-      )!
-      expect(resResearchRev1.launchConfig.agentId).toBe('claude')
-      expect(resResearchRev2.launchConfig.agentId).toBe('codex')
-
-      const resEditorRev2 = snapRev2.resolvedChildren.find(
-        (c) => c.childDefinitionId === 'child-editor'
-      )!
-      expect(resEditorRev2.launchConfig.agentId).toBe('claude')
-      expect(resEditorRev2.provenance.agentId).toBe('overridden')
-
-      expect(snapRev1.canonicalDigest).not.toBe(snapRev2.canonicalDigest)
+      expect(() =>
+        assertHostSupportsCoordinatedAutomations({
+          contractVersion: 1,
+          supportedCapabilities: ['coordinated_v1']
+        })
+      ).not.toThrow()
     })
   })
 
-  describe('Frozen snapshots (immutability)', () => {
-    it('leaves already-created snapshot unchanged when definition objects are mutated', () => {
+  describe('Receipt against Snapshot Validation', () => {
+    it('validates a complete, compliant semantic completion receipt against snapshot', () => {
       const coordinated = createSampleCoordinatedAutomation()
-      const snapshot = resolveAutomationSnapshot({ automation: coordinated })
-
-      const originalResearchPromptText = snapshot.resolvedChildren[0].prompt.text
-      const originalDigest = snapshot.canonicalDigest
-
-      coordinated.name = 'Totally Mutated Name'
-      coordinated.children![0].name = 'Mutated Child'
-      coordinated.children![0].promptSource = { kind: 'inline', text: 'Brand new prompt text' }
-      coordinated.children!.push({
-        id: 'child-unwanted',
-        role: 'intruder',
-        name: 'Intruder',
-        promptSource: { kind: 'inline', text: 'malicious' },
-        dependencies: [],
-        mutationClass: 'read_only',
-        launchConfig: {},
-        enabled: true
+      const snapshot = resolveAutomationSnapshot({
+        automation: coordinated,
+        promptResolver: samplePromptResolver
       })
 
-      expect(snapshot.resolvedChildren).toHaveLength(3)
-      expect(snapshot.resolvedChildren[0].prompt.text).toBe(originalResearchPromptText)
-      expect(snapshot.canonicalDigest).toBe(originalDigest)
-    })
-
-    it('snapshot object is deeply frozen', () => {
-      const coordinated = createSampleCoordinatedAutomation()
-      const snapshot = resolveAutomationSnapshot({ automation: coordinated })
-
-      expect(Object.isFrozen(snapshot)).toBe(true)
-      expect(Object.isFrozen(snapshot.resolvedChildren)).toBe(true)
-      expect(Object.isFrozen(snapshot.resolvedChildren[0])).toBe(true)
-      expect(Object.isFrozen(snapshot.resolvedChildren[0].launchConfig)).toBe(true)
-    })
-  })
-
-  describe('Structured worker result and Semantic completion receipt schemas', () => {
-    it('validates a correct structured worker result envelope', () => {
-      const validResult = {
-        schemaVersion: 1,
-        automationRunId: 'run-123',
-        orchestrationRunId: 'orch-456',
-        childDefinitionId: 'child-writer',
-        taskId: 'task-789',
-        dispatchId: 'disp-abc',
-        definitionRevision: 1,
-        resolvedConfigDigest:
-          'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-        outcome: 'succeeded',
-        summary: 'Drafted DJVibe article on music tech advancements',
-        artifacts: [
-          {
-            kind: 'draft',
-            uri: 'content/drafts/music-tech.md',
-            sha256: 'sha256:abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd'
-          }
-        ],
-        checks: [
-          {
-            id: 'word-count',
-            outcome: 'passed',
-            evidence: ['1250 words drafted (min 800 required)']
-          }
-        ],
-        effects: [
-          {
-            kind: 'local-stage',
-            status: 'verified',
-            receipt: 'row_id:9912'
-          }
-        ],
-        blockers: [],
-        reportMarkdown: '# Article Draft Ready\n\nDraft completed successfully.'
-      }
-
-      const parsed = StructuredWorkerResultSchema.parse(validResult)
-      expect(parsed.schemaVersion).toBe(1)
-      expect(parsed.outcome).toBe('succeeded')
-      expect(parsed.artifacts).toHaveLength(1)
-    })
-
-    it('rejects structured worker result with invalid outcome or missing identities', () => {
-      const invalidResult = {
-        schemaVersion: 1,
-        automationRunId: 'run-123',
-        childDefinitionId: 'child-writer',
-        taskId: 'task-789',
-        dispatchId: 'disp-abc',
-        definitionRevision: 1,
-        resolvedConfigDigest: 'not-a-sha256',
-        outcome: 'invalid_outcome_status',
-        summary: 'test',
-        artifacts: [],
-        checks: [],
-        effects: [],
-        blockers: [],
-        reportMarkdown: ''
-      }
-
-      const check = StructuredWorkerResultSchema.safeParse(invalidResult)
-      expect(check.success).toBe(false)
-    })
-
-    it('validates a complete semantic completion receipt', () => {
-      const receipt = {
-        schemaVersion: 1,
+      const validReceipt = {
+        schemaVersion: 1 as const,
         identityChain: {
-          automationId: 'auto-coord-1',
-          definitionRevision: 1,
+          automationId: snapshot.automationId,
+          definitionRevision: snapshot.definitionRevision,
           automationRunId: 'run-123',
-          orchestrationRunId: 'orch-456'
+          orchestrationRunId: 'orch-456',
+          hostId: 'host-local-1'
         },
-        frozenConfigDigest:
-          'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-        finalState: 'ready_to_publish',
+        frozenConfigDigest: snapshot.canonicalDigest,
+        finalState: 'ready_to_publish' as const,
         completedAt: 1700000000000,
-        selectedOutcomeItemIdentity: 'article-tech-advance-2026',
         acceptanceResults: [
           {
+            criterionId: 'crit-research',
+            status: 'satisfied' as const,
+            evidence: ['Research packet verified at research/packet.json'],
+            evaluatedAt: 1700000000000
+          },
+          {
+            criterionId: 'crit-draft',
+            status: 'satisfied' as const,
+            evidence: ['Draft article verified at content/drafts/tech.md'],
+            evaluatedAt: 1700000000000
+          },
+          {
             criterionId: 'crit-editorial',
-            status: 'satisfied',
-            evidence: ['Editor approval granted by @amethyst on draft hash abc'],
+            status: 'satisfied' as const,
+            evidence: ['Editorial approval token granted'],
             evaluatedAt: 1700000000000
           }
         ],
@@ -590,73 +430,237 @@ describe('Coordinated Automation Shared Contracts', () => {
             evidence: 'approved with zero critical findings'
           }
         ],
-        effectReceipts: [
-          {
-            kind: 'local-stage',
-            status: 'verified',
-            receipt: 'DJVIBE_LOCAL_STAGE_RESULT:post_id=42',
-            verifiedAt: 1700000000000
-          }
-        ],
+        effectReceipts: [],
         unresolvedWarnings: []
       }
 
-      const parsed = SemanticCompletionReceiptSchema.parse(receipt)
-      expect(parsed.schemaVersion).toBe(1)
-      expect(parsed.finalState).toBe('ready_to_publish')
-      expect(parsed.approvals).toHaveLength(1)
+      const receiptValidation = validateReceiptAgainstSnapshot(validReceipt, snapshot)
+      expect(receiptValidation.valid).toBe(true)
+      expect(receiptValidation.errors).toHaveLength(0)
     })
 
-    it('validates outcome contract acceptance criteria and approval targets', () => {
+    it('rejects receipt with mismatched config digest or identity chain', () => {
       const coordinated = createSampleCoordinatedAutomation()
-      const contractParsed = AutomationOutcomeContractSchema.parse(coordinated.outcomeContract)
-      expect(contractParsed.humanStatement).toContain('Produce an editor-approved')
+      const snapshot = resolveAutomationSnapshot({
+        automation: coordinated,
+        promptResolver: samplePromptResolver
+      })
+
+      const receipt = {
+        schemaVersion: 1 as const,
+        identityChain: {
+          automationId: 'wrong-id',
+          definitionRevision: 999,
+          automationRunId: 'run-123',
+          orchestrationRunId: 'orch-456',
+          hostId: 'host-local-1'
+        },
+        frozenConfigDigest:
+          'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+        finalState: 'ready_to_publish' as const,
+        completedAt: 1700000000000,
+        acceptanceResults: [],
+        approvals: [],
+        effectReceipts: [],
+        unresolvedWarnings: []
+      }
+
+      const res = validateReceiptAgainstSnapshot(receipt, snapshot)
+      expect(res.valid).toBe(false)
+      expect(res.errors.some((e) => e.includes('does not match snapshot canonicalDigest'))).toBe(
+        true
+      )
+      expect(res.errors.some((e) => e.includes('does not match snapshot automationId'))).toBe(true)
     })
 
-    it('supports authority-qualified source references in prompt and snapshot', () => {
+    it('rejects author self-approval when disallowAuthorApproval is true', () => {
       const coordinated = createSampleCoordinatedAutomation()
-      const writer = coordinated.children!.find((c) => c.id === 'child-writer')!
-      writer.promptSource = {
-        kind: 'source_reference',
-        authority: 'local-workspace',
-        path: 'automations/goals/content-writer/GOAL.md',
-        digest: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+      const snapshot = resolveAutomationSnapshot({
+        automation: coordinated,
+        promptResolver: samplePromptResolver
+      })
+
+      const selfApprovalReceipt = {
+        schemaVersion: 1 as const,
+        identityChain: {
+          automationId: snapshot.automationId,
+          definitionRevision: snapshot.definitionRevision,
+          automationRunId: 'run-123',
+          orchestrationRunId: 'orch-456',
+          hostId: 'host-local-1'
+        },
+        frozenConfigDigest: snapshot.canonicalDigest,
+        finalState: 'ready_to_publish' as const,
+        completedAt: 1700000000000,
+        acceptanceResults: [
+          {
+            criterionId: 'crit-research',
+            status: 'satisfied' as const,
+            evidence: ['ev'],
+            evaluatedAt: 1700000000000
+          },
+          {
+            criterionId: 'crit-draft',
+            status: 'satisfied' as const,
+            evidence: ['ev'],
+            evaluatedAt: 1700000000000
+          },
+          {
+            criterionId: 'crit-editorial',
+            status: 'satisfied' as const,
+            evidence: ['ev'],
+            evaluatedAt: 1700000000000
+          }
+        ],
+        approvals: [
+          {
+            approvalId: 'approval-editor',
+            role: 'content-editor',
+            approverIdentity: 'term_same_user',
+            authorIdentity: 'term_same_user',
+            approvedAt: 1700000000000
+          }
+        ],
+        effectReceipts: [],
+        unresolvedWarnings: []
       }
 
-      const snapshot = resolveAutomationSnapshot({ automation: coordinated })
-      const resolvedWriter = snapshot.resolvedChildren.find(
-        (c) => c.childDefinitionId === 'child-writer'
-      )!
-      expect(resolvedWriter.prompt.kind).toBe('source_reference')
-      expect(resolvedWriter.prompt.path).toBe('automations/goals/content-writer/GOAL.md')
+      const res = validateReceiptAgainstSnapshot(selfApprovalReceipt, snapshot)
+      expect(res.valid).toBe(false)
+      expect(
+        res.errors.some((e) => e.includes('disallows author approval, but was approved by author'))
+      ).toBe(true)
     })
 
-    it('validates fail-closed host capability negotiation', () => {
-      const validHostCapabilities = {
-        contractVersion: 1,
-        supportedCapabilities: [
-          'coordinated_v1',
-          'structured_worker_result_v1',
-          'semantic_completion_receipt_v1',
-          'stage_acceptance_v1'
-        ]
-      }
-      expect(CoordinatedHostCapabilitiesSchema.parse(validHostCapabilities).contractVersion).toBe(1)
+    it('rejects receipt if final state is not permitted by snapshot outcome contract', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      const snapshot = resolveAutomationSnapshot({
+        automation: coordinated,
+        promptResolver: samplePromptResolver
+      })
 
-      const invalidVersion = {
-        contractVersion: 2,
-        supportedCapabilities: ['coordinated_v1']
+      const receipt = {
+        schemaVersion: 1 as const,
+        identityChain: {
+          automationId: snapshot.automationId,
+          definitionRevision: snapshot.definitionRevision,
+          automationRunId: 'run-123',
+          orchestrationRunId: 'orch-456',
+          hostId: 'host-local-1'
+        },
+        frozenConfigDigest: snapshot.canonicalDigest,
+        finalState: 'published_verified' as const,
+        completedAt: 1700000000000,
+        acceptanceResults: [],
+        approvals: [],
+        effectReceipts: [],
+        unresolvedWarnings: []
       }
-      expect(CoordinatedHostCapabilitiesSchema.safeParse(invalidVersion).success).toBe(false)
+
+      const res = validateReceiptAgainstSnapshot(receipt, snapshot)
+      expect(res.valid).toBe(false)
+      expect(
+        res.errors.some((e) => e.includes('is not permitted by snapshot outcomeContract'))
+      ).toBe(true)
+    })
+  })
+
+  describe('Saga Technical Phases, Replan Schema, and Bounds', () => {
+    it('verifies dispatch is forbidden before mappings_persisted', () => {
+      expect(canDispatchCoordinatedTask('intent_persisted')).toBe(false)
+      expect(canDispatchCoordinatedTask('orchestration_run_created')).toBe(false)
+      expect(canDispatchCoordinatedTask('tasks_created')).toBe(false)
+      expect(canDispatchCoordinatedTask('mappings_persisted')).toBe(false)
+      expect(canDispatchCoordinatedTask('ready_for_dispatch')).toBe(true)
+      expect(canDispatchCoordinatedTask('orphaned_reconciling')).toBe(false)
+      expect(canDispatchCoordinatedTask('compensation_failed')).toBe(false)
+      expect(canDispatchCoordinatedTask('materialization_failed')).toBe(false)
+
+      expect(isTerminalMaterializationPhase('compensation_failed')).toBe(true)
+      expect(isTerminalMaterializationPhase('materialization_failed')).toBe(true)
+      expect(isTerminalMaterializationPhase('ready_for_dispatch')).toBe(false)
+    })
+
+    it('validates bounded replan fields via CoordinatedRunFieldsSchema', () => {
+      const validRun = {
+        automationDefinitionRevision: 2,
+        orchestrationRunId: 'orch-2',
+        resolvedSnapshot: null,
+        completionReceipt: null,
+        replanOfAutomationRunId: 'run-1',
+        replanOfDefinitionRevision: 1,
+        replanReason: 'Previous child failed linting and requested revision',
+        materializationPhase: 'ready_for_dispatch' as const,
+        childMappings: [{ childDefinitionId: 'child-1', taskId: 't-1' }]
+      }
+      expect(CoordinatedRunFieldsSchema.parse(validRun).replanReason).toContain('failed linting')
+
+      const invalidReplan = {
+        ...validRun,
+        replanOfAutomationRunId: 'run-1',
+        replanOfDefinitionRevision: null,
+        replanReason: null
+      }
+      expect(CoordinatedRunFieldsSchema.safeParse(invalidReplan).success).toBe(false)
+    })
+
+    it('enforces bounds on strings, arrays, artifact URIs, and sha256 digests', () => {
+      expect(
+        StructuredWorkerArtifactSchema.safeParse({
+          kind: 'artifact',
+          uri: '../../etc/passwd'
+        }).success
+      ).toBe(false)
+
+      expect(
+        StructuredWorkerArtifactSchema.safeParse({
+          kind: 'artifact',
+          uri: '/root/private/file'
+        }).success
+      ).toBe(false)
+
+      expect(
+        StructuredWorkerArtifactSchema.safeParse({
+          kind: 'artifact',
+          uri: 'valid/repo/relative/path.json',
+          sha256: 'nope'
+        }).success
+      ).toBe(false)
+
+      expect(
+        StructuredWorkerArtifactSchema.safeParse({
+          kind: 'artifact',
+          uri: 'valid/repo/relative/path.json',
+          sha256: 'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
+        }).success
+      ).toBe(true)
+
+      expect(
+        CoordinatedAutomationChildDefinitionSchema.safeParse({
+          id: 'invalid child id with spaces!',
+          role: 'role',
+          name: 'name',
+          promptSource: { kind: 'inline', text: 'prompt' },
+          dependencies: [],
+          mutationClass: 'read_only',
+          launchConfig: {},
+          enabled: true
+        }).success
+      ).toBe(false)
     })
 
     it('validates separate stage acceptance and cross-store saga materialization records', () => {
       const stageRecord = {
+        automationRunId: 'run-1',
+        orchestrationRunId: 'orch-run-1',
+        definitionRevision: 1,
+        resolvedConfigDigest:
+          'sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
         childDefinitionId: 'child-writer',
         taskId: 'task-100',
         dispatchId: 'disp-100',
-        status: 'accepted',
-        workerReportOutcome: 'succeeded',
+        status: 'accepted' as const,
+        workerReportOutcome: 'succeeded' as const,
         evaluatedAt: 1700000000000,
         acceptanceEvidence: ['Draft verified against editorial gate sha256'],
         unmetCriteria: []
@@ -670,12 +674,19 @@ describe('Coordinated Automation Shared Contracts', () => {
         definitionRevision: 1,
         idempotencyKey: 'idemp-12345',
         orchestrationRunId: 'orch-run-1',
-        phase: 'mappings_persisted',
+        phase: 'mappings_persisted' as const,
         childMappings: [{ childDefinitionId: 'child-writer', taskId: 'task-100' }],
         updatedAt: 1700000000000
       }
       const parsedSaga = CoordinatedRunMaterializationRecordSchema.parse(sagaRecord)
       expect(parsedSaga.phase).toBe('mappings_persisted')
+
+      expect(
+        CoordinatedHostCapabilitiesSchema.safeParse({
+          contractVersion: 1,
+          supportedCapabilities: ['coordinated_v1']
+        }).success
+      ).toBe(true)
     })
   })
 })

@@ -17,6 +17,7 @@ export type CoordinatedHostCapabilities = {
 
 /**
  * Durable cross-store materialization phase across Automation and Orchestration stores.
+ * Strictly technical saga phases decoupled from semantic execution and acceptance.
  */
 export type CoordinatedRunMaterializationPhase =
   | 'intent_persisted'
@@ -24,10 +25,24 @@ export type CoordinatedRunMaterializationPhase =
   | 'tasks_created'
   | 'mappings_persisted'
   | 'ready_for_dispatch'
-  | 'dispatch_active'
-  | 'accepted'
-  | 'failed'
-  | 'reconciliation_blocked'
+  | 'orphaned_reconciling'
+  | 'compensation_failed'
+  | 'materialization_failed'
+
+/**
+ * Guard proving worker task dispatch is strictly forbidden prior to durable mappings persistence.
+ * Tasks may only be dispatched once the saga reaches 'ready_for_dispatch'.
+ */
+export function canDispatchCoordinatedTask(phase: CoordinatedRunMaterializationPhase): boolean {
+  return phase === 'ready_for_dispatch'
+}
+
+/**
+ * Indicates whether the saga materialization ended in a terminal failure state.
+ */
+export function isTerminalMaterializationPhase(phase: CoordinatedRunMaterializationPhase): boolean {
+  return phase === 'compensation_failed' || phase === 'materialization_failed'
+}
 
 export type CoordinatedRunChildMapping = {
   childDefinitionId: string

@@ -349,5 +349,161 @@ describe('Coordinated Automation Validation', () => {
       const validation = validateCoordinatedAutomationDefinition(coordinated)
       expect(validation.errors.filter((e) => e.code === 'UNSAFE_WRITER_LANE')).toHaveLength(0)
     })
+
+    it('flags an error when exclusive_writer and shared_writer share a lane without dependency sequencing', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      const research = coordinated.children!.find((c) => c.id === 'child-research')!
+      const writer = coordinated.children!.find((c) => c.id === 'child-writer')!
+
+      research.mutationClass = 'exclusive_writer'
+      research.mutationLane = 'content'
+      writer.mutationClass = 'shared_writer'
+      writer.mutationLane = 'content'
+      writer.dependencies = []
+
+      const validation = validateCoordinatedAutomationDefinition(coordinated)
+      expect(validation.valid).toBe(false)
+      const laneError = validation.errors.find((e) => e.code === 'UNSAFE_WRITER_LANE')
+      expect(laneError).toBeDefined()
+      expect(laneError?.message).toContain('unsafe concurrency conflict')
+    })
+
+    it('allows concurrent shared_writers on the same lane without dependency edges', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      const research = coordinated.children!.find((c) => c.id === 'child-research')!
+      const writer = coordinated.children!.find((c) => c.id === 'child-writer')!
+      const editor = coordinated.children!.find((c) => c.id === 'child-editor')!
+
+      research.mutationClass = 'shared_writer'
+      research.mutationLane = 'content'
+      writer.mutationClass = 'shared_writer'
+      writer.mutationLane = 'content'
+      writer.dependencies = []
+      editor.mutationLane = 'editorial'
+
+      const validation = validateCoordinatedAutomationDefinition(coordinated)
+      expect(validation.errors.filter((e) => e.code === 'UNSAFE_WRITER_LANE')).toHaveLength(0)
+    })
+
+    it('rejects user-specified mutation lane using internal default sentinel name', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      const writer = coordinated.children!.find((c) => c.id === 'child-writer')!
+      writer.mutationLane = '@@orca_internal_default_writer_lane@@'
+
+      const validation = validateCoordinatedAutomationDefinition(coordinated)
+      expect(validation.valid).toBe(false)
+      const sentinelError = validation.errors.find((e) => e.code === 'UNSAFE_WRITER_LANE')
+      expect(sentinelError).toBeDefined()
+      expect(sentinelError?.message).toContain('reserved internal lane identifier')
+    })
+  })
+
+  describe('Launch config coherence and unattainable acceptance criteria', () => {
+    it('rejects new_per_run workspace mode combined with reuseSession', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      const research = coordinated.children![0]
+      research.launchConfig.workspaceMode = 'new_per_run'
+      research.launchConfig.reuseSession = true
+
+      const validation = validateCoordinatedAutomationDefinition(coordinated)
+      expect(validation.valid).toBe(false)
+      const err = validation.errors.find((e) => e.code === 'INCOMPATIBLE_LAUNCH_SETTINGS')
+      expect(err).toBeDefined()
+      expect(err?.message).toContain('New per-run workspaces cannot reuse sessions')
+    })
+
+    it('rejects existing workspace mode combined with baseBranch', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      const research = coordinated.children![0]
+      research.launchConfig.workspaceMode = 'existing'
+      research.launchConfig.baseBranch = 'feature/branch'
+
+      const validation = validateCoordinatedAutomationDefinition(coordinated)
+      expect(validation.valid).toBe(false)
+      const err = validation.errors.find((e) => e.code === 'INCOMPATIBLE_LAUNCH_SETTINGS')
+      expect(err).toBeDefined()
+      expect(err?.message).toContain('baseBranch is only valid for new workspaces')
+    })
+
+    it('rejects inherited default timeout exceeding ceiling', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      coordinated.globalCeilings = { maxWallClockSeconds: 1000 }
+      coordinated.inheritedDefaults = { timeoutSeconds: 1500 }
+
+      const validation = validateCoordinatedAutomationDefinition(coordinated)
+      expect(validation.valid).toBe(false)
+      const err = validation.errors.find((e) => e.code === 'LIMIT_EXCEEDS_CEILING')
+      expect(err).toBeDefined()
+      expect(err?.message).toContain('Inherited default timeout (1500s) exceeds parent ceiling')
+    })
+
+    it('rejects read_only child declaring requiredEffects in stageAcceptance', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      const research = coordinated.children![0]
+      research.mutationClass = 'read_only'
+      research.stageAcceptance = {
+        requiredEffects: [{ kind: 'git-commit', allowedStatuses: ['applied'], required: true }]
+      }
+
+      const validation = validateCoordinatedAutomationDefinition(coordinated)
+      expect(validation.valid).toBe(false)
+      const err = validation.errors.find((e) => e.code === 'UNATTAINABLE_ACCEPTANCE_CRITERIA')
+      expect(err).toBeDefined()
+      expect(err?.message).toContain('declared as read_only but defines requiredEffects')
+    })
+
+    it('rejects published_verified final state when allowExternalMutation is false', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      coordinated.publicationPolicy = {
+        allowExternalMutation: false,
+        allowedFinalStates: ['ready_to_publish'],
+        requireHumanDecisionForProduction: true
+      }
+      coordinated.outcomeContract.allowedFinalStates = ['published_verified']
+
+      const validation = validateCoordinatedAutomationDefinition(coordinated)
+      expect(validation.valid).toBe(false)
+      const err = validation.errors.find((e) => e.code === 'UNATTAINABLE_ACCEPTANCE_CRITERIA')
+      expect(err).toBeDefined()
+      expect(err?.message).toContain('allowExternalMutation is false')
+    })
+
+    it('rejects publication policy with no overlapping final states with outcome contract', () => {
+      const coordinated = createSampleCoordinatedAutomation()
+      coordinated.outcomeContract.allowedFinalStates = ['failed']
+      coordinated.publicationPolicy = {
+        allowExternalMutation: false,
+        allowedFinalStates: ['ready_to_publish'],
+        requireHumanDecisionForProduction: true
+      }
+
+      const validation = validateCoordinatedAutomationDefinition(coordinated)
+      expect(validation.valid).toBe(false)
+      const err = validation.errors.find((e) => e.code === 'INVALID_OUTCOME_CONTRACT')
+      expect(err).toBeDefined()
+      expect(err?.message).toContain('has no overlapping states')
+    })
+
+    it('reports exactly one error when a forbidden schedule property is provided on child', () => {
+      const rawChild = {
+        id: 'child-1',
+        role: 'worker',
+        name: 'Worker',
+        promptSource: { kind: 'inline', text: 'prompt' },
+        dependencies: [],
+        mutationClass: 'read_only',
+        launchConfig: {},
+        enabled: true,
+        schedule: 'hourly'
+      }
+      const parsed = CoordinatedAutomationChildDefinitionSchema.safeParse(rawChild)
+      expect(parsed.success).toBe(false)
+      if (!parsed.success) {
+        const scheduleErrors = parsed.error.issues.filter(
+          (i) => i.path[0] === 'schedule' || i.message.includes('independent schedules')
+        )
+        expect(scheduleErrors).toHaveLength(1)
+      }
+    })
   })
 })
