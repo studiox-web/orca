@@ -1,4 +1,4 @@
-import { sealCoordinatedRun } from '../../../shared/coordinated-automation-run-seal'
+import { sealLoadedCoordinatedRun } from '../../../shared/coordinated-automation-run-seal'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   normalizeProjectHostSetupRows,
@@ -64,8 +64,8 @@ export function normalizeLoadedAutomationRuns(
     return []
   }
   const runs = pruneAutomationRuns(backfillAutomationRunNumbers(parsed.automationRuns)).map(
-    // Reloaded coordinated history is frozen like freshly written history.
-    (run) => sealCoordinatedRun(run, false)
+    // Reloaded coordinated history is validated, then frozen like a fresh write; invalid rows are quarantined.
+    (run) => sealLoadedCoordinatedRun(run)
   )
   // Persist pruning even when no unrelated save follows startup.
   if (runs.length !== parsed.automationRuns.length) {

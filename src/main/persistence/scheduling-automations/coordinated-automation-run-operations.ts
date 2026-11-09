@@ -182,7 +182,7 @@ export function createCoordinatedAutomationRun(
     canonicalDigest: snapshot.canonicalDigest,
     recordedAt: now
   }
-  const sealed = sealCoordinatedRun(run, true)
+  const sealed = sealCoordinatedRun(run)
   commitRuns(operations, {
     ledger: ledgerWithOccurrence(ledger, occurrence),
     automations:

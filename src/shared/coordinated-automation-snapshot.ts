@@ -214,26 +214,17 @@ export function resolveAutomationSnapshot(
     generation: automation.executionTargetGeneration
   }
 
-  const configDigestPayload = {
+  const canonicalDigest = computeSnapshotCanonicalDigest({
     automationId: automation.id,
     definitionRevision: automation.definitionRevision,
     outcomeContract,
-    resolvedChildren: resolvedChildren
-      .slice()
-      .sort((a, b) =>
-        a.childDefinitionId < b.childDefinitionId
-          ? -1
-          : a.childDefinitionId > b.childDefinitionId
-            ? 1
-            : 0
-      ),
+    resolvedChildren,
     executionTarget,
     inheritedDefaults: parentDefaults,
     globalCeilings: effectiveCeilings,
     publicationPolicy,
     retentionPolicy
-  }
-  const canonicalDigest = `sha256:${sha256Hex(toCanonicalJson(configDigestPayload))}`
+  })
   const snapshot: ResolvedAutomationRunSnapshot = {
     automationId: automation.id,
     definitionRevision: automation.definitionRevision,
@@ -248,4 +239,30 @@ export function resolveAutomationSnapshot(
     canonicalDigest
   }
   return deepFreeze(snapshot)
+}
+
+/** Digest over everything a snapshot freezes except `createdAt`; children are ID-ordered. */
+export function computeSnapshotCanonicalDigest(
+  snapshot: Omit<ResolvedAutomationRunSnapshot, 'createdAt' | 'canonicalDigest'>
+): string {
+  const payload = {
+    automationId: snapshot.automationId,
+    definitionRevision: snapshot.definitionRevision,
+    outcomeContract: snapshot.outcomeContract,
+    resolvedChildren: snapshot.resolvedChildren
+      .slice()
+      .sort((a, b) =>
+        a.childDefinitionId < b.childDefinitionId
+          ? -1
+          : a.childDefinitionId > b.childDefinitionId
+            ? 1
+            : 0
+      ),
+    executionTarget: snapshot.executionTarget,
+    inheritedDefaults: snapshot.inheritedDefaults,
+    globalCeilings: snapshot.globalCeilings,
+    publicationPolicy: snapshot.publicationPolicy,
+    retentionPolicy: snapshot.retentionPolicy
+  }
+  return `sha256:${sha256Hex(toCanonicalJson(payload))}`
 }

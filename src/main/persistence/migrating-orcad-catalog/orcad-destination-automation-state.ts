@@ -6,6 +6,7 @@ import {
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { selectNewRows } from './orcad-catalog-row-identity'
+import { assertNoIncomingCoordinatedState } from './orcad-coordinated-automation-refusal'
 
 export type PreparedOrcadMigrationAutomationState = {
   incomingAutomations: Automation[]
@@ -21,6 +22,7 @@ export function prepareOrcadMigrationAutomationState(
 ): PreparedOrcadMigrationAutomationState {
   const incomingAutomations = (automations ?? []).map((entry) => structuredClone(entry))
   const incomingRuns = (runs ?? []).map((entry) => structuredClone(entry))
+  assertNoIncomingCoordinatedState(incomingAutomations, incomingRuns)
   const newAutomations = selectNewRows(
     incomingAutomations,
     state.automations,

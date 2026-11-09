@@ -63,6 +63,16 @@ export type CoordinatedRunFields = {
   idempotencyKey?: string
   materializationError?: string | null
   retainedEvidence?: CoordinatedRunRetainedEvidence
+  /** Set on reload when stored coordinated fields failed validation; the row is inert. */
+  coordinatedQuarantine?: CoordinatedRunQuarantine
+}
+
+export type CoordinatedRunQuarantine = {
+  reason: string
+  /** sha256 of the rejected coordinated payload as it was stored. */
+  payloadDigest: string
+  /** The rejected payload, kept verbatim when it fits the bound. */
+  payload: string | null
 }
 
 export type OverrideProvenance = 'inherited' | 'overridden'

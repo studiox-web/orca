@@ -30,11 +30,19 @@ export class CoordinatedReplayHorizonError extends Error {
   }
 }
 
+/**
+ * Exact owning incarnation: `<type>:<id>` plus `#<generation>` when the target has one. A
+ * re-registered SSH host keeps its ID but gets a new generation, so its deliveries conflict
+ * with the old incarnation's records instead of replaying them.
+ */
 export function coordinatedExecutionAuthority(automation: Automation): string {
-  return `${automation.executionTargetType}:${automation.executionTargetId}`
+  const base = `${automation.executionTargetType}:${automation.executionTargetId}`
+  return automation.executionTargetGeneration === undefined
+    ? base
+    : `${base}#${automation.executionTargetGeneration}`
 }
 
-/** Canonical occurrence identity; the target generation is excluded so re-adoption replays. */
+/** Canonical occurrence identity, qualified by the exact execution authority incarnation. */
 export function coordinatedOccurrenceFingerprint(input: {
   automationId: string
   trigger: AutomationRunTrigger
@@ -43,7 +51,7 @@ export function coordinatedOccurrenceFingerprint(input: {
 }): string {
   return `sha256:${sha256Hex(
     toCanonicalJson({
-      version: 1,
+      version: 2,
       automationId: input.automationId,
       trigger: input.trigger,
       scheduledFor: input.scheduledFor,

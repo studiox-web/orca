@@ -18,7 +18,7 @@ export type CoordinatedOccurrenceRecord = {
   idempotencyKey: string
   trigger: AutomationRunTrigger
   scheduledFor: number
-  /** `<executionTargetType>:<executionTargetId>` that owned the parent when the run was created. */
+  /** `<type>:<id>[#<generation>]`: the exact target incarnation that owned the parent. */
   executionAuthority: string
   automationRunId: string
   definitionRevision: number

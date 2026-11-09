@@ -20,6 +20,7 @@ import {
   unqualifyOrcadMigrationOwnerKey
 } from './orcad-source-scope'
 import { compareKeys } from './orcad-source-key-order'
+import { assertNoCoordinatedStateInOrcadMigration } from './orcad-coordinated-automation-refusal'
 
 export type OrcadMigrationSourceAutomationInspection = {
   automations: Automation[]
@@ -45,6 +46,12 @@ export function collectOrcadMigrationSourceAutomationState(
   const touchedRuns = state.automationRuns.filter(
     (entry) => touchedAutomationIds.has(entry.automationId) || runTouchesScope(entry, scope)
   )
+  assertNoCoordinatedStateInOrcadMigration({
+    state,
+    automations: touchedAutomations,
+    runs: touchedRuns,
+    sshTargetId: scope.targetId
+  })
   const runsByAutomationId = Map.groupBy(touchedRuns, (entry) => entry.automationId)
   const automationsById = Map.groupBy(touchedAutomations, (entry) => entry.id)
   const automations: Automation[] = []

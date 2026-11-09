@@ -1,13 +1,7 @@
 import type { Automation, AutomationRun } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import {
-  isCoordinatedAutomation,
-  type ResolvedAutomationRunSnapshot
-} from '../../../shared/coordinated-automation-types'
-import type {
-  CoordinatedRunChildMapping,
-  CoordinatedRunMaterializationPhase
-} from '../../../shared/coordinated-automation-saga-types'
+import { isCoordinatedAutomation } from '../../../shared/coordinated-automation-types'
+import type { CoordinatedRunMaterializationPhase } from '../../../shared/coordinated-automation-saga-types'
 import {
   isCoordinatedAutomationRun,
   type CoordinatedAutomationLedger
@@ -16,6 +10,7 @@ import {
   detachCoordinatedRun,
   sealCoordinatedRun
 } from '../../../shared/coordinated-automation-run-seal'
+import { mappingProblem } from '../../../shared/coordinated-automation-run-validation'
 import type { AutomationStorageAuthority } from './automation-owner-projection'
 import { CoordinatedAutomationExecutionRefusedError } from './coordinated-automation-revisions'
 
@@ -32,6 +27,8 @@ export type CoordinatedOrchestrationRecordProbe = {
   hasRun: (orchestrationRunId: string) => boolean
   hasTask: (orchestrationRunId: string, taskId: string) => boolean
 }
+
+export { mappingProblem }
 
 export class CoordinatedRunConflictError extends Error {
   constructor(message: string) {
@@ -56,33 +53,6 @@ export function isCoordinatedRunDispatchable(run: AutomationRun): boolean {
     return false
   }
   return mappingProblem(run.resolvedSnapshot, run.childMappings ?? []) === null
-}
-
-export function mappingProblem(
-  snapshot: ResolvedAutomationRunSnapshot,
-  mappings: readonly CoordinatedRunChildMapping[]
-): string | null {
-  const required = new Set(
-    snapshot.resolvedChildren.filter((child) => child.enabled).map((c) => c.childDefinitionId)
-  )
-  const seenChildren = new Set<string>()
-  const seenTasks = new Set<string>()
-  for (const mapping of mappings) {
-    if (!required.has(mapping.childDefinitionId)) {
-      return `Child "${mapping.childDefinitionId}" is not an enabled child of this run's snapshot.`
-    }
-    if (seenChildren.has(mapping.childDefinitionId)) {
-      return `Child "${mapping.childDefinitionId}" is mapped more than once.`
-    }
-    if (!mapping.taskId || seenTasks.has(mapping.taskId)) {
-      return `Task "${mapping.taskId}" is missing or mapped to more than one child.`
-    }
-    seenChildren.add(mapping.childDefinitionId)
-    seenTasks.add(mapping.taskId)
-  }
-  return seenChildren.size === required.size
-    ? null
-    : 'Every enabled child needs exactly one Task mapping.'
 }
 
 /** Write one in-memory change; restore it if the durable write throws so no half state survives. */
@@ -124,6 +94,11 @@ export function requireCoordinatedRun(
   if (!run) {
     throw new Error('Automation run not found.')
   }
+  if (run.coordinatedQuarantine) {
+    throw new CoordinatedRunConflictError(
+      `Coordinated run is quarantined: ${run.coordinatedQuarantine.reason}`
+    )
+  }
   if (!isCoordinatedRun(run) || !run.resolvedSnapshot) {
     throw new Error('Automation run is not a coordinated run.')
   }
@@ -134,7 +109,7 @@ export function replaceRun(
   operations: CoordinatedAutomationRunOperations,
   updated: AutomationRun
 ): AutomationRun {
-  const sealed = sealCoordinatedRun(updated, true)
+  const sealed = sealCoordinatedRun(updated)
   commitRuns(operations, {
     automationRuns: operations.state.automationRuns.map((run) =>
       run.id === sealed.id ? sealed : run

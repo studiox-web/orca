@@ -23,8 +23,11 @@ import {
   child,
   coordinatedCreateInput,
   coordinatedTestState,
+  durableHarness,
   fakeOrchestration
 } from '../scheduling-automations/coordinated-automation-persistence.test-support'
+import { createCoordinatedAutomation } from '../scheduling-automations/coordinated-automation-definition-operations'
+import { createCoordinatedAutomationRun } from '../scheduling-automations/coordinated-automation-run-operations'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -263,5 +266,34 @@ describe('coordinated automation profile persistence', () => {
     expect(store.listAutomationRuns(parent.id)[0].resolvedSnapshot!.resolvedChildren[0].name).toBe(
       'research worker'
     )
+  })
+
+  it('quarantines a malformed coordinated row on SQLite reload instead of trusting it', async () => {
+    const harness = durableHarness(coordinatedTestState())
+    const parent = createCoordinatedAutomation(harness.definitions(), coordinatedCreateInput())
+    const created = createCoordinatedAutomationRun(harness.runs(), {
+      automationId: parent.id,
+      scheduledFor: 5
+    }).run!
+    const tampered = structuredClone(created)
+    tampered.resolvedSnapshot!.resolvedChildren[0].name = 'edited on disk'
+    writeDataFile({
+      ...coordinatedTestState(),
+      automations: [LEGACY_AUTOMATION, parent],
+      automationRuns: [LEGACY_RUN, tampered]
+    })
+
+    const store = await openStore()
+    const reloaded = store.listAutomationRuns(parent.id)[0]
+    expect(reloaded).toMatchObject({
+      id: created.id,
+      resolvedSnapshot: null,
+      materializationPhase: 'materialization_failed',
+      coordinatedQuarantine: { reason: expect.stringMatching(/canonical digest/) }
+    })
+    expect(
+      JSON.parse(reloaded.coordinatedQuarantine!.payload!).resolvedSnapshot.resolvedChildren[0].name
+    ).toBe('edited on disk')
+    expect(store.listAutomationRuns('legacy-1')).toEqual([LEGACY_RUN])
   })
 })
