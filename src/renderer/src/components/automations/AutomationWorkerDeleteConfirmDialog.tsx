@@ -10,6 +10,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import type { CoordinatedAutomationChildDefinition } from '../../../../shared/coordinated-automation-types'
+import { translate } from '@/i18n/i18n'
 
 type AutomationWorkerDeleteConfirmDialogProps = {
   worker: CoordinatedAutomationChildDefinition | null
@@ -30,18 +31,29 @@ export function AutomationWorkerDeleteConfirmDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="size-4 shrink-0" />
-            <span>Confirm Remove Worker</span>
+            <span>
+              {translate(
+                'auto.components.automations.workers.deleteConfirmTitle',
+                'Confirm Remove Worker'
+              )}
+            </span>
           </DialogTitle>
           <DialogDescription asChild>
             <div className="space-y-2 text-xs pt-2 text-muted-foreground">
               <p>
-                Are you sure you want to remove worker <strong>{worker?.name}</strong>?
+                {translate(
+                  'auto.components.automations.workers.deleteConfirmQuestion',
+                  'Are you sure you want to remove worker {{name}}?',
+                  { name: worker?.name ?? '' }
+                )}
               </p>
               {dependentWorkers.length > 0 ? (
-                <p className="rounded border border-warning/40 bg-warning/10 p-2 text-warning-foreground">
-                  This worker is configured as a dependency for:{' '}
-                  <strong>{dependentWorkers.map((w) => w.name).join(', ')}</strong>. Removing it
-                  will also remove those dependency references.
+                <p className="rounded border border-status-warning-border bg-status-warning-background p-2 text-status-warning-text">
+                  {translate(
+                    'auto.components.automations.workers.deleteDependentsWarning',
+                    'This worker is configured as a dependency for: {{dependents}}. Removing it will also remove those dependency references.',
+                    { dependents: dependentWorkers.map((w) => w.name).join(', ') }
+                  )}
                 </p>
               ) : null}
             </div>
@@ -49,10 +61,10 @@ export function AutomationWorkerDeleteConfirmDialog({
         </DialogHeader>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={onCancel}>
-            Cancel
+            {translate('auto.components.automations.workers.cancel', 'Cancel')}
           </Button>
           <Button variant="destructive" data-testid="confirm-delete-worker" onClick={onConfirm}>
-            Confirm Remove
+            {translate('auto.components.automations.workers.confirmRemove', 'Confirm Remove')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -11,9 +11,13 @@ import {
 } from '@/components/ui/select'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { AutomationWorkspaceMode } from '../../../../shared/automations-types'
-import type { CoordinatedAutomationInheritedDefaults } from '../../../../shared/coordinated-automation-types'
+import type {
+  CoordinatedAutomationChildDefinition,
+  CoordinatedAutomationInheritedDefaults
+} from '../../../../shared/coordinated-automation-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
+import { AutomationWorkerExecutionPolicyFields } from './AutomationWorkerExecutionPolicyFields'
 
 export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | string
 
@@ -31,6 +35,41 @@ export type LaunchConfigFormState = {
   overrideTimeout: boolean
   timeoutExplicitNone: boolean
   timeoutMinutes: string
+  overrideRetries: boolean
+  maxRetries: string
+  overrideReviewIterations: boolean
+  maxReviewIterations: string
+}
+
+export function createInitialLaunchConfigFormState(
+  worker: CoordinatedAutomationChildDefinition,
+  parentDefaults?: CoordinatedAutomationInheritedDefaults
+): LaunchConfigFormState {
+  const cfg = worker.launchConfig
+  const prov = cfg.provenance
+  return {
+    overrideAgent: prov?.agentId === 'overridden',
+    agentId: cfg.agentId ?? parentDefaults?.agentId ?? 'claude',
+    overrideModel: prov?.model === 'overridden',
+    modelExplicitNone: cfg.model === null,
+    model: cfg.model ?? '',
+    overrideEffort: prov?.reasoningEffort === 'overridden',
+    effortExplicitNone: cfg.reasoningEffort === null,
+    effort: cfg.reasoningEffort ?? 'medium',
+    overrideWorkspace: prov?.workspaceMode === 'overridden',
+    workspaceMode: cfg.workspaceMode ?? parentDefaults?.workspaceMode ?? 'existing',
+    overrideTimeout: prov?.timeoutSeconds === 'overridden',
+    timeoutExplicitNone: cfg.timeoutSeconds === null,
+    timeoutMinutes:
+      typeof cfg.timeoutSeconds === 'number' && cfg.timeoutSeconds > 0
+        ? String(Math.round(cfg.timeoutSeconds / 60))
+        : '',
+    overrideRetries: prov?.maxRetries === 'overridden',
+    maxRetries: typeof cfg.maxRetries === 'number' ? String(cfg.maxRetries) : '',
+    overrideReviewIterations: prov?.maxReviewIterations === 'overridden',
+    maxReviewIterations:
+      typeof cfg.maxReviewIterations === 'number' ? String(cfg.maxReviewIterations) : ''
+  }
 }
 
 type AutomationWorkerLaunchConfigFieldsProps = {
@@ -59,7 +98,10 @@ export function AutomationWorkerLaunchConfigFields({
           <Switch
             checked={state.overrideAgent}
             onCheckedChange={(val) => onChange((prev) => ({ ...prev, overrideAgent: val }))}
-            aria-label="Override agent"
+            aria-label={translate(
+              'auto.components.automations.workers.overrideAgent',
+              'Override agent'
+            )}
           />
         </div>
         {state.overrideAgent ? (
@@ -67,15 +109,21 @@ export function AutomationWorkerLaunchConfigFields({
             value={state.agentId}
             onValueChange={(val) => onChange((prev) => ({ ...prev, agentId: val as TuiAgent }))}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger
+              className="w-full"
+              aria-label={translate(
+                'auto.components.automations.workers.agentSelectLabel',
+                'Agent override'
+              )}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {getAgentCatalog().map((agent) => (
-                <SelectItem key={agent.id} value={agent.id}>
+              {getAgentCatalog().map((entry) => (
+                <SelectItem key={entry.id} value={entry.id}>
                   <div className="flex items-center gap-2">
-                    <AgentIcon agent={agent.id} size={14} />
-                    <span>{agent.label}</span>
+                    <AgentIcon agent={entry.id} size={14} />
+                    <span>{entry.label}</span>
                   </div>
                 </SelectItem>
               ))}
@@ -83,7 +131,16 @@ export function AutomationWorkerLaunchConfigFields({
           </Select>
         ) : (
           <div className="text-2xs text-muted-foreground italic">
-            Inheriting parent default ({parentDefaults?.agentId ?? 'claude'})
+            {parentDefaults?.agentId
+              ? translate(
+                  'auto.components.automations.workers.inheritingAgent',
+                  'Inheriting parent default agent ({{agent}})',
+                  { agent: parentDefaults.agentId }
+                )
+              : translate(
+                  'auto.components.automations.workers.inheritingAgentNone',
+                  'Inherited (no agent specified)'
+                )}
           </div>
         )}
       </div>
@@ -97,40 +154,62 @@ export function AutomationWorkerLaunchConfigFields({
           <Switch
             checked={state.overrideModel}
             onCheckedChange={(val) => onChange((prev) => ({ ...prev, overrideModel: val }))}
-            aria-label="Override model"
+            aria-label={translate(
+              'auto.components.automations.workers.overrideModel',
+              'Override model'
+            )}
           />
         </div>
         {state.overrideModel ? (
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Input
+                id="worker-model-override-input"
                 value={state.model}
                 disabled={state.modelExplicitNone}
                 onChange={(e) => {
                   const val = e.target.value
                   onChange((prev) => ({ ...prev, model: val }))
                 }}
-                placeholder="e.g. claude-3-5-sonnet, gpt-5.6-sol"
+                placeholder="e.g. claude-3-7-sonnet, gpt-5.6-sol"
+                aria-label={translate(
+                  'auto.components.automations.workers.modelInputLabel',
+                  'Worker model override'
+                )}
                 className="font-mono text-xs"
               />
               <button
                 type="button"
-                className={`text-2xs px-2 py-1 rounded border ${
+                aria-pressed={state.modelExplicitNone}
+                aria-label={translate(
+                  'auto.components.automations.workers.modelExplicitNoneLabel',
+                  'Set model to none'
+                )}
+                className={`text-2xs px-2 py-1 rounded border transition-colors ${
                   state.modelExplicitNone
-                    ? 'bg-muted border-primary text-primary font-medium'
-                    : 'border-border text-muted-foreground'
+                    ? 'bg-status-warning-background border-status-warning-border text-status-warning-text font-medium'
+                    : 'border-border text-muted-foreground hover:bg-muted'
                 }`}
                 onClick={() =>
                   onChange((prev) => ({ ...prev, modelExplicitNone: !prev.modelExplicitNone }))
                 }
               >
-                None
+                {translate('auto.components.automations.workers.none', 'None')}
               </button>
             </div>
           </div>
         ) : (
           <div className="text-2xs text-muted-foreground italic">
-            Inheriting parent default model ({parentDefaults?.model ?? 'Default'})
+            {parentDefaults?.model
+              ? translate(
+                  'auto.components.automations.workers.inheritingModel',
+                  'Inheriting parent default model ({{model}})',
+                  { model: parentDefaults.model }
+                )
+              : translate(
+                  'auto.components.automations.workers.inheritingModelNone',
+                  'Inherited (no model specified)'
+                )}
           </div>
         )}
       </div>
@@ -147,7 +226,10 @@ export function AutomationWorkerLaunchConfigFields({
           <Switch
             checked={state.overrideEffort}
             onCheckedChange={(val) => onChange((prev) => ({ ...prev, overrideEffort: val }))}
-            aria-label="Override reasoning effort"
+            aria-label={translate(
+              'auto.components.automations.workers.overrideEffort',
+              'Override reasoning effort'
+            )}
           />
         </div>
         {state.overrideEffort ? (
@@ -165,19 +247,51 @@ export function AutomationWorkerLaunchConfigFields({
               }
             }}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger
+              className="w-full"
+              aria-label={translate(
+                'auto.components.automations.workers.effortSelectLabel',
+                'Reasoning effort override'
+              )}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">Explicit None (disabled)</SelectItem>
-              <SelectItem value="low">Low</SelectItem>
-              <SelectItem value="medium">Medium</SelectItem>
-              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="none">
+                {translate(
+                  'auto.components.automations.workers.effortExplicitNone',
+                  'Explicit None (disabled)'
+                )}
+              </SelectItem>
+              <SelectItem value="low">
+                {translate('auto.components.automations.workers.effortLow', 'Low')}
+              </SelectItem>
+              <SelectItem value="medium">
+                {translate('auto.components.automations.workers.effortMedium', 'Medium')}
+              </SelectItem>
+              <SelectItem value="high">
+                {translate('auto.components.automations.workers.effortHigh', 'High')}
+              </SelectItem>
+              <SelectItem value="xhigh">
+                {translate('auto.components.automations.workers.effortXHigh', 'Extra High')}
+              </SelectItem>
+              <SelectItem value="max">
+                {translate('auto.components.automations.workers.effortMax', 'Max')}
+              </SelectItem>
             </SelectContent>
           </Select>
         ) : (
           <div className="text-2xs text-muted-foreground italic">
-            Inheriting parent default effort ({parentDefaults?.reasoningEffort ?? 'Default'})
+            {parentDefaults?.reasoningEffort
+              ? translate(
+                  'auto.components.automations.workers.inheritingEffort',
+                  'Inheriting parent default effort ({{effort}})',
+                  { effort: parentDefaults.reasoningEffort }
+                )
+              : translate(
+                  'auto.components.automations.workers.inheritingEffortNone',
+                  'Inherited (no effort specified)'
+                )}
           </div>
         )}
       </div>
@@ -194,7 +308,10 @@ export function AutomationWorkerLaunchConfigFields({
           <Switch
             checked={state.overrideWorkspace}
             onCheckedChange={(val) => onChange((prev) => ({ ...prev, overrideWorkspace: val }))}
-            aria-label="Override workspace policy"
+            aria-label={translate(
+              'auto.components.automations.workers.overrideWorkspace',
+              'Override workspace policy'
+            )}
           />
         </div>
         {state.overrideWorkspace ? (
@@ -207,7 +324,13 @@ export function AutomationWorkerLaunchConfigFields({
               }))
             }}
           >
-            <SelectTrigger className="w-full">
+            <SelectTrigger
+              className="w-full"
+              aria-label={translate(
+                'auto.components.automations.workers.workspaceSelectLabel',
+                'Workspace mode override'
+              )}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -224,62 +347,26 @@ export function AutomationWorkerLaunchConfigFields({
           </Select>
         ) : (
           <div className="text-2xs text-muted-foreground italic">
-            Inheriting parent default ({parentDefaults?.workspaceMode ?? 'existing'})
+            {parentDefaults?.workspaceMode
+              ? translate(
+                  'auto.components.automations.workers.inheritingWorkspace',
+                  'Inheriting parent default workspace ({{mode}})',
+                  { mode: parentDefaults.workspaceMode }
+                )
+              : translate(
+                  'auto.components.automations.workers.inheritingWorkspaceNone',
+                  'Inherited (no workspace policy specified)'
+                )}
           </div>
         )}
       </div>
 
-      {/* 5. Timeout */}
-      <div className="space-y-1.5 border-t border-border/40 pt-2">
-        <div className="flex items-center justify-between">
-          <span className="text-2xs text-muted-foreground">
-            {translate('auto.components.automations.workers.overrideTimeout', 'Override timeout')}
-          </span>
-          <Switch
-            checked={state.overrideTimeout}
-            onCheckedChange={(val) => onChange((prev) => ({ ...prev, overrideTimeout: val }))}
-            aria-label="Override timeout"
-          />
-        </div>
-        {state.overrideTimeout ? (
-          <div className="flex items-center gap-2">
-            <Input
-              type="number"
-              min="1"
-              disabled={state.timeoutExplicitNone}
-              value={state.timeoutMinutes}
-              onChange={(e) => {
-                const val = e.target.value
-                onChange((prev) => ({ ...prev, timeoutMinutes: val }))
-              }}
-              placeholder="30"
-              className="text-xs"
-            />
-            <span className="text-2xs text-muted-foreground">min</span>
-            <button
-              type="button"
-              className={`text-2xs px-2 py-1 rounded border ${
-                state.timeoutExplicitNone
-                  ? 'bg-muted border-primary text-primary font-medium'
-                  : 'border-border text-muted-foreground'
-              }`}
-              onClick={() =>
-                onChange((prev) => ({ ...prev, timeoutExplicitNone: !prev.timeoutExplicitNone }))
-              }
-            >
-              None
-            </button>
-          </div>
-        ) : (
-          <div className="text-2xs text-muted-foreground italic">
-            Inheriting parent default timeout (
-            {parentDefaults?.timeoutSeconds
-              ? `${Math.round(parentDefaults.timeoutSeconds / 60)}m`
-              : 'None'}
-            )
-          </div>
-        )}
-      </div>
+      {/* 5. Execution Policies (Timeout, Retries, Review Iterations) */}
+      <AutomationWorkerExecutionPolicyFields
+        state={state}
+        onChange={onChange}
+        parentDefaults={parentDefaults}
+      />
     </div>
   )
 }

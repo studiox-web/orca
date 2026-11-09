@@ -79,6 +79,7 @@ export const ChildLaunchConfigSchema: z.ZodType<ChildLaunchConfig> = z.object({
     .number()
     .positive()
     .max(86400 * 7)
+    .nullable()
     .optional(),
   maxRetries: z.number().int().nonnegative().max(50).optional(),
   maxReviewIterations: z.number().int().nonnegative().max(50).optional(),
@@ -106,6 +107,7 @@ export const CoordinatedAutomationInheritedDefaultsSchema: z.ZodType<Coordinated
       .number()
       .positive()
       .max(86400 * 7)
+      .nullable()
       .optional(),
     maxRetries: z.number().int().nonnegative().max(50).optional(),
     maxReviewIterations: z.number().int().nonnegative().max(50).optional()

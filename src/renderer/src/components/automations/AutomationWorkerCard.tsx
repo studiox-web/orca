@@ -73,7 +73,7 @@ export function AutomationWorkerCard({
       aria-label={`Worker: ${child.name}`}
       data-testid={`worker-card-${child.id}`}
       data-child-id={child.id}
-      className={`relative rounded-lg border transition-all ${
+      className={`@container relative rounded-lg border transition-all ${
         isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''
       } ${
         hasErrors
@@ -175,7 +175,7 @@ export function AutomationWorkerCard({
                 >
                   <span
                     className={`size-2 rounded-full ${
-                      child.enabled ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-muted-foreground'
+                      child.enabled ? 'bg-status-success' : 'bg-muted-foreground'
                     }`}
                   />
                 </Button>
@@ -332,10 +332,7 @@ export function AutomationWorkerCard({
                 key={crit.id ?? `crit-${idx}`}
                 className="flex items-center gap-1 text-foreground"
               >
-                <CheckCircle
-                  className="size-3 shrink-0 text-emerald-500 dark:text-emerald-400"
-                  aria-hidden="true"
-                />
+                <CheckCircle className="size-3 shrink-0 text-status-success" aria-hidden="true" />
                 <span className="font-medium text-xs">{crit.description}</span>
               </div>
             ))}
@@ -344,7 +341,9 @@ export function AutomationWorkerCard({
                 key={chk.id ?? `chk-${idx}`}
                 className="flex items-center gap-1 font-mono text-3xs"
               >
-                <span className="text-muted-foreground">check:</span>
+                <span className="text-muted-foreground">
+                  {translate('auto.components.automations.workers.checkPrefix', 'check:')}
+                </span>
                 <span className="text-foreground">{chk.description || chk.id}</span>
               </div>
             ))}
@@ -363,8 +362,11 @@ export function AutomationWorkerCard({
                 </span>
                 <span className="font-mono text-3xs">{app.role}</span>
                 {app.disallowAuthorApproval ? (
-                  <Badge variant="outline" className="text-3xs text-amber-600 dark:text-amber-400">
-                    non-author
+                  <Badge
+                    variant="outline"
+                    className="text-3xs text-status-warning border-status-warning-border"
+                  >
+                    {translate('auto.components.automations.workers.nonAuthor', 'non-author')}
                   </Badge>
                 ) : null}
               </div>

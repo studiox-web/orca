@@ -8,6 +8,7 @@ type AutomationRevisionImpactPreviewProps = {
   hasModifications?: boolean
   activeRunId?: string | null
   activeRunRevision?: number | null
+  activeRunStatus?: string | null
   className?: string
 }
 
@@ -16,6 +17,7 @@ export function AutomationRevisionImpactPreview({
   hasModifications = false,
   activeRunId = null,
   activeRunRevision = null,
+  activeRunStatus = null,
   className = ''
 }: AutomationRevisionImpactPreviewProps): React.JSX.Element {
   const isExistingRevision = typeof currentRevision === 'number' && currentRevision > 0
@@ -29,7 +31,7 @@ export function AutomationRevisionImpactPreview({
         'auto.components.automations.workers.revisionImpactTitle',
         'Revision impact preview'
       )}
-      className={`rounded-lg border border-border/60 bg-muted/30 p-3 text-foreground ${className}`}
+      className={`@container rounded-lg border border-border/60 bg-muted/30 p-3 text-foreground ${className}`}
       data-testid="automation-revision-impact-preview"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -46,7 +48,9 @@ export function AutomationRevisionImpactPreview({
         <div className="flex items-center gap-1.5 text-xs">
           {isExistingRevision ? (
             <Badge variant="secondary" className="font-mono text-3xs">
-              Rev {currentRevision}
+              {translate('auto.components.automations.workers.revisionPrefix', 'Rev {{revision}}', {
+                revision: currentRevision
+              })}
             </Badge>
           ) : (
             <Badge variant="outline" className="text-3xs text-muted-foreground">
@@ -61,7 +65,11 @@ export function AutomationRevisionImpactPreview({
                 variant="outline"
                 className="border-primary/50 font-mono text-3xs text-primary"
               >
-                Next: Rev {nextRevision}
+                {translate(
+                  'auto.components.automations.workers.nextRevisionPrefix',
+                  'Next: Rev {{revision}}',
+                  { revision: nextRevision }
+                )}
               </Badge>
             </>
           ) : null}
@@ -88,28 +96,40 @@ export function AutomationRevisionImpactPreview({
       </p>
 
       {activeRunId ? (
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded border border-border/40 bg-card/60 px-2.5 py-1.5 text-2xs">
+        <div className="mt-2.5 flex flex-col gap-2 rounded border border-border/40 bg-card/60 px-2.5 py-1.5 text-2xs @sm:flex-row @sm:items-center @sm:justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <Lock className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <span className="text-muted-foreground truncate">
-              {typeof activeRunRevision === 'number'
-                ? translate(
-                    'auto.components.automations.workers.activeRunFrozenWithRev',
-                    'Active run {{runId}} is executing against frozen snapshot (Rev {{runRevision}})',
-                    { runId: activeRunId, runRevision: activeRunRevision }
-                  )
-                : translate(
-                    'auto.components.automations.workers.activeRunFrozen',
-                    'Active run {{runId}} is executing against frozen snapshot',
-                    { runId: activeRunId }
-                  )}
+            <span className="text-muted-foreground break-words">
+              {activeRunStatus === 'pending' || activeRunStatus === 'dispatching'
+                ? typeof activeRunRevision === 'number'
+                  ? translate(
+                      'auto.components.automations.workers.queuedRunFrozenWithRev',
+                      'Queued run {{runId}} is prepared with frozen snapshot (Rev {{runRevision}})',
+                      { runId: activeRunId, runRevision: activeRunRevision }
+                    )
+                  : translate(
+                      'auto.components.automations.workers.queuedRunFrozen',
+                      'Queued run {{runId}} is prepared with frozen snapshot',
+                      { runId: activeRunId }
+                    )
+                : typeof activeRunRevision === 'number'
+                  ? translate(
+                      'auto.components.automations.workers.activeRunFrozenWithRev',
+                      'Active run {{runId}} is running with frozen snapshot (Rev {{runRevision}})',
+                      { runId: activeRunId, runRevision: activeRunRevision }
+                    )
+                  : translate(
+                      'auto.components.automations.workers.activeRunFrozen',
+                      'Active run {{runId}} is running with frozen snapshot',
+                      { runId: activeRunId }
+                    )}
             </span>
           </div>
-          <Badge variant="outline" className="text-3xs text-muted-foreground shrink-0">
-            <ShieldCheck
-              className="mr-1 size-3 text-emerald-500 dark:text-emerald-400"
-              aria-hidden="true"
-            />
+          <Badge
+            variant="outline"
+            className="text-3xs text-muted-foreground self-start @sm:self-center shrink-0"
+          >
+            <ShieldCheck className="mr-1 size-3 text-status-success" aria-hidden="true" />
             {translate('auto.components.automations.workers.frozen', 'Frozen')}
           </Badge>
         </div>

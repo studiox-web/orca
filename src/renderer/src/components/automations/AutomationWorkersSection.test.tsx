@@ -247,10 +247,12 @@ describe('AutomationWorkersSection', () => {
         agentId: 'claude',
         model: null, // Explicit none
         reasoningEffort: null, // Explicit none
+        timeoutSeconds: null, // Explicit none
         provenance: {
           agentId: 'inherited',
           model: 'overridden',
-          reasoningEffort: 'overridden'
+          reasoningEffort: 'overridden',
+          timeoutSeconds: 'overridden'
         }
       }
     }
@@ -325,6 +327,7 @@ describe('AutomationWorkersSection', () => {
 
     expect(cardA.scrollIntoView).toHaveBeenCalled()
     expect(cardA.className).toContain('ring-2 ring-primary')
+    expect(document.activeElement).toBe(cardA)
   })
 
   it('switches between list and graph views with keyboard accessibility', async () => {
@@ -338,19 +341,19 @@ describe('AutomationWorkersSection', () => {
 
     const graphBtn = container.querySelector('button[aria-label="Graph view"]') as HTMLButtonElement
     await act(async () => {
-      graphBtn.click()
+      graphBtn.focus()
+      graphBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     })
 
     expect(container.querySelector('[data-testid="automation-workers-graph"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="automation-workers-list"]')).toBeNull()
 
-    // Click graph node to jump back to list view
-    const nodeA = container.querySelector(
-      '[data-testid="graph-node-worker-1"]'
-    ) as HTMLButtonElement
-    expect(nodeA).not.toBeNull()
+    // Switch back using Space key on List view button
+    const listBtn = container.querySelector('button[aria-label="List view"]') as HTMLButtonElement
+    expect(listBtn).not.toBeNull()
     await act(async () => {
-      nodeA.click()
+      listBtn.focus()
+      listBtn.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
     })
 
     expect(container.querySelector('[data-testid="automation-workers-list"]')).not.toBeNull()
@@ -440,7 +443,7 @@ describe('AutomationWorkersSection', () => {
 
     const container = await renderWorkersSection({
       workers: [baseChild1],
-      activeRunId: 'run-historical-1234',
+      snapshotRunId: 'run-historical-1234',
       historicalSnapshot: snapshot,
       isEditing: false
     })

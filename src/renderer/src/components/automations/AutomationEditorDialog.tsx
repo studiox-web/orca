@@ -214,7 +214,7 @@ export function AutomationEditorDialog({
           {isCoordinated ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 scrollbar-sleek gap-5">
               {!isCoordinatedFeatureEnabled ? (
-                <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-2xs text-warning-foreground">
+                <div className="rounded-md border border-status-warning-border bg-status-warning-background p-3 text-2xs text-status-warning-text">
                   {translate(
                     'auto.components.automations.editor.flagOffNotice',
                     'Coordinated automations require the experimental feature flag to be enabled in Settings. Viewing in safe read-only mode.'
@@ -267,7 +267,7 @@ export function AutomationEditorDialog({
                   setupDecision: draft.setupDecision,
                   reuseSession: draft.reuseSession
                 }}
-                isEditing={isEditing && isCoordinatedFeatureEnabled}
+                isEditing={isCoordinatedFeatureEnabled}
                 hasModifications={false}
                 onWorkersChange={(children) => {
                   onDraftChange((curr) => ({

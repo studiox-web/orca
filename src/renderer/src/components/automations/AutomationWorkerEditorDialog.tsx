@@ -28,6 +28,7 @@ import type {
 import { AutomationWorkerPromptSourceFields } from './AutomationWorkerPromptSourceFields'
 import {
   AutomationWorkerLaunchConfigFields,
+  createInitialLaunchConfigFormState,
   type LaunchConfigFormState
 } from './AutomationWorkerLaunchConfigFields'
 import { AutomationWorkerStageAcceptanceFields } from './AutomationWorkerStageAcceptanceFields'
@@ -82,23 +83,9 @@ function AutomationWorkerEditorForm({
     worker.stageAcceptance ?? {}
   )
 
-  const [launchConfigState, setLaunchConfigState] = useState<LaunchConfigFormState>({
-    overrideAgent: worker.launchConfig.provenance?.agentId === 'overridden',
-    agentId: worker.launchConfig.agentId ?? parentDefaults?.agentId ?? 'claude',
-    overrideModel: worker.launchConfig.provenance?.model === 'overridden',
-    modelExplicitNone: worker.launchConfig.model === null,
-    model: worker.launchConfig.model ?? '',
-    overrideEffort: worker.launchConfig.provenance?.reasoningEffort === 'overridden',
-    effortExplicitNone: worker.launchConfig.reasoningEffort === null,
-    effort: worker.launchConfig.reasoningEffort ?? 'medium',
-    overrideWorkspace: worker.launchConfig.provenance?.workspaceMode === 'overridden',
-    workspaceMode: worker.launchConfig.workspaceMode ?? parentDefaults?.workspaceMode ?? 'existing',
-    overrideTimeout: worker.launchConfig.provenance?.timeoutSeconds === 'overridden',
-    timeoutExplicitNone: worker.launchConfig.timeoutSeconds === null,
-    timeoutMinutes: worker.launchConfig.timeoutSeconds
-      ? String(Math.round(worker.launchConfig.timeoutSeconds / 60))
-      : ''
-  })
+  const [launchConfigState, setLaunchConfigState] = useState<LaunchConfigFormState>(() =>
+    createInitialLaunchConfigFormState(worker, parentDefaults)
+  )
 
   const otherWorkers = allWorkers.filter((w) => w.id !== worker.id)
 
@@ -124,10 +111,23 @@ function AutomationWorkerEditorForm({
 
     const nextTimeoutSeconds = launchConfigState.overrideTimeout
       ? launchConfigState.timeoutExplicitNone
-        ? undefined
+        ? null
         : Number(launchConfigState.timeoutMinutes) > 0
           ? Number(launchConfigState.timeoutMinutes) * 60
-          : undefined
+          : null
+      : undefined
+
+    const nextRetries = launchConfigState.overrideRetries
+      ? Number(launchConfigState.maxRetries) >= 0 && launchConfigState.maxRetries.trim() !== ''
+        ? Number(launchConfigState.maxRetries)
+        : undefined
+      : undefined
+
+    const nextReviewIterations = launchConfigState.overrideReviewIterations
+      ? Number(launchConfigState.maxReviewIterations) >= 0 &&
+        launchConfigState.maxReviewIterations.trim() !== ''
+        ? Number(launchConfigState.maxReviewIterations)
+        : undefined
       : undefined
 
     const saved: CoordinatedAutomationChildDefinition = {
@@ -158,13 +158,19 @@ function AutomationWorkerEditorForm({
           ? launchConfigState.workspaceMode
           : undefined,
         timeoutSeconds: nextTimeoutSeconds,
+        maxRetries: nextRetries,
+        maxReviewIterations: nextReviewIterations,
         provenance: {
           ...worker.launchConfig.provenance,
           agentId: launchConfigState.overrideAgent ? 'overridden' : 'inherited',
           model: launchConfigState.overrideModel ? 'overridden' : 'inherited',
           reasoningEffort: launchConfigState.overrideEffort ? 'overridden' : 'inherited',
           workspaceMode: launchConfigState.overrideWorkspace ? 'overridden' : 'inherited',
-          timeoutSeconds: launchConfigState.overrideTimeout ? 'overridden' : 'inherited'
+          timeoutSeconds: launchConfigState.overrideTimeout ? 'overridden' : 'inherited',
+          maxRetries: launchConfigState.overrideRetries ? 'overridden' : 'inherited',
+          maxReviewIterations: launchConfigState.overrideReviewIterations
+            ? 'overridden'
+            : 'inherited'
         }
       }
     }
@@ -184,7 +190,9 @@ function AutomationWorkerEditorForm({
         {/* Name & Role */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label htmlFor="worker-name">Name</Label>
+            <Label htmlFor="worker-name">
+              {translate('auto.components.automations.workers.name', 'Name')}
+            </Label>
             <Input
               id="worker-name"
               value={name}
@@ -193,7 +201,9 @@ function AutomationWorkerEditorForm({
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="worker-role">Role identifier</Label>
+            <Label htmlFor="worker-role">
+              {translate('auto.components.automations.workers.roleIdentifier', 'Role identifier')}
+            </Label>
             <Input
               id="worker-role"
               value={role}
@@ -205,7 +215,9 @@ function AutomationWorkerEditorForm({
 
         {/* Description */}
         <div className="space-y-1">
-          <Label htmlFor="worker-desc">Description</Label>
+          <Label htmlFor="worker-desc">
+            {translate('auto.components.automations.workers.description', 'Description')}
+          </Label>
           <Input
             id="worker-desc"
             value={description}
@@ -217,15 +229,23 @@ function AutomationWorkerEditorForm({
         {/* Enabled switch */}
         <div className="flex items-center justify-between rounded-md border border-border/50 p-2.5">
           <div>
-            <div className="font-medium text-foreground">Worker enabled</div>
+            <div className="font-medium text-foreground">
+              {translate('auto.components.automations.workers.workerEnabled', 'Worker enabled')}
+            </div>
             <div className="text-2xs text-muted-foreground">
-              Disabled workers are skipped during workflow execution
+              {translate(
+                'auto.components.automations.workers.workerEnabledHint',
+                'Disabled workers are skipped during workflow execution'
+              )}
             </div>
           </div>
           <Switch
             checked={enabled}
             onCheckedChange={setEnabled}
-            aria-label="Toggle worker enabled"
+            aria-label={translate(
+              'auto.components.automations.workers.toggleWorkerEnabled',
+              'Toggle worker enabled'
+            )}
           />
         </div>
 
@@ -257,7 +277,9 @@ function AutomationWorkerEditorForm({
         {/* Mutation Class & Lane */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label htmlFor="mutation-class-select">Mutation class</Label>
+            <Label htmlFor="mutation-class-select">
+              {translate('auto.components.automations.workers.mutationClass', 'Mutation class')}
+            </Label>
             <Select
               value={mutationClass}
               onValueChange={(val) => setMutationClass(val as MutationClass)}
@@ -266,14 +288,25 @@ function AutomationWorkerEditorForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="read_only">Read-only</SelectItem>
-                <SelectItem value="exclusive_writer">Exclusive writer</SelectItem>
-                <SelectItem value="shared_writer">Shared writer</SelectItem>
+                <SelectItem value="read_only">
+                  {translate('auto.components.automations.workers.readOnly', 'Read-only')}
+                </SelectItem>
+                <SelectItem value="exclusive_writer">
+                  {translate(
+                    'auto.components.automations.workers.exclusiveWriter',
+                    'Exclusive writer'
+                  )}
+                </SelectItem>
+                <SelectItem value="shared_writer">
+                  {translate('auto.components.automations.workers.sharedWriter', 'Shared writer')}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="worker-lane">Mutation lane</Label>
+            <Label htmlFor="worker-lane">
+              {translate('auto.components.automations.workers.mutationLane', 'Mutation lane')}
+            </Label>
             <Input
               id="worker-lane"
               value={mutationLane}
@@ -286,7 +319,9 @@ function AutomationWorkerEditorForm({
         {/* Dependencies with disambiguated labels */}
         {otherWorkers.length > 0 ? (
           <div className="space-y-2 rounded-md border border-border/50 p-3">
-            <Label className="font-semibold">Dependencies</Label>
+            <Label className="font-semibold">
+              {translate('auto.components.automations.workers.dependencies', 'Dependencies')}
+            </Label>
             <div className="max-h-36 space-y-1.5 overflow-y-auto scrollbar-sleek">
               {otherWorkers.map((other) => {
                 const isDep = dependencies.some((d) => d.childId === other.id)
@@ -317,9 +352,11 @@ function AutomationWorkerEditorForm({
 
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>
-          Cancel
+          {translate('auto.components.automations.workers.cancel', 'Cancel')}
         </Button>
-        <Button onClick={handleSave}>Save worker</Button>
+        <Button onClick={handleSave}>
+          {translate('auto.components.automations.workers.saveWorker', 'Save worker')}
+        </Button>
       </DialogFooter>
     </DialogContent>
   )

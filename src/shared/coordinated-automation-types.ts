@@ -122,7 +122,7 @@ export type ChildLaunchConfig = {
   workspaceId?: string | null
   baseBranch?: string | null
   setupDecision?: SetupDecision
-  timeoutSeconds?: number
+  timeoutSeconds?: number | null
   maxRetries?: number
   maxReviewIterations?: number
   provenance?: Partial<Record<ChildLaunchConfigField, OverrideProvenance>>
@@ -139,7 +139,7 @@ export type CoordinatedAutomationInheritedDefaults = {
   workspaceId?: string | null
   baseBranch?: string | null
   setupDecision?: SetupDecision
-  timeoutSeconds?: number
+  timeoutSeconds?: number | null
   maxRetries?: number
   maxReviewIterations?: number
 }

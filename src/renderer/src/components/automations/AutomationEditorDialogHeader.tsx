@@ -77,13 +77,22 @@ export function AutomationEditorDialogHeader({
               'auto.components.automations.editor.modeGroupAria',
               'Automation execution mode'
             )}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                e.preventDefault()
+                onKindChange?.('coordinated')
+              } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                e.preventDefault()
+                onKindChange?.('single')
+              }
+            }}
             className="flex items-center rounded-md border border-border/60 bg-muted/40 p-0.5 text-xs"
           >
             <button
               type="button"
               role="radio"
               aria-checked={kind !== 'coordinated'}
-              aria-pressed={kind !== 'coordinated'}
+              tabIndex={kind !== 'coordinated' ? 0 : -1}
               className={`rounded px-2.5 py-1 text-2xs font-medium transition-colors ${
                 kind !== 'coordinated'
                   ? 'bg-card text-foreground shadow-xs'
@@ -101,7 +110,7 @@ export function AutomationEditorDialogHeader({
               type="button"
               role="radio"
               aria-checked={kind === 'coordinated'}
-              aria-pressed={kind === 'coordinated'}
+              tabIndex={kind === 'coordinated' ? 0 : -1}
               className={`rounded px-2.5 py-1 text-2xs font-medium transition-colors ${
                 kind === 'coordinated'
                   ? 'bg-card text-foreground shadow-xs'

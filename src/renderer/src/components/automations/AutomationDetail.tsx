@@ -197,6 +197,7 @@ export function AutomationDetail({
                   )
             }
             onClick={isFlagOffCoordinated ? undefined : () => onEdit(automation)}
+            disabled={isFlagOffCoordinated}
             className={isFlagOffCoordinated ? 'opacity-40 cursor-not-allowed' : undefined}
           >
             <Pencil className="size-4" />
@@ -219,6 +220,7 @@ export function AutomationDetail({
                     )
             }
             onClick={isFlagOffCoordinated ? undefined : () => onToggle(automation)}
+            disabled={isFlagOffCoordinated}
             className={isFlagOffCoordinated ? 'opacity-40 cursor-not-allowed' : undefined}
           >
             {automation.enabled ? <Pause className="size-4" /> : <Play className="size-4" />}
@@ -379,8 +381,10 @@ export function AutomationDetail({
           publicationPolicy={automation.publicationPolicy}
           retentionPolicy={automation.retentionPolicy}
           isEditing={false}
-          activeRunId={snapshotRunId ?? activeRun?.id ?? null}
+          activeRunId={activeRun?.id ?? null}
           activeRunRevision={activeRun?.automationDefinitionRevision}
+          activeRunStatus={activeRun?.status ?? null}
+          snapshotRunId={snapshotRunId}
           historicalSnapshot={historicalSnapshot}
         />
       ) : (

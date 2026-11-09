@@ -168,7 +168,7 @@ describe('AutomationEditorDialog coordinated automations', () => {
       '[data-testid="coordinated-persistence-unavailable-message"]'
     )
     expect(notice).not.toBeNull()
-    expect(notice?.textContent).toContain('persistence is not available yet in Phase 3 preview')
+    expect(notice?.textContent).toContain('persistence is not available yet in this preview')
 
     // Verify Save/Create button is disabled
     const saveButton = Array.from(document.body.querySelectorAll('button')).find((b) =>
@@ -230,5 +230,57 @@ describe('AutomationEditorDialog coordinated automations', () => {
     expect(document.body.textContent).toContain(
       'Coordinated automations require the experimental feature flag to be enabled'
     )
+  })
+
+  it('allows adding workers in create mode preview even though save is disabled', async () => {
+    const settings = createGlobalSettingsFixture({
+      experimentalCoordinatedAutomations: true
+    })
+
+    const coordinatedDraft: AutomationDraft = {
+      ...baseDraft,
+      kind: 'coordinated',
+      children: []
+    }
+
+    await renderEditorDialog({
+      draft: coordinatedDraft,
+      settings
+    })
+
+    const addWorkerBtn = Array.from(document.body.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Add worker')
+    )
+    expect(addWorkerBtn).toBeDefined()
+    expect(addWorkerBtn?.disabled).toBe(false)
+  })
+
+  it('supports roving tabindex and arrow keys on execution mode radiogroup', async () => {
+    const settings = createGlobalSettingsFixture({
+      experimentalCoordinatedAutomations: true
+    })
+
+    const onDraftChange = vi.fn()
+    await renderEditorDialog({
+      draft: baseDraft,
+      settings,
+      onDraftChange
+    })
+
+    const singleRadio = document.body.querySelector('button[aria-label="Single prompt mode"]')
+    const coordRadio = document.body.querySelector('button[aria-label="Coordinated workers mode"]')
+    const radioGroup = document.body.querySelector('div[role="radiogroup"]')
+    expect(singleRadio?.getAttribute('tabindex')).toBe('0')
+    expect(coordRadio?.getAttribute('tabindex')).toBe('-1')
+    expect(singleRadio?.hasAttribute('aria-pressed')).toBe(false)
+    expect(coordRadio?.hasAttribute('aria-pressed')).toBe(false)
+
+    await act(async () => {
+      radioGroup?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    })
+
+    expect(onDraftChange).toHaveBeenCalled()
+    const updater = onDraftChange.mock.calls[0][0]
+    expect(updater(baseDraft).kind).toBe('coordinated')
   })
 })

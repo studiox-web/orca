@@ -43,6 +43,8 @@ type AutomationWorkersSectionProps = {
   hasModifications?: boolean
   activeRunId?: string | null
   activeRunRevision?: number | null
+  activeRunStatus?: string | null
+  snapshotRunId?: string | null
   historicalSnapshot?: ResolvedAutomationRunSnapshot | null
   onWorkersChange?: (workers: CoordinatedAutomationChildDefinition[]) => void
   onResetField?: (childId: string, field: ChildLaunchConfigField) => void
@@ -61,6 +63,8 @@ export function AutomationWorkersSection({
   hasModifications = false,
   activeRunId = null,
   activeRunRevision = null,
+  activeRunStatus = null,
+  snapshotRunId = null,
   historicalSnapshot = null,
   onWorkersChange,
   onResetField,
@@ -205,7 +209,7 @@ export function AutomationWorkersSection({
         'auto.components.automations.workers.sectionTitle',
         'Specialist workers'
       )}
-      className={`space-y-4 ${className}`}
+      className={`@container space-y-4 ${className}`}
       data-testid="automation-workers-section"
     >
       {/* Header */}
@@ -233,10 +237,16 @@ export function AutomationWorkersSection({
               size="sm"
               className="h-7 gap-1 px-2.5 text-2xs"
               onClick={() => setViewMode('list')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setViewMode('list')
+                }
+              }}
               aria-label={translate('auto.components.automations.workers.listView', 'List view')}
             >
               <List className="size-3.5" aria-hidden="true" />
-              <span>List</span>
+              <span>{translate('auto.components.automations.workers.list', 'List')}</span>
             </Button>
             <Button
               type="button"
@@ -244,10 +254,16 @@ export function AutomationWorkersSection({
               size="sm"
               className="h-7 gap-1 px-2.5 text-2xs"
               onClick={() => setViewMode('graph')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setViewMode('graph')
+                }
+              }}
               aria-label={translate('auto.components.automations.workers.graphView', 'Graph view')}
             >
               <Network className="size-3.5" aria-hidden="true" />
-              <span>Graph</span>
+              <span>{translate('auto.components.automations.workers.graph', 'Graph')}</span>
             </Button>
             {historicalSnapshot ? (
               <Button
@@ -256,13 +272,19 @@ export function AutomationWorkersSection({
                 size="sm"
                 className="h-7 gap-1 px-2.5 text-2xs"
                 onClick={() => setViewMode('historical')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setViewMode('historical')
+                  }
+                }}
                 aria-label={translate(
                   'auto.components.automations.workers.historicalView',
                   'Historical snapshot'
                 )}
               >
                 <History className="size-3.5" aria-hidden="true" />
-                <span>Snapshot</span>
+                <span>{translate('auto.components.automations.workers.snapshot', 'Snapshot')}</span>
               </Button>
             ) : null}
           </div>
@@ -277,7 +299,9 @@ export function AutomationWorkersSection({
               aria-label={translate('auto.components.automations.workers.addWorker', 'Add worker')}
             >
               <Plus className="size-3.5" />
-              <span>Add worker</span>
+              <span>
+                {translate('auto.components.automations.workers.addWorker', 'Add worker')}
+              </span>
             </Button>
           ) : null}
         </div>
@@ -298,11 +322,12 @@ export function AutomationWorkersSection({
         hasModifications={hasModifications}
         activeRunId={activeRunId}
         activeRunRevision={activeRunRevision}
+        activeRunStatus={activeRunStatus}
       />
 
       {/* View modes */}
       {viewMode === 'historical' && historicalSnapshot ? (
-        <AutomationHistoricalSnapshotViewer snapshot={historicalSnapshot} runId={activeRunId} />
+        <AutomationHistoricalSnapshotViewer snapshot={historicalSnapshot} runId={snapshotRunId} />
       ) : viewMode === 'graph' ? (
         <AutomationWorkersGraph
           workers={workers}

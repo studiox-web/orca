@@ -44,20 +44,24 @@ export function ToolbarIconButton({
   label,
   children,
   onClick,
+  disabled,
   className
 }: {
   label: string
   children: React.ReactNode
   onClick?: () => void
+  disabled?: boolean
   className?: string
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          type="button"
           variant="ghost"
           size="icon-sm"
           aria-label={label}
+          disabled={disabled}
           onClick={onClick}
           className={className}
         >
@@ -76,7 +80,7 @@ export function CoordinatedFlagOffBanner(): React.JSX.Element {
     <div
       role="status"
       data-testid="coordinated-flag-off-banner"
-      className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning-foreground shadow-sm"
+      className="rounded-md border border-status-warning-border bg-status-warning-background p-3 text-xs text-status-warning-text shadow-sm"
     >
       {translate(
         'auto.components.automations.detail.coordinatedFlagOffNotice',

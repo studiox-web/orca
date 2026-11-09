@@ -26,7 +26,10 @@ function ProvenanceBadge({
 }): React.JSX.Element {
   if (isOverridden && isExplicitNone) {
     return (
-      <Badge variant="outline" className="border-warning/50 text-warning text-3xs">
+      <Badge
+        variant="outline"
+        className="border-status-warning-border bg-status-warning-background text-status-warning-text text-3xs"
+      >
         {translate('auto.components.automations.workers.overriddenNone', 'Overridden (None)')}
       </Badge>
     )
@@ -109,7 +112,7 @@ export function WorkerConfigGrid({
     : (child.launchConfig.timeoutSeconds ?? parentDefaults?.timeoutSeconds ?? null)
 
   return (
-    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="mt-3 grid grid-cols-1 gap-2 @md:grid-cols-2 @2xl:grid-cols-3">
       {/* 1. Agent & Model */}
       <div className="rounded border border-border/40 bg-muted/20 p-2 min-w-0">
         <div className="flex items-center justify-between gap-1">
@@ -147,7 +150,11 @@ export function WorkerConfigGrid({
           ) : (
             <div className="flex items-center gap-1 text-muted-foreground italic">
               <Bot className="size-3.5" />
-              <span>{isAgentExplicitNone ? 'No agent' : 'Default agent'}</span>
+              <span>
+                {isAgentExplicitNone
+                  ? translate('auto.components.automations.workers.noAgent', 'No agent')
+                  : translate('auto.components.automations.workers.defaultAgent', 'Default agent')}
+              </span>
             </div>
           )}
 
@@ -191,7 +198,9 @@ export function WorkerConfigGrid({
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs font-medium min-w-0">
           <Brain className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="capitalize">
-            {effectiveEffort ? `effort: ${effectiveEffort}` : 'effort: default'}
+            {effectiveEffort
+              ? `effort: ${effectiveEffort}`
+              : translate('auto.components.automations.workers.defaultEffort', 'effort: default')}
           </span>
           <Badge
             variant="outline"
@@ -249,16 +258,26 @@ export function WorkerConfigGrid({
           <div className="flex items-center gap-1 min-w-0">
             <HardDrive className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="capitalize truncate">
-              {effectiveWorkspace ? effectiveWorkspace.replace('_', ' ') : 'default workspace'}
+              {effectiveWorkspace
+                ? effectiveWorkspace.replace('_', ' ')
+                : translate(
+                    'auto.components.automations.workers.defaultWorkspace',
+                    'default workspace'
+                  )}
             </span>
           </div>
 
           <div className="flex items-center gap-1 text-2xs text-muted-foreground">
             <Clock className="size-3 shrink-0" aria-hidden="true" />
             <span>
-              {effectiveTimeout != null
-                ? `${Math.round(effectiveTimeout / 60)}m`
-                : 'default timeout'}
+              {isTimeoutExplicitNone
+                ? translate('auto.components.automations.workers.none', 'None')
+                : effectiveTimeout != null
+                  ? `${Math.round(effectiveTimeout / 60)}m`
+                  : translate(
+                      'auto.components.automations.workers.defaultTimeout',
+                      'default timeout'
+                    )}
             </span>
           </div>
         </div>

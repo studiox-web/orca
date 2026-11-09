@@ -35,14 +35,14 @@ export function AutomationEditorDialogFooter({
       <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
         {isCoordinated ? (
           <>
-            <Info className="size-3.5 shrink-0 text-warning" aria-hidden="true" />
+            <Info className="size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
             <span
-              className="truncate text-warning/90"
+              className="truncate text-status-warning-text"
               data-testid="coordinated-persistence-unavailable-message"
             >
               {translate(
                 'auto.components.automations.editor.persistenceUnavailable',
-                'Coordinated automation persistence is not available yet in Phase 3 preview. Create and Save are disabled.'
+                'Coordinated automation persistence is not available yet in this preview. Workers can be designed and tested here, but cannot be saved.'
               )}
             </span>
           </>
@@ -69,7 +69,7 @@ export function AutomationEditorDialogFooter({
             isCoordinated
               ? translate(
                   'auto.components.automations.editor.persistenceDisabledTooltip',
-                  'Coordinated automations cannot be saved in Phase 3 preview (persistence not integrated)'
+                  'Coordinated automations cannot be saved in this preview (persistence not integrated)'
                 )
               : undefined
           }

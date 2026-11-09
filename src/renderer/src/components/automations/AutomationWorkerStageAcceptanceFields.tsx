@@ -74,7 +74,12 @@ export function AutomationWorkerStageAcceptanceFields({
 
       {/* Criteria */}
       <div className="space-y-1.5">
-        <span className="text-2xs text-muted-foreground font-medium">Acceptance Criteria</span>
+        <span className="text-2xs text-muted-foreground font-medium">
+          {translate(
+            'auto.components.automations.workers.acceptanceCriteriaTitle',
+            'Acceptance Criteria'
+          )}
+        </span>
         <div className="space-y-1">
           {criteria.map((crit, idx) => (
             <div
@@ -88,6 +93,11 @@ export function AutomationWorkerStageAcceptanceFields({
                 size="icon-xs"
                 className="h-4 w-4 text-destructive"
                 onClick={() => handleRemoveCriterion(idx)}
+                aria-label={translate(
+                  'auto.components.automations.workers.removeCriterion',
+                  'Remove criterion: {{description}}',
+                  { description: crit.description }
+                )}
               >
                 <Trash2 className="size-2.5" />
               </Button>
@@ -95,9 +105,14 @@ export function AutomationWorkerStageAcceptanceFields({
           ))}
           <div className="flex items-center gap-1.5 pt-1">
             <Input
+              id="worker-new-criterion-input"
               value={newCriterion}
               onChange={(e) => setNewCriterion(e.target.value)}
               placeholder="e.g. Validated schema and zero lint warnings"
+              aria-label={translate(
+                'auto.components.automations.workers.newCriterionLabel',
+                'New acceptance criterion'
+              )}
               className="text-xs h-7"
             />
             <Button
@@ -108,7 +123,7 @@ export function AutomationWorkerStageAcceptanceFields({
               onClick={handleAddCriterion}
             >
               <Plus className="size-3 mr-1" />
-              Add
+              {translate('auto.components.automations.workers.add', 'Add')}
             </Button>
           </div>
         </div>
@@ -117,7 +132,10 @@ export function AutomationWorkerStageAcceptanceFields({
       {/* Required checks */}
       <div className="space-y-1.5 border-t border-border/40 pt-2">
         <span className="text-2xs text-muted-foreground font-medium">
-          Required Automated Checks
+          {translate(
+            'auto.components.automations.workers.requiredChecksTitle',
+            'Required Automated Checks'
+          )}
         </span>
         <div className="space-y-1">
           {requiredChecks.map((chk, idx) => (
@@ -132,6 +150,11 @@ export function AutomationWorkerStageAcceptanceFields({
                 size="icon-xs"
                 className="h-4 w-4 text-destructive"
                 onClick={() => handleRemoveCheck(idx)}
+                aria-label={translate(
+                  'auto.components.automations.workers.removeCheck',
+                  'Remove check: {{description}}',
+                  { description: chk.description || chk.id }
+                )}
               >
                 <Trash2 className="size-2.5" />
               </Button>
@@ -139,9 +162,14 @@ export function AutomationWorkerStageAcceptanceFields({
           ))}
           <div className="flex items-center gap-1.5 pt-1">
             <Input
+              id="worker-new-check-input"
               value={newCheck}
               onChange={(e) => setNewCheck(e.target.value)}
               placeholder="e.g. pnpm test:contracts"
+              aria-label={translate(
+                'auto.components.automations.workers.newCheckLabel',
+                'New automated check'
+              )}
               className="font-mono text-xs h-7"
             />
             <Button
@@ -152,7 +180,7 @@ export function AutomationWorkerStageAcceptanceFields({
               onClick={handleAddCheck}
             >
               <Plus className="size-3 mr-1" />
-              Add
+              {translate('auto.components.automations.workers.add', 'Add')}
             </Button>
           </div>
         </div>

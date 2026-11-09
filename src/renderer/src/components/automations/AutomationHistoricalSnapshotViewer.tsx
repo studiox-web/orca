@@ -32,7 +32,7 @@ export function AutomationHistoricalSnapshotViewer({
   const createdAtStr =
     Number.isFinite(snapshot.createdAt) && snapshot.createdAt > 0
       ? new Date(snapshot.createdAt).toISOString()
-      : 'Unknown date'
+      : translate('auto.components.automations.workers.unknownDate', 'Unknown date')
 
   return (
     <div
@@ -41,7 +41,7 @@ export function AutomationHistoricalSnapshotViewer({
         'auto.components.automations.workers.historicalSnapshotTitle',
         'Historical run snapshot'
       )}
-      className={`space-y-4 rounded-lg border border-border/70 bg-card p-4 shadow-sm ${className}`}
+      className={`@container space-y-4 rounded-lg border border-border/70 bg-card p-4 shadow-sm ${className}`}
       data-testid="automation-historical-snapshot-viewer"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3 min-w-0">
@@ -60,7 +60,9 @@ export function AutomationHistoricalSnapshotViewer({
               className="font-mono text-3xs truncate max-w-[200px]"
               title={runId}
             >
-              Run: {runId}
+              {translate('auto.components.automations.workers.runPrefix', 'Run: {{runId}}', {
+                runId
+              })}
             </Badge>
           ) : null}
           <Badge
@@ -103,7 +105,7 @@ export function AutomationHistoricalSnapshotViewer({
         >
           {copied ? (
             <>
-              <Check className="size-3 text-emerald-500 dark:text-emerald-400" />
+              <Check className="size-3 text-status-success" />
               <span>{translate('auto.components.automations.workers.copied', 'Copied')}</span>
             </>
           ) : (
@@ -155,7 +157,7 @@ export function AutomationHistoricalSnapshotViewer({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
                   <div className="flex items-center gap-1.5 rounded bg-muted/50 px-2 py-0.5">
                     <AgentIcon agent={child.launchConfig.agentId} size={14} />
                     <span className="text-3xs font-medium text-foreground">
@@ -177,7 +179,7 @@ export function AutomationHistoricalSnapshotViewer({
               </div>
 
               <div className="mt-2.5 rounded border border-border/40 bg-muted/30 p-2 text-2xs min-w-0">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-muted-foreground min-w-0">
+                <div className="flex flex-col @sm:flex-row @sm:items-center justify-between gap-1 text-muted-foreground min-w-0">
                   <div className="flex items-center gap-1 min-w-0">
                     <FileText className="size-3 shrink-0" aria-hidden="true" />
                     <span className="font-medium truncate">
