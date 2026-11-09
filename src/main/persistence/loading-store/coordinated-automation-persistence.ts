@@ -26,7 +26,9 @@ import {
   linkCoordinatedOrchestrationRun as linkCoordinatedOrchestrationRunOperation,
   markCoordinatedRunReadyForDispatch as markCoordinatedRunReadyForDispatchOperation,
   persistCoordinatedChildMappings as persistCoordinatedChildMappingsOperation,
-  recordCoordinatedMaterializationFailure as recordCoordinatedMaterializationFailureOperation
+  recordCoordinatedChildDispatch as recordCoordinatedChildDispatchOperation,
+  recordCoordinatedMaterializationFailure as recordCoordinatedMaterializationFailureOperation,
+  recordCoordinatedRunSettlement as recordCoordinatedRunSettlementOperation
 } from '../scheduling-automations/coordinated-automation-run-links'
 import type { CoordinatedOrchestrationRecordProbe } from '../scheduling-automations/coordinated-automation-run-records'
 import {
@@ -126,6 +128,28 @@ export class CoordinatedAutomationPersistence {
     error: string
   }): AutomationRun {
     return recordCoordinatedMaterializationFailureOperation(
+      getCoordinatedAutomationRunOperations(this[coordinatedAutomationPersistenceContext]),
+      input
+    )
+  }
+
+  recordCoordinatedChildDispatch(input: {
+    automationRunId: string
+    childDefinitionId: string
+    dispatchId: string
+  }): AutomationRun {
+    return recordCoordinatedChildDispatchOperation(
+      getCoordinatedAutomationRunOperations(this[coordinatedAutomationPersistenceContext]),
+      input
+    )
+  }
+
+  recordCoordinatedRunSettlement(input: {
+    automationRunId: string
+    status: 'completed' | 'dispatch_failed'
+    error?: string | null
+  }): AutomationRun {
+    return recordCoordinatedRunSettlementOperation(
       getCoordinatedAutomationRunOperations(this[coordinatedAutomationPersistenceContext]),
       input
     )

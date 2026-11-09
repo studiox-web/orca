@@ -149,3 +149,52 @@ export function recordCoordinatedMaterializationFailure(
     ...(terminal ? { status: 'dispatch_failed' as const, error: input.error } : {})
   })
 }
+
+export function recordCoordinatedChildDispatch(
+  operations: CoordinatedAutomationRunOperations,
+  input: {
+    automationRunId: string
+    childDefinitionId: string
+    dispatchId: string
+  }
+): AutomationRun {
+  const run = requireCoordinatedRun(operations, input.automationRunId)
+  assertPhase(run, ['ready_for_dispatch'])
+  const orchestrationRunId = run.orchestrationRunId
+  if (!orchestrationRunId) {
+    throw new CoordinatedRunConflictError('Run has no linked orchestration Run.')
+  }
+  const mappings = run.childMappings ?? []
+  const mappingIndex = mappings.findIndex((m) => m.childDefinitionId === input.childDefinitionId)
+  if (mappingIndex === -1) {
+    throw new CoordinatedRunConflictError(
+      `Child "${input.childDefinitionId}" is not mapped in this run.`
+    )
+  }
+  const updatedMappings = mappings.map((m) =>
+    m.childDefinitionId === input.childDefinitionId ? { ...m, dispatchId: input.dispatchId } : m
+  )
+  return replaceRun(operations, {
+    ...run,
+    status: 'dispatched',
+    dispatchedAt: run.dispatchedAt ?? Date.now(),
+    childMappings: updatedMappings
+  })
+}
+
+export function recordCoordinatedRunSettlement(
+  operations: CoordinatedAutomationRunOperations,
+  input: {
+    automationRunId: string
+    status: 'completed' | 'dispatch_failed'
+    error?: string | null
+  }
+): AutomationRun {
+  const run = requireCoordinatedRun(operations, input.automationRunId)
+  assertPhase(run, ['ready_for_dispatch'])
+  return replaceRun(operations, {
+    ...run,
+    status: input.status,
+    error: input.error ?? null
+  })
+}
