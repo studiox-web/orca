@@ -33,11 +33,11 @@ export const COORDINATED_REPOS: Repo[] = [
     addedAt: 3,
     kind: 'folder'
   }
-] as Repo[]
+]
 
 export const COORDINATED_SSH_TARGETS: SshTarget[] = [
   { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me', generation: 7 }
-] as SshTarget[]
+]
 
 export function coordinatedTestState(overrides: Partial<PersistedState> = {}): PersistedState {
   return {
@@ -101,6 +101,8 @@ export function coordinatedCreateInput(
   }
 }
 
+const NO_FAILURE: number | null = null
+
 /** Durable writes copy state to `disk`; `failAt` makes the Nth write throw like a lost commit. */
 export function durableHarness(
   initial: PersistedState,
@@ -110,7 +112,7 @@ export function durableHarness(
     state: initial,
     disk: structuredClone(initial),
     writes: 0,
-    failAt: null as number | null,
+    failAt: NO_FAILURE,
     definitions(): AutomationDefinitionOperations {
       return {
         state: harness.state,

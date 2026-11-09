@@ -44,6 +44,8 @@ type DefinitionPatch = Partial<
 function splitDefinition<T extends object>(
   input: T
 ): { base: Omit<T, keyof CoordinatedAutomationDefinitionFields>; patch: DefinitionPatch } {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every definition key is optional on both input shapes; destructuring only separates them.
+  const source = input as T & CoordinatedAutomationDefinitionFields
   const {
     kind: _kind,
     definitionRevision: _revision,
@@ -56,7 +58,7 @@ function splitDefinition<T extends object>(
     publicationPolicy,
     retentionPolicy,
     ...base
-  } = input as T & CoordinatedAutomationDefinitionFields
+  } = source
   const patch: DefinitionPatch = Object.fromEntries(
     Object.entries({
       outcomeContract,
@@ -154,6 +156,7 @@ export function createCoordinatedAutomation(
   const { base, patch } = splitDefinition(input)
   return createAutomation(
     operations,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: base is the create input minus coordinated-only keys.
     { ...(base as AutomationCreateInput), enabled: false },
     options,
     (automation) => {
@@ -181,6 +184,7 @@ export function updateCoordinatedAutomation(
   return updateAutomation(
     operations,
     id,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: base is the update input minus coordinated-only keys and the revision precondition.
     base as AutomationUpdateInput,
     options,
     (current, merged) => {

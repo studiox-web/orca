@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Automation } from '../../../shared/automations-types'
+import type { Automation, AutomationUpdateInput } from '../../../shared/automations-types'
+import type { AutomationOwnerPrecondition } from '../../../shared/automation-owner-precondition'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import { createAutomation, updateAutomation } from './automation-definition-operations'
@@ -112,13 +113,16 @@ describe('coordinated definitions', () => {
     const ops = harness.definitions()
     const single = coordinatedCreateInput()
     expect(() => createAutomation(ops, single)).toThrow(/coordinated definition path/)
-    expect(() => updateAutomation(ops, created.id, { kind: 'coordinated' } as never)).toThrow(
+    const toCoordinated: AutomationUpdateInput & { kind: 'coordinated' } = { kind: 'coordinated' }
+    const childEdit: AutomationUpdateInput & { children: [] } = { children: [] }
+    const toSingle: AutomationUpdateInput & { kind: 'single' } = { kind: 'single' }
+    expect(() => updateAutomation(ops, created.id, toCoordinated)).toThrow(
       /coordinated definition path/
     )
-    expect(() => updateAutomation(ops, created.id, { children: [] } as never)).toThrow(
+    expect(() => updateAutomation(ops, created.id, childEdit)).toThrow(
       /coordinated field "children"/
     )
-    const flipped = updateAutomation(ops, created.id, { kind: 'single' } as never)
+    const flipped = updateAutomation(ops, created.id, toSingle)
     expect(flipped.kind).toBe('coordinated')
     const { kind: _kind, outcomeContract: _contract, children: _children, ...base } = single
     const creationKeyClash = createAutomation(harness.definitions(), { ...base, creationKey: 'k1' })
@@ -352,11 +356,11 @@ describe('owner fencing and authority', () => {
     const harness = durableHarness(coordinatedTestState(), 'runtime')
     const created = sshParent(harness)
     expect(created).toMatchObject({ executionTargetType: 'ssh', executionTargetId: 'ssh-1' })
-    const run = (expectedOwner?: unknown) =>
+    const run = (expectedOwner?: AutomationOwnerPrecondition) =>
       createCoordinatedAutomationRun(harness.runs(), {
         automationId: created.id,
         scheduledFor: 1,
-        expectedOwner: expectedOwner as never
+        expectedOwner
       })
     expect(run).toThrow(AUTOMATION_OWNER_CONFLICT_CODES.fencingRequired)
     expect(() =>

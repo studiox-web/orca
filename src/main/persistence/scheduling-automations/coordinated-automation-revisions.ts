@@ -24,7 +24,9 @@ export class CoordinatedAutomationExecutionRefusedError extends Error {
 }
 
 /** Generic create/update paths must never write or flip coordinated definition state. */
-export function assertSingleAutomationWrite(input: object): void {
+export type AutomationKindWrite = Readonly<Record<string, unknown>>
+
+export function assertSingleAutomationWrite(input: AutomationKindWrite): void {
   const record: Record<string, unknown> = { ...input }
   if (record.kind !== undefined && record.kind !== 'single') {
     throw new Error(
@@ -38,7 +40,7 @@ export function assertSingleAutomationWrite(input: object): void {
   }
 }
 
-export function assertKindWrite(input: object, coordinatedHook: unknown): void {
+export function assertKindWrite(input: AutomationKindWrite, coordinatedHook: unknown): void {
   if (!coordinatedHook) {
     assertSingleAutomationWrite(input)
   }
@@ -50,7 +52,10 @@ export function assertCreationKeyKind(existing: Automation, coordinatedHook: unk
   }
 }
 
-export function guardSingleUpdates<T extends object>(updates: T, coordinatedHook: unknown): T {
+export function guardSingleUpdates<T extends AutomationKindWrite>(
+  updates: T,
+  coordinatedHook: unknown
+): T {
   assertKindWrite(updates, coordinatedHook)
   return coordinatedHook ? updates : stripUnchangedSingleKind(updates)
 }
@@ -60,11 +65,11 @@ export function advanceRevisionIfChanged(current: Automation, next: Automation):
 }
 
 /** Keep single records byte-identical: an explicit `kind: 'single'` is never persisted. */
-export function stripUnchangedSingleKind<T extends object>(updates: T): T {
+export function stripUnchangedSingleKind<T extends AutomationKindWrite>(updates: T): T {
   if (!Object.hasOwn(updates, 'kind')) {
     return updates
   }
-  const { kind: _kind, ...rest } = updates as T & { kind?: unknown }
+  const { kind: _kind, ...rest } = updates
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the optional `kind` key was removed.
   return rest as T
 }

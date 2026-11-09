@@ -4,11 +4,13 @@ import type { ResolvedAutomationRunSnapshot } from './coordinated-automation-typ
 import type { SemanticCompletionReceipt } from './coordinated-automation-receipt-types'
 import { pruneAutomationRuns } from './automation-run-retention'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: retention reads only the fields this partial fixture sets.
 const RECEIPT = { finalState: 'completed' } as unknown as SemanticCompletionReceipt
 
 function snapshot(
   retentionPolicy: ResolvedAutomationRunSnapshot['retentionPolicy']
 ): ResolvedAutomationRunSnapshot {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: retention reads only the fields this partial fixture sets.
   return {
     automationId: 'a1',
     definitionRevision: 3,
@@ -19,6 +21,7 @@ function snapshot(
 }
 
 function run(id: string, createdAt: number, extra: Partial<AutomationRun> = {}): AutomationRun {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: retention reads only the fields this partial fixture sets.
   return {
     id,
     automationId: 'a1',

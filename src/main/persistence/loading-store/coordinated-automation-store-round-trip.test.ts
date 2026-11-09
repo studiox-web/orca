@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Automation, AutomationRun } from '../../../shared/automations-types'
+import type {
+  Automation,
+  AutomationRun,
+  AutomationUpdateInput
+} from '../../../shared/automations-types'
 import {
   closeTestStores,
   createSqliteTestStore,
@@ -30,7 +34,7 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 /** A profile written before coordinated automations existed. */
-const LEGACY_AUTOMATION = {
+const LEGACY_AUTOMATION: Automation = {
   id: 'legacy-1',
   name: 'Nightly',
   prompt: 'go',
@@ -53,9 +57,9 @@ const LEGACY_AUTOMATION = {
   missedRunGraceMinutes: 720,
   createdAt: 1,
   updatedAt: 1
-} as unknown as Automation
+}
 
-const LEGACY_RUN = {
+const LEGACY_RUN: AutomationRun = {
   id: 'legacy-run-1',
   automationId: 'legacy-1',
   runNumber: 1,
@@ -79,7 +83,7 @@ const LEGACY_RUN = {
   startedAt: 11,
   dispatchedAt: 12,
   createdAt: 10
-} as unknown as AutomationRun
+}
 
 let opened = 0
 
@@ -127,7 +131,11 @@ describe('coordinated automation profile persistence', () => {
     // Baseline after the loader's existing legacy-context backfill.
     const [baseline] = readPersistedState().automations
 
-    store.updateAutomation('legacy-1', { name: 'Nightly 2', kind: 'single' } as never)
+    const explicitSingle: AutomationUpdateInput & { kind: 'single' } = {
+      name: 'Nightly 2',
+      kind: 'single'
+    }
+    store.updateAutomation('legacy-1', explicitSingle)
     expect(() => store.createAutomationRun(store.listAutomations()[0], 20)).not.toThrow()
     await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     await restart()

@@ -41,6 +41,10 @@ export const NOT_HOST_TWINNED = new Map([
   ['AutomationPersistence.disableAutomations', 'automation ids are minted UUIDs'],
   ['AutomationPersistence.updateAutomation', 'automation ids are minted UUIDs'],
   [
+    'CoordinatedAutomationPersistence.updateCoordinatedAutomation',
+    'automation ids are minted UUIDs'
+  ],
+  [
     'MetadataLineageOperations.removeUnhostedWorktreeMeta',
     'acts only on a row no host stamped; it refuses a stamped one'
   ],

@@ -111,7 +111,7 @@ export function createCoordinatedAutomationRun(
   })
   ResolvedAutomationRunSnapshotSchema.parse(resolved)
   // Store the exact digested content; a schema-parsed copy could strip keys the digest covers.
-  const snapshot = structuredClone(resolved) as ResolvedAutomationRunSnapshot
+  const snapshot: ResolvedAutomationRunSnapshot = structuredClone(resolved)
   const runNumber = nextAutomationRunNumber(runs.filter((run) => run.automationId === stored.id))
   const run: AutomationRun = {
     id: randomUUID(),
