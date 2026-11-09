@@ -11,6 +11,7 @@ import type {
   SemanticReceiptApproval,
   SemanticReceiptEffect,
   SemanticReceiptIdentityChain,
+  SemanticReceiptWaiver,
   SemanticReceiptWarning,
   StageAcceptanceRecord,
   StageAcceptanceStatus,
@@ -33,21 +34,44 @@ export const OutcomeFinalStateSchema: z.ZodType<OutcomeFinalState> = z.enum([
   'published_verified'
 ])
 
-export const SAFE_ARTIFACT_URI_REGEX =
-  /^(file:\/\/[a-zA-Z0-9_\-./]+|artifact:\/\/[a-zA-Z0-9_\-./]+|[a-zA-Z0-9_\-.]+(?:\/[a-zA-Z0-9_\-.]+)*)$/
+export function isValidArtifactUri(uri: string): boolean {
+  if (typeof uri !== 'string' || uri.length === 0 || uri.length > 2048) {
+    return false
+  }
+  if (uri.startsWith('/') || uri.startsWith('\\')) {
+    return false
+  }
+  let path = uri
+  if (uri.includes('://')) {
+    if (!uri.startsWith('artifact://')) {
+      return false
+    }
+    path = uri.slice('artifact://'.length)
+    if (path.startsWith('/')) {
+      return false
+    }
+  }
+  const segments = path.split('/')
+  if (segments.length === 0 || segments.some((s) => s.length === 0)) {
+    return false
+  }
+  for (const segment of segments) {
+    if (segment === '.' || segment === '..') {
+      return false
+    }
+    if (!/^[a-zA-Z0-9_\-.@]+$/.test(segment)) {
+      return false
+    }
+  }
+  return true
+}
 
 export const StructuredWorkerArtifactSchema: z.ZodType<StructuredWorkerArtifact> = z.object({
   kind: z.string().trim().min(1).max(100),
-  uri: z
-    .string()
-    .min(1)
-    .max(2048)
-    .refine((val) => !val.includes('..') && !val.startsWith('/'), {
-      message: 'Artifact URI must be a repo-relative path without ".." traversal or a safe URI'
-    })
-    .refine((val) => SAFE_ARTIFACT_URI_REGEX.test(val), {
-      message: 'Artifact URI contains invalid path or scheme characters'
-    }),
+  uri: z.string().min(1).max(2048).refine(isValidArtifactUri, {
+    message:
+      'Artifact URI must be a repo-relative path without ".." traversal segments or a safe artifact:// URI'
+  }),
   authority: z.string().max(256).optional(),
   sha256: z
     .string()
@@ -90,11 +114,11 @@ export const StructuredWorkerResultOutcomeSchema: z.ZodType<StructuredWorkerResu
 
 export const StructuredWorkerResultSchema: z.ZodType<StructuredWorkerResult> = z.object({
   schemaVersion: z.literal(1),
-  automationRunId: z.string().min(1, 'automationRunId is required'),
-  orchestrationRunId: z.string().min(1, 'orchestrationRunId is required'),
-  childDefinitionId: z.string().min(1, 'childDefinitionId is required'),
-  taskId: z.string().min(1, 'taskId is required'),
-  dispatchId: z.string().min(1, 'dispatchId is required'),
+  automationRunId: z.string().min(1).max(64),
+  orchestrationRunId: z.string().min(1).max(64),
+  childDefinitionId: z.string().min(1).max(64),
+  taskId: z.string().min(1).max(64),
+  dispatchId: z.string().min(1).max(64),
   definitionRevision: z.number().int().positive('definitionRevision must be a positive integer'),
   resolvedConfigDigest: z
     .string()
@@ -111,49 +135,56 @@ export const StructuredWorkerResultSchema: z.ZodType<StructuredWorkerResult> = z
 })
 
 export const CoordinatedRunChildMappingSchema: z.ZodType<CoordinatedRunChildMapping> = z.object({
-  childDefinitionId: z.string().min(1),
-  taskId: z.string().min(1),
-  dispatchId: z.string().nullable().optional()
+  childDefinitionId: z.string().min(1).max(64),
+  taskId: z.string().min(1).max(64),
+  dispatchId: z.string().max(64).nullable().optional()
 })
 
 export const SemanticReceiptIdentityChainSchema: z.ZodType<SemanticReceiptIdentityChain> = z.object(
   {
-    automationId: z.string().min(1, 'automationId is required'),
+    automationId: z.string().min(1).max(64),
     definitionRevision: z.number().int().positive('definitionRevision must be positive'),
-    automationRunId: z.string().min(1, 'automationRunId is required'),
-    orchestrationRunId: z.string().min(1, 'orchestrationRunId is required'),
-    hostId: z.string().min(1, 'hostId is required'),
+    automationRunId: z.string().min(1).max(64),
+    orchestrationRunId: z.string().min(1).max(64),
+    hostId: z.string().min(1).max(128),
     targetExecutionAuthority: z.string().max(256).optional(),
     taskMappings: z.array(CoordinatedRunChildMappingSchema).max(100).optional()
   }
 )
 
+export const SemanticReceiptWaiverSchema: z.ZodType<SemanticReceiptWaiver> = z.object({
+  authorizedBy: z.string().trim().min(1).max(256),
+  reason: z.string().max(1024).optional(),
+  waivedAt: z.number().optional()
+})
+
 export const SemanticReceiptAcceptanceResultSchema: z.ZodType<SemanticReceiptAcceptanceResult> =
   z.object({
-    criterionId: z.string().min(1),
+    criterionId: z.string().min(1).max(64),
     status: z.enum(['satisfied', 'failed', 'waived']),
     evidence: z.array(z.string().max(512)).max(100),
-    evaluatedAt: z.number()
+    evaluatedAt: z.number(),
+    waiver: SemanticReceiptWaiverSchema.optional()
   })
 
 export const SemanticReceiptApprovalSchema: z.ZodType<SemanticReceiptApproval> = z.object({
-  approvalId: z.string().min(1),
-  role: z.string().min(1),
-  approverIdentity: z.string().min(1),
-  authorIdentity: z.string().optional(),
+  approvalId: z.string().min(1).max(64),
+  role: z.string().min(1).max(100),
+  approverIdentity: z.string().min(1).max(256),
+  authorIdentity: z.string().max(256).optional(),
   approvedAt: z.number(),
   evidence: z.string().max(1024).optional()
 })
 
 export const SemanticReceiptEffectSchema: z.ZodType<SemanticReceiptEffect> = z.object({
-  kind: z.string().min(1),
+  kind: z.string().min(1).max(100),
   status: z.enum(['verified', 'applied', 'denied', 'uncertain']),
   receipt: z.string().min(1).max(2048),
   verifiedAt: z.number()
 })
 
 export const SemanticReceiptWarningSchema: z.ZodType<SemanticReceiptWarning> = z.object({
-  code: z.string().min(1),
+  code: z.string().min(1).max(64),
   message: z.string().max(2000)
 })
 
@@ -212,14 +243,14 @@ export const CoordinatedRunMaterializationPhaseSchema: z.ZodType<CoordinatedRunM
 
 export const CoordinatedRunMaterializationRecordSchema: z.ZodType<CoordinatedRunMaterializationRecord> =
   z.object({
-    automationId: z.string().min(1),
-    automationRunId: z.string().min(1),
+    automationId: z.string().min(1).max(64),
+    automationRunId: z.string().min(1).max(64),
     definitionRevision: z.number().int().positive(),
-    idempotencyKey: z.string().min(1),
-    orchestrationRunId: z.string().nullable().optional(),
+    idempotencyKey: z.string().min(1).max(128),
+    orchestrationRunId: z.string().max(64).nullable().optional(),
     phase: CoordinatedRunMaterializationPhaseSchema,
-    childMappings: z.array(CoordinatedRunChildMappingSchema),
-    boundaryError: z.string().nullable().optional(),
+    childMappings: z.array(CoordinatedRunChildMappingSchema).max(100),
+    boundaryError: z.string().max(2048).nullable().optional(),
     updatedAt: z.number()
   })
 

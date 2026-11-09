@@ -1,20 +1,22 @@
 import type { Automation } from './automations-types'
 import {
   isCoordinatedAutomation,
-  type ChildLaunchConfig,
-  type ChildLaunchConfigField,
+  type AutomationOutcomeContract,
   type CoordinatedAutomationCeilings,
   type CoordinatedAutomationChildDefinition,
   type CoordinatedAutomationPublicationPolicy,
   type CoordinatedAutomationRetentionPolicy,
-  type OverrideProvenance,
   type ResolvedAutomationRunSnapshot,
-  type ResolvedChildLaunchConfig,
   type ResolvedChildSnapshot,
   type ResolvedPrompt
 } from './coordinated-automation-types'
+import { CoordinatedAutomationDefinitionSchema } from './coordinated-automation-schemas'
 import { validateCoordinatedAutomationDefinition } from './coordinated-automation-validation'
 import { deepFreeze, sha256Hex, toCanonicalJson } from './coordinated-automation-canonical-digest'
+import {
+  resolveChildLaunchConfig,
+  resolveParentDefaults
+} from './coordinated-automation-launch-resolution'
 
 export { deepFreeze, sha256Hex, toCanonicalJson }
 
@@ -28,95 +30,6 @@ export type ResolveAutomationSnapshotOptions = {
   automation: Automation
   promptResolver?: ResolvePromptFunction
   createdAt?: number
-}
-
-function resolveParentDefaults(
-  automation: Automation,
-  ceilings: CoordinatedAutomationCeilings
-): ResolvedChildLaunchConfig {
-  const d = automation.inheritedDefaults
-  return {
-    agentId: d?.agentId ?? automation.agentId,
-    model: d?.model ?? null,
-    reasoningEffort: d?.reasoningEffort ?? null,
-    surface: d?.surface ?? automation.surface ?? 'terminal',
-    extraAgentArgs: d?.extraAgentArgs ?? automation.extraAgentArgs ?? '',
-    reuseSession: d?.reuseSession ?? automation.reuseSession ?? false,
-    workspaceMode: d?.workspaceMode ?? automation.workspaceMode ?? 'existing',
-    workspaceId: d?.workspaceId ?? automation.workspaceId ?? null,
-    baseBranch: d?.baseBranch ?? automation.baseBranch ?? null,
-    setupDecision: d?.setupDecision ?? automation.setupDecision ?? 'inherit',
-    timeoutSeconds:
-      d?.timeoutSeconds ??
-      (ceilings.maxWallClockSeconds ? Math.min(1800, ceilings.maxWallClockSeconds) : 1800),
-    maxRetries: d?.maxRetries ?? 3,
-    maxReviewIterations:
-      d?.maxReviewIterations ??
-      (ceilings.maxReviewIterations !== undefined ? Math.min(2, ceilings.maxReviewIterations) : 2)
-  }
-}
-
-function resolveChildLaunchConfig(
-  child: CoordinatedAutomationChildDefinition,
-  parentDefaults: ResolvedChildLaunchConfig
-): {
-  resolved: ResolvedChildLaunchConfig
-  provenance: Record<ChildLaunchConfigField, OverrideProvenance>
-} {
-  const cfg = child.launchConfig
-  const explicitProv = cfg.provenance ?? {}
-
-  function resolveField<K extends ChildLaunchConfigField>(
-    field: K,
-    childValue: ChildLaunchConfig[K],
-    defaultValue: ResolvedChildLaunchConfig[K]
-  ): { value: ResolvedChildLaunchConfig[K]; prov: OverrideProvenance } {
-    if (explicitProv[field] === 'overridden') {
-      if (childValue !== undefined) {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: childValue conforms to ResolvedChildLaunchConfig[K]
-        return { value: childValue as ResolvedChildLaunchConfig[K], prov: 'overridden' }
-      }
-      return { value: defaultValue, prov: 'inherited' }
-    }
-    if (explicitProv[field] === 'inherited') {
-      return { value: defaultValue, prov: 'inherited' }
-    }
-    if (childValue !== undefined) {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: childValue conforms to ResolvedChildLaunchConfig[K]
-      return { value: childValue as ResolvedChildLaunchConfig[K], prov: 'overridden' }
-    }
-    return { value: defaultValue, prov: 'inherited' }
-  }
-
-  const fields: ChildLaunchConfigField[] = [
-    'agentId',
-    'model',
-    'reasoningEffort',
-    'surface',
-    'extraAgentArgs',
-    'reuseSession',
-    'workspaceMode',
-    'workspaceId',
-    'baseBranch',
-    'setupDecision',
-    'timeoutSeconds',
-    'maxRetries',
-    'maxReviewIterations'
-  ]
-
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dynamically populated across all ChildLaunchConfigField keys
-  const resolved = {} as ResolvedChildLaunchConfig
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dynamically populated across all ChildLaunchConfigField keys
-  const provenance = {} as Record<ChildLaunchConfigField, OverrideProvenance>
-
-  for (const f of fields) {
-    const res = resolveField(f, cfg[f], parentDefaults[f])
-    // @ts-expect-error dynamic key assignment
-    resolved[f] = res.value
-    provenance[f] = res.prov
-  }
-
-  return { resolved, provenance }
 }
 
 function resolveChildPrompt(
@@ -140,28 +53,37 @@ function resolveChildPrompt(
   const computedDigest = `sha256:${computedHex}`
 
   if (promptSource.digest) {
-    const pinned = promptSource.digest.startsWith('sha256:')
-      ? promptSource.digest
-      : `sha256:${promptSource.digest}`
-    if (!/^sha256:[0-9a-f]{64}$/.test(pinned)) {
+    if (!promptSource.digest.startsWith('sha256:')) {
       throw new Error(
         `Invalid pinned prompt digest format "${promptSource.digest}": expected sha256:[0-9a-f]{64}`
       )
     }
-    if (pinned !== computedDigest) {
+    if (!/^sha256:[0-9a-f]{64}$/.test(promptSource.digest)) {
       throw new Error(
-        `Pinned prompt digest mismatch for "${promptSource.path}": expected ${pinned}, resolved content computed to ${computedDigest}`
+        `Invalid pinned prompt digest format "${promptSource.digest}": expected sha256:[0-9a-f]{64}`
+      )
+    }
+    if (promptSource.digest !== computedDigest) {
+      throw new Error(
+        `Pinned prompt digest mismatch for "${promptSource.path}": expected ${promptSource.digest}, resolved content computed to ${computedDigest}`
       )
     }
   }
 
   if (resolved.digest) {
-    const resolverDigest = resolved.digest.startsWith('sha256:')
-      ? resolved.digest
-      : `sha256:${resolved.digest}`
-    if (!/^sha256:[0-9a-f]{64}$/.test(resolverDigest)) {
+    if (!resolved.digest.startsWith('sha256:')) {
       throw new Error(
         `Resolver returned invalid digest format "${resolved.digest}": expected sha256:[0-9a-f]{64}`
+      )
+    }
+    if (!/^sha256:[0-9a-f]{64}$/.test(resolved.digest)) {
+      throw new Error(
+        `Resolver returned invalid digest format "${resolved.digest}": expected sha256:[0-9a-f]{64}`
+      )
+    }
+    if (resolved.digest !== computedDigest) {
+      throw new Error(
+        `Resolver-supplied digest "${resolved.digest}" does not match computed digest "${computedDigest}" for source prompt "${promptSource.path}".`
       )
     }
   }
@@ -207,19 +129,28 @@ export function resolveAutomationSnapshot(
     )
   }
 
+  const definitionPayload = {
+    kind: 'coordinated' as const,
+    definitionRevision: automation.definitionRevision,
+    outcomeContract: automation.outcomeContract,
+    children: automation.children,
+    inheritedDefaults: automation.inheritedDefaults,
+    globalCeilings: automation.globalCeilings,
+    publicationPolicy: automation.publicationPolicy,
+    retentionPolicy: automation.retentionPolicy
+  }
+
+  const schemaParsed = CoordinatedAutomationDefinitionSchema.safeParse(definitionPayload)
+  if (!schemaParsed.success) {
+    throw new Error(
+      `Cannot resolve snapshot: coordinated automation definition schema validation failed: ${schemaParsed.error.message}`
+    )
+  }
+
   const effectiveCeilings: CoordinatedAutomationCeilings = { ...automation.globalCeilings }
   const validationResult = validateCoordinatedAutomationDefinition(
-    {
-      kind: 'coordinated',
-      definitionRevision: automation.definitionRevision,
-      outcomeContract: automation.outcomeContract,
-      children: automation.children,
-      inheritedDefaults: automation.inheritedDefaults,
-      globalCeilings: automation.globalCeilings,
-      publicationPolicy: automation.publicationPolicy,
-      retentionPolicy: automation.retentionPolicy
-    },
-    automation.inheritedDefaults,
+    definitionPayload,
+    undefined,
     effectiveCeilings
   )
   if (!validationResult.valid) {
@@ -229,15 +160,27 @@ export function resolveAutomationSnapshot(
   }
 
   const publicationPolicy: CoordinatedAutomationPublicationPolicy = {
-    allowExternalMutation: false,
-    allowedFinalStates: ['completed'],
-    requireHumanDecisionForProduction: true,
-    ...automation.publicationPolicy
+    allowExternalMutation: automation.publicationPolicy?.allowExternalMutation ?? false,
+    requireHumanDecisionForProduction:
+      automation.publicationPolicy?.requireHumanDecisionForProduction ?? true,
+    allowedFinalStates: automation.publicationPolicy?.allowedFinalStates
+      ? [...automation.publicationPolicy.allowedFinalStates]
+      : ['completed']
   }
   const retentionPolicy: CoordinatedAutomationRetentionPolicy = {
-    preserveCompletionReceipt: true,
-    ...automation.retentionPolicy
+    preserveCompletionReceipt: automation.retentionPolicy?.preserveCompletionReceipt ?? true,
+    preserveSnapshot: automation.retentionPolicy?.preserveSnapshot,
+    preserveMappings: automation.retentionPolicy?.preserveMappings,
+    artifactRetentionDays: automation.retentionPolicy?.artifactRetentionDays,
+    defaultRetentionClass: automation.retentionPolicy?.defaultRetentionClass,
+    minimumEvidenceReferences: automation.retentionPolicy?.minimumEvidenceReferences
+      ? [...automation.retentionPolicy.minimumEvidenceReferences]
+      : undefined
   }
+  const outcomeContract: AutomationOutcomeContract = JSON.parse(
+    JSON.stringify(automation.outcomeContract)
+  )
+
   const parentDefaults = resolveParentDefaults(automation, effectiveCeilings)
   const resolvedChildren: ResolvedChildSnapshot[] = automation.children.map((child) => {
     const { resolved: launchConfig, provenance } = resolveChildLaunchConfig(child, parentDefaults)
@@ -259,7 +202,6 @@ export function resolveAutomationSnapshot(
     }
   })
 
-  const outcomeContract = automation.outcomeContract
   const executionTarget = {
     type: automation.executionTargetType,
     id: automation.executionTargetId,
@@ -290,7 +232,7 @@ export function resolveAutomationSnapshot(
     automationId: automation.id,
     definitionRevision: automation.definitionRevision,
     createdAt,
-    outcomeContract: JSON.parse(JSON.stringify(outcomeContract)),
+    outcomeContract,
     resolvedChildren,
     executionTarget,
     inheritedDefaults: parentDefaults,

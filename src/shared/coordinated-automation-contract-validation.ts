@@ -69,36 +69,49 @@ export function validateOutcomeContract(
     }
   }
 
-  if (definition.publicationPolicy) {
-    if (definition.publicationPolicy.allowExternalMutation === false) {
-      if (contract.allowedFinalStates.includes('published_verified')) {
-        errors.push({
-          code: 'UNATTAINABLE_ACCEPTANCE_CRITERIA',
-          message:
-            'Outcome contract specifies "published_verified" final state, but publicationPolicy.allowExternalMutation is false.',
-          path: 'outcomeContract.allowedFinalStates'
-        })
-      }
-      if (definition.publicationPolicy.allowedFinalStates.includes('published_verified')) {
-        errors.push({
-          code: 'UNATTAINABLE_ACCEPTANCE_CRITERIA',
-          message:
-            'publicationPolicy allows "published_verified" final state, but publicationPolicy.allowExternalMutation is false.',
-          path: 'publicationPolicy.allowedFinalStates'
-        })
-      }
-    }
+  const pub = definition.publicationPolicy
+  const effectiveAllowedFinalStates = pub?.allowedFinalStates ?? ['completed']
+  const effectiveAllowExternalMutation = pub?.allowExternalMutation ?? false
+  const effectiveRequireHumanDecision = pub?.requireHumanDecisionForProduction ?? true
 
-    const hasIntersectingFinalState = definition.publicationPolicy.allowedFinalStates.some((s) =>
-      contract.allowedFinalStates.includes(s)
-    )
-    if (!hasIntersectingFinalState) {
+  const mentionsPublishedVerified =
+    contract.allowedFinalStates.includes('published_verified') ||
+    effectiveAllowedFinalStates.includes('published_verified')
+
+  if (mentionsPublishedVerified) {
+    if (!effectiveAllowExternalMutation) {
       errors.push({
-        code: 'INVALID_OUTCOME_CONTRACT',
+        code: 'UNATTAINABLE_ACCEPTANCE_CRITERIA',
         message:
-          'publicationPolicy.allowedFinalStates has no overlapping states with outcomeContract.allowedFinalStates.',
-        path: 'publicationPolicy.allowedFinalStates'
+          'Outcome contract or publication policy specifies "published_verified" final state, but publicationPolicy.allowExternalMutation is false.',
+        path: 'outcomeContract.allowedFinalStates'
       })
     }
+    const hasWriterChild = Array.from(childMap.values()).some(
+      (c) =>
+        c.enabled && (c.mutationClass === 'exclusive_writer' || c.mutationClass === 'shared_writer')
+    )
+    const hasEffectCriterion = contract.acceptanceCriteria.some((c) => c.kind === 'effect')
+    if (!hasWriterChild || !hasEffectCriterion || !effectiveRequireHumanDecision) {
+      errors.push({
+        code: 'UNATTAINABLE_ACCEPTANCE_CRITERIA',
+        message:
+          'Final state "published_verified" requires at least one active writer child, at least one effect criterion, and a human production decision gate.',
+        path: 'outcomeContract.allowedFinalStates'
+      })
+    }
+  }
+
+  const hasIntersectingFinalState = effectiveAllowedFinalStates.some((s) =>
+    contract.allowedFinalStates.includes(s)
+  )
+  if (!hasIntersectingFinalState) {
+    errors.push({
+      code: 'INVALID_OUTCOME_CONTRACT',
+      message: pub
+        ? 'publicationPolicy.allowedFinalStates has no overlapping states with outcomeContract.allowedFinalStates.'
+        : 'outcomeContract.allowedFinalStates has no overlapping states with default publication allowed states (["completed"]).',
+      path: pub ? 'publicationPolicy.allowedFinalStates' : 'outcomeContract.allowedFinalStates'
+    })
   }
 }

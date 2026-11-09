@@ -65,11 +65,28 @@ export type SemanticReceiptIdentityChain = {
   taskMappings?: CoordinatedRunChildMapping[]
 }
 
+export type SemanticReceiptWaiver = {
+  authorizedBy: string
+  reason?: string
+  waivedAt?: number
+}
+
 export type SemanticReceiptAcceptanceResult = {
   criterionId: string
   status: 'satisfied' | 'failed' | 'waived'
   evidence: string[]
   evaluatedAt: number
+  waiver?: SemanticReceiptWaiver
+}
+
+export type ReceiptValidationContext = {
+  trustedAuthorIdentity?: string
+  trustedHostId?: string
+  trustedExecutionAuthority?: string
+  activeAttempt?: {
+    taskId: string
+    dispatchId: string
+  }
 }
 
 export type SemanticReceiptApproval = {

@@ -14,10 +14,7 @@ import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../automation-precheck'
-import {
-  SemanticCompletionReceiptSchema,
-  StructuredWorkerResultSchema
-} from '../coordinated-automation-schemas'
+import { AutomationKindSchema } from '../coordinated-automation-schemas'
 
 export const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
   message: 'Unknown provider'
@@ -199,7 +196,7 @@ export const AutomationLaunchSetupPatch = z
     message: 'Choose an automation launch change.'
   })
 
-export const AutomationKindSchema = z.enum(['single', 'coordinated'])
+export { AutomationKindSchema }
 
 export const GenericAutomationKind = z
   .union([z.literal('single'), z.literal('coordinated')])
@@ -220,8 +217,6 @@ const ForbiddenCoordinatedParam = z
       'Coordinated automation fields cannot be created or updated via generic automation RPC in Phase 1. Coordinated writes require confirmed host capability "coordinated_v1" and dedicated coordinated methods.'
   })
   .optional()
-
-export { SemanticCompletionReceiptSchema, StructuredWorkerResultSchema }
 
 export const AutomationCreate = z.object({
   creationKey: OptionalString,

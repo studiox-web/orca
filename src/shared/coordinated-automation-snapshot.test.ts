@@ -290,7 +290,9 @@ describe('Coordinated Automation Snapshot Resolution', () => {
           automation: coordinated,
           promptResolver: samplePromptResolver
         })
-      ).toThrow(/Invalid pinned prompt digest format/)
+      ).toThrow(
+        /Source reference digest must be a valid sha256 hex digest|Invalid pinned prompt digest format/
+      )
     })
   })
 

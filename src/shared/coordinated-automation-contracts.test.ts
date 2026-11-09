@@ -378,6 +378,18 @@ describe('Coordinated Automation Shared Contracts', () => {
         })
       ).not.toThrow()
     })
+
+    it('verifies generic RPC fail-closed behavior on probes G1-G5', () => {
+      const cr = { name: 'n', prompt: 'p', agentId: 'claude', rrule: 'FREQ=DAILY', dtstart: 1 }
+      expect(AutomationCreate.safeParse({ ...cr, kind: 'coordinated' }).success).toBe(false)
+      expect(AutomationCreate.safeParse({ ...cr, children: [] }).success).toBe(false)
+      expect(AutomationUpdateFields.safeParse({ definitionRevision: 9 }).success).toBe(false)
+      expect(AutomationUpdateFields.safeParse({ kind: 'single' }).success).toBe(true)
+      const g5 = AutomationCreate.safeParse({ ...cr, childMappings: [1] })
+      expect(g5.success).toBe(true)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: checking stripped keys
+      expect((g5 as { data: Record<string, unknown> }).data.childMappings).toBeUndefined()
+    })
   })
 
   describe('Receipt against Snapshot Validation', () => {
@@ -395,7 +407,7 @@ describe('Coordinated Automation Shared Contracts', () => {
           definitionRevision: snapshot.definitionRevision,
           automationRunId: 'run-123',
           orchestrationRunId: 'orch-456',
-          hostId: 'host-local-1'
+          hostId: 'local'
         },
         frozenConfigDigest: snapshot.canonicalDigest,
         finalState: 'ready_to_publish' as const,
@@ -487,7 +499,7 @@ describe('Coordinated Automation Shared Contracts', () => {
           definitionRevision: snapshot.definitionRevision,
           automationRunId: 'run-123',
           orchestrationRunId: 'orch-456',
-          hostId: 'host-local-1'
+          hostId: 'local'
         },
         frozenConfigDigest: snapshot.canonicalDigest,
         finalState: 'ready_to_publish' as const,
@@ -546,7 +558,7 @@ describe('Coordinated Automation Shared Contracts', () => {
           definitionRevision: snapshot.definitionRevision,
           automationRunId: 'run-123',
           orchestrationRunId: 'orch-456',
-          hostId: 'host-local-1'
+          hostId: 'local'
         },
         frozenConfigDigest: snapshot.canonicalDigest,
         finalState: 'published_verified' as const,

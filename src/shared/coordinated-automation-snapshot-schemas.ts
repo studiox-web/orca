@@ -48,9 +48,12 @@ export const ResolvedChildLaunchConfigSchema: z.ZodType<ResolvedChildLaunchConfi
   workspaceId: z.string().max(256).nullable(),
   baseBranch: z.string().max(256).nullable(),
   setupDecision: z.enum(['inherit', 'run', 'skip']),
-  timeoutSeconds: z.number().positive(),
-  maxRetries: z.number().int().nonnegative(),
-  maxReviewIterations: z.number().int().nonnegative()
+  timeoutSeconds: z
+    .number()
+    .positive()
+    .max(86400 * 7),
+  maxRetries: z.number().int().nonnegative().max(50),
+  maxReviewIterations: z.number().int().nonnegative().max(50)
 })
 
 export const ResolvedChildSnapshotSchema: z.ZodType<ResolvedChildSnapshot> = z.object({
@@ -118,5 +121,19 @@ export const CoordinatedRunFieldsSchema: z.ZodType<CoordinatedRunFields> = z
           message: 'replanReason is required when replanOfAutomationRunId is specified'
         })
       }
+    }
+    if (data.replanOfDefinitionRevision && !data.replanOfAutomationRunId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['replanOfAutomationRunId'],
+        message: 'replanOfAutomationRunId is required when replanOfDefinitionRevision is specified'
+      })
+    }
+    if (data.replanReason && !data.replanOfAutomationRunId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['replanOfAutomationRunId'],
+        message: 'replanOfAutomationRunId is required when replanReason is specified'
+      })
     }
   })
