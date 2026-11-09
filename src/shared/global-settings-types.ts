@@ -448,6 +448,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalAgentDashboardPopout?: boolean
   /** Experimental: panel beside chats and terminals listing the agents each agent works with; off mounts nothing. */
   experimentalOrchestrationPanel?: boolean
+  /** Experimental: coordinated multi-worker automation definitions and workers UI; off preserves single automation UI. */
+  experimentalCoordinatedAutomations?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean
   /** True when the profile previously opted into the legacy Agents view. */

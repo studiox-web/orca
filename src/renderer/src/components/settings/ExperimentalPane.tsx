@@ -49,8 +49,12 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showCoordinatedAutomations = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().coordinatedAutomations
+  ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const coordinatedAutomationsEnabled = settings.experimentalCoordinatedAutomations === true
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
@@ -251,6 +255,51 @@ export function ExperimentalPane({
               onChange={() =>
                 updateSettings({
                   experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
+                })
+              }
+            />
+          </div>
+        </SearchableSetting>
+      ) : null}
+
+      {showCoordinatedAutomations ? (
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.ExperimentalPane.coordinatedAutomations.title',
+            'Coordinated automations'
+          )}
+          description={translate(
+            'auto.components.settings.ExperimentalPane.coordinatedAutomations.description',
+            'Configure multi-worker coordinated automations with specialized roles, dependency graphs, and outcome contracts.'
+          )}
+          keywords={getExperimentalSearchEntry().coordinatedAutomations.keywords}
+          className="space-y-3 py-2"
+          id="experimental-coordinated-automations"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.coordinatedAutomations.title',
+                  'Coordinated automations'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.coordinatedAutomations.copy',
+                  'Configure multi-worker coordinated automations with specialized roles, dependency graphs, and outcome contracts.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={coordinatedAutomationsEnabled}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.coordinatedAutomations.toggleLabel',
+                'Toggle coordinated automations'
+              )}
+              onChange={() =>
+                updateSettings({
+                  experimentalCoordinatedAutomations: !coordinatedAutomationsEnabled
                 })
               }
             />

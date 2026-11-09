@@ -4,7 +4,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import {
+  isCoordinatedAutomation,
+  type Automation,
+  type AutomationRun
+} from '../../../../shared/automations-types'
+import { useAppStore } from '@/store'
+import { shouldShowWorkersSection } from './automation-workers-feature-flag'
+import { AutomationWorkersSection } from './AutomationWorkersSection'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 import {
@@ -25,6 +32,8 @@ import { translate } from '@/i18n/i18n'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
 import { automationRunErrorText } from './automation-run-error-copy'
 
+import { DetailMetric, formatGrace, ToolbarIconButton } from './automation-detail-components'
+
 type AutomationDetailProps = {
   automation: Automation | null
   runs: AutomationRun[]
@@ -42,75 +51,6 @@ type AutomationDetailProps = {
   onDelete: (automation: Automation) => void
 }
 
-function DetailMetric({
-  label,
-  value,
-  title
-}: {
-  label: string
-  value: string
-  title?: string
-}): React.JSX.Element {
-  return (
-    <div className="min-w-0">
-      <div className="text-[11px] font-medium uppercase text-muted-foreground">{label}</div>
-      <div className="mt-1 break-words text-sm font-medium" title={title}>
-        {value}
-      </div>
-    </div>
-  )
-}
-
-function formatGrace(minutes: number): string {
-  if (minutes <= 0) {
-    return translate('auto.components.automations.AutomationDetail.noGrace', 'No grace')
-  }
-  if (minutes < 60) {
-    return translate(
-      'auto.components.automations.AutomationDetail.graceMinutes',
-      '{{count}} minutes',
-      { count: minutes, defaultValue_one: '{{count}} minute' }
-    )
-  }
-  const hours = minutes / 60
-  return translate('auto.components.automations.AutomationDetail.graceHours', '{{count}} hours', {
-    count: hours,
-    defaultValue_one: '{{count}} hour'
-  })
-}
-
-function ToolbarIconButton({
-  label,
-  children,
-  onClick,
-  className
-}: {
-  label: string
-  children: React.ReactNode
-  onClick: () => void
-  className?: string
-}): React.JSX.Element {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          onClick={onClick}
-          className={className}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 export function AutomationDetail({
   automation,
   runs,
@@ -126,6 +66,8 @@ export function AutomationDetail({
   onToggle,
   onDelete
 }: AutomationDetailProps): React.JSX.Element {
+  const settings = useAppStore((s) => s.settings)
+
   if (!automation) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -165,7 +107,19 @@ export function AutomationDetail({
     entry: hostEntry,
     hostLabelById
   })
-  const runNowDisabled = runNowAvailability?.canRunNow === false
+  const isCoordinated = isCoordinatedAutomation(automation)
+  const showWorkers = shouldShowWorkersSection(automation, settings) && isCoordinated
+  const activeRun = runs.find(
+    (r) => r.status === 'pending' || r.status === 'dispatching' || r.status === 'dispatched'
+  )
+  const historicalSnapshot = runs.find((r) => r.resolvedSnapshot)?.resolvedSnapshot ?? null
+  const runNowDisabled = isCoordinated || runNowAvailability?.canRunNow === false
+  const runNowMessage = isCoordinated
+    ? translate(
+        'auto.components.automations.workers.runDisabled',
+        'Execution controls disabled during definition preview (Phase 4)'
+      )
+    : runNowAvailability?.message
   const latestRun = indexLatestAutomationRuns(runs).get(automation.id)
   const latestRunError =
     latestRun?.status === 'dispatch_failed' ? automationRunErrorText(latestRun) : null
@@ -181,6 +135,14 @@ export function AutomationDetail({
                 ? translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
                 : translate('auto.components.automations.enablement.paused', 'Paused')}
             </Badge>
+            {isCoordinated ? (
+              <Badge
+                variant="outline"
+                className="border-primary/50 font-mono text-3xs text-primary"
+              >
+                Coordinated (Rev {automation.definitionRevision ?? 1})
+              </Badge>
+            ) : null}
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">
             {projectName} / {workspaceName}
@@ -201,9 +163,9 @@ export function AutomationDetail({
                 </Button>
               </span>
             </TooltipTrigger>
-            {runNowDisabled ? (
+            {runNowDisabled && runNowMessage ? (
               <TooltipContent side="bottom" sideOffset={6}>
-                {runNowAvailability.message}
+                {runNowMessage}
               </TooltipContent>
             ) : null}
           </Tooltip>
@@ -376,10 +338,26 @@ export function AutomationDetail({
         />
       </div>
 
-      <AutomationPromptDisclosure
-        key={`${automation.id}:${automation.prompt}`}
-        prompt={automation.prompt}
-      />
+      {showWorkers ? (
+        <AutomationWorkersSection
+          workers={automation.children ?? []}
+          definitionRevision={automation.definitionRevision ?? 1}
+          outcomeContract={automation.outcomeContract}
+          inheritedDefaults={automation.inheritedDefaults}
+          globalCeilings={automation.globalCeilings}
+          publicationPolicy={automation.publicationPolicy}
+          retentionPolicy={automation.retentionPolicy}
+          isEditing={false}
+          activeRunId={activeRun?.id}
+          activeRunRevision={activeRun?.automationDefinitionRevision}
+          historicalSnapshot={historicalSnapshot}
+        />
+      ) : (
+        <AutomationPromptDisclosure
+          key={`${automation.id}:${automation.prompt}`}
+          prompt={automation.prompt}
+        />
+      )}
     </div>
   )
 }

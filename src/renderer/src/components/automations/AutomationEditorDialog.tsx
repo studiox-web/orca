@@ -11,8 +11,15 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type {
+  AutomationKind,
+  AutomationOutcomeContract,
   AutomationSchedulePreset,
-  AutomationWorkspaceMode
+  AutomationWorkspaceMode,
+  CoordinatedAutomationCeilings,
+  CoordinatedAutomationChildDefinition,
+  CoordinatedAutomationInheritedDefaults,
+  CoordinatedAutomationPublicationPolicy,
+  CoordinatedAutomationRetentionPolicy
 } from '../../../../shared/automations-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
@@ -21,6 +28,8 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { closeUnfocusedMonacoFindOrPreventDialogDismiss } from '@/components/editor/monaco-find-widget'
 import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
@@ -32,6 +41,8 @@ import { getAutomationPromptEditorRoot } from './AutomationEditorPromptEditor'
 import { AutomationEditorPromptSection } from './AutomationEditorPromptSection'
 import { AutomationEditorSettingsSidebar } from './AutomationEditorSettingsSidebar'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
+import { isCoordinatedAutomationsFeatureEnabled } from './automation-workers-feature-flag'
+import { AutomationWorkersSection } from './AutomationWorkersSection'
 
 export const AUTOMATION_EDITOR_PICKER_TRIGGER_CLASS =
   'border-input bg-input/30 shadow-xs hover:bg-accent/60 dark:bg-input/30 dark:hover:bg-input/50'
@@ -65,6 +76,14 @@ export type AutomationDraft = {
   savedSchedule: string | null
   missedRunGraceMinutes: string
   scheduleWarning: string | null
+  kind?: AutomationKind
+  definitionRevision?: number
+  outcomeContract?: AutomationOutcomeContract
+  children?: CoordinatedAutomationChildDefinition[]
+  inheritedDefaults?: CoordinatedAutomationInheritedDefaults
+  globalCeilings?: CoordinatedAutomationCeilings
+  publicationPolicy?: CoordinatedAutomationPublicationPolicy
+  retentionPolicy?: CoordinatedAutomationRetentionPolicy
 }
 
 type AutomationEditorDialogProps = {
@@ -146,6 +165,9 @@ export function AutomationEditorDialog({
     )
   }, [draft.agentId, settings?.disabledTuiAgents])
 
+  const isCoordinatedFeatureEnabled = isCoordinatedAutomationsFeatureEnabled(settings)
+  const isCoordinated = draft.kind === 'coordinated'
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -177,6 +199,9 @@ export function AutomationEditorDialog({
           isCreateMode={isCreateMode}
           templateOpen={templateOpen}
           templates={getAutomationTemplates()}
+          isCoordinatedFeatureEnabled={isCoordinatedFeatureEnabled}
+          kind={draft.kind}
+          onKindChange={(kind) => onDraftChange((curr) => ({ ...curr, kind }))}
           onTemplateOpenChange={setTemplateOpen}
           onApplyTemplate={(template) => {
             onApplyTemplate(template)
@@ -185,11 +210,70 @@ export function AutomationEditorDialog({
         />
 
         <div className="flex min-h-0 flex-1 flex-row">
-          <AutomationEditorPromptSection
-            draft={draft}
-            onDraftChange={onDraftChange}
-            onDismiss={() => onOpenChange(false)}
-          />
+          {isCoordinated ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 scrollbar-sleek gap-5">
+              <div className="space-y-1.5">
+                <Label
+                  htmlFor="automation-outcome-statement"
+                  className="font-semibold text-2xs uppercase tracking-wider text-muted-foreground"
+                >
+                  Outcome statement
+                </Label>
+                <Textarea
+                  id="automation-outcome-statement"
+                  value={draft.outcomeContract?.humanStatement ?? draft.prompt}
+                  onChange={(e) => {
+                    const text = e.target.value
+                    onDraftChange((curr) => ({
+                      ...curr,
+                      prompt: text,
+                      outcomeContract: {
+                        humanStatement: text,
+                        acceptanceCriteria: curr.outcomeContract?.acceptanceCriteria ?? [],
+                        requiredApprovals: curr.outcomeContract?.requiredApprovals ?? [],
+                        allowedFinalStates: curr.outcomeContract?.allowedFinalStates ?? [
+                          'completed'
+                        ]
+                      }
+                    }))
+                  }}
+                  placeholder="Describe the desired end-to-end outcome that specialist workers must achieve..."
+                  rows={2}
+                  className="text-xs"
+                />
+              </div>
+
+              <AutomationWorkersSection
+                workers={draft.children ?? []}
+                definitionRevision={draft.definitionRevision ?? 1}
+                outcomeContract={draft.outcomeContract}
+                inheritedDefaults={{
+                  agentId: draft.agentId,
+                  surface: draft.surface,
+                  extraAgentArgs: draft.extraAgentArgs,
+                  workspaceMode: draft.workspaceMode,
+                  workspaceId: draft.workspaceId,
+                  baseBranch: draft.baseBranch,
+                  setupDecision: draft.setupDecision,
+                  reuseSession: draft.reuseSession
+                }}
+                isEditing={true}
+                hasModifications={true}
+                onWorkersChange={(children) => {
+                  onDraftChange((curr) => ({
+                    ...curr,
+                    children
+                  }))
+                }}
+              />
+            </div>
+          ) : (
+            <AutomationEditorPromptSection
+              draft={draft}
+              onDraftChange={onDraftChange}
+              onDismiss={() => onOpenChange(false)}
+            />
+          )}
           <AutomationEditorSettingsSidebar
             destination={destination}
             surface={surface}

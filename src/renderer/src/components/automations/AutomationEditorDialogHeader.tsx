@@ -2,6 +2,7 @@ import { Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import type { AutomationKind } from '../../../../shared/automations-types'
 import type { AutomationTemplate } from './automation-templates'
 import { translate } from '@/i18n/i18n'
 
@@ -10,6 +11,9 @@ type AutomationEditorDialogHeaderProps = {
   isCreateMode: boolean
   templateOpen: boolean
   templates: AutomationTemplate[]
+  isCoordinatedFeatureEnabled?: boolean
+  kind?: AutomationKind
+  onKindChange?: (kind: AutomationKind) => void
   onTemplateOpenChange: (open: boolean) => void
   onApplyTemplate: (template: AutomationTemplate) => void
 }
@@ -54,6 +58,9 @@ export function AutomationEditorDialogHeader({
   isCreateMode,
   templateOpen,
   templates,
+  isCoordinatedFeatureEnabled = false,
+  kind = 'single',
+  onKindChange,
   onTemplateOpenChange,
   onApplyTemplate
 }: AutomationEditorDialogHeaderProps): React.JSX.Element {
@@ -61,7 +68,37 @@ export function AutomationEditorDialogHeader({
 
   return (
     <DialogHeader className="flex-row items-center justify-between gap-3 border-b border-border/50 px-5 py-2.5 pr-12 text-left">
-      <DialogTitle className="min-w-0 truncate text-sm font-medium">{title}</DialogTitle>
+      <div className="flex items-center gap-3">
+        <DialogTitle className="min-w-0 truncate text-sm font-medium">{title}</DialogTitle>
+        {isCoordinatedFeatureEnabled ? (
+          <div className="flex items-center rounded-md border border-border/60 bg-muted/40 p-0.5 text-xs">
+            <button
+              type="button"
+              className={`rounded px-2.5 py-1 text-2xs font-medium transition-colors ${
+                kind !== 'coordinated'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => onKindChange?.('single')}
+              aria-label="Single prompt mode"
+            >
+              Single prompt
+            </button>
+            <button
+              type="button"
+              className={`rounded px-2.5 py-1 text-2xs font-medium transition-colors ${
+                kind === 'coordinated'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              onClick={() => onKindChange?.('coordinated')}
+              aria-label="Coordinated workers mode"
+            >
+              Coordinated workers
+            </button>
+          </div>
+        ) : null}
+      </div>
       {isCreateMode ? (
         <div className="flex shrink-0 items-center gap-2">
           <Popover open={templateOpen} onOpenChange={onTemplateOpenChange}>

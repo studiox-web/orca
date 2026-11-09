@@ -41,6 +41,14 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
         : translate(
             'auto.components.automations.editDraft.unsupportedSchedule',
             'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
-          )
+          ),
+    kind: automation.kind,
+    definitionRevision: automation.definitionRevision,
+    outcomeContract: automation.outcomeContract,
+    children: automation.children,
+    inheritedDefaults: automation.inheritedDefaults,
+    globalCeilings: automation.globalCeilings,
+    publicationPolicy: automation.publicationPolicy,
+    retentionPolicy: automation.retentionPolicy
   }
 }

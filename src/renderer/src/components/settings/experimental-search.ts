@@ -180,6 +180,42 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
+    {
+      title: translate(
+        'auto.components.settings.experimental.search.coordinatedAutomations.title',
+        'Coordinated automations'
+      ),
+      description: translate(
+        'auto.components.settings.experimental.search.coordinatedAutomations.description',
+        'Configure multi-worker coordinated automations with specialized roles, dependency graphs, and outcome contracts.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.coordinatedAutomations.coordinated',
+          'coordinated'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.coordinatedAutomations.workers',
+          'workers'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.coordinatedAutomations.automations',
+          'automations'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.coordinatedAutomations.dag',
+          'dag'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.coordinatedAutomations.outcome',
+          'outcome'
+        )
+      ]
+    },
     getEphemeralVmsSearchEntry(),
     getBrowserExtensionsExperimentalSearchEntry(),
     // Index WSL toggles only on Windows desktops that expose them.
@@ -220,6 +256,12 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
         'New card style'
+      )
+    ),
+    coordinatedAutomations: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.coordinatedAutomations.title',
+        'Coordinated automations'
       )
     ),
     ephemeralVms: findEntry(
