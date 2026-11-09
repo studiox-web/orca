@@ -15,6 +15,7 @@ import {
   orchestrationRecordProbe
 } from './coordinated-automation-materialization'
 import { selectEligibleTasksForDispatch } from './coordinated-automation-lane-scheduler'
+import { executeCoordinatedTaskDispatch } from './coordinated-automation-task-execution'
 
 export { CoordinatedAutomationLaunchRefusedError, orchestrationRecordProbe }
 
@@ -51,19 +52,24 @@ export class CoordinatedAutomationAdapter {
     this.#orchestrationDb = ctx.orchestrationDb
     this.#probe = orchestrationRecordProbe(ctx.orchestrationDb)
     this.#workerProvider = ctx.workerProvider ?? {
-      run: async (identity) => ({
-        schemaVersion: 1,
-        ...identity,
-        definitionRevision: 1,
-        resolvedConfigDigest: '',
-        outcome: 'succeeded',
-        summary: `Fake worker ${identity.childDefinitionId} completed`,
-        reportMarkdown: `Fake worker ${identity.childDefinitionId} report`,
-        artifacts: [],
-        checks: [],
-        effects: [],
-        blockers: []
-      })
+      run: async (identity) => {
+        const run = this.#store.listAutomationRuns().find((r) => r.id === identity.automationRunId)
+        const revision = run?.resolvedSnapshot?.definitionRevision ?? 1
+        const digest = run?.resolvedSnapshot?.canonicalDigest ?? `sha256:${'0'.repeat(64)}`
+        return {
+          schemaVersion: 1,
+          ...identity,
+          definitionRevision: revision,
+          resolvedConfigDigest: digest,
+          outcome: 'succeeded',
+          summary: `Fake worker ${identity.childDefinitionId} completed`,
+          reportMarkdown: `Fake worker ${identity.childDefinitionId} report`,
+          artifacts: [],
+          checks: [],
+          effects: [],
+          blockers: []
+        }
+      }
     }
     this.#runInParentLane =
       ctx.runInParentLane ??
@@ -92,87 +98,17 @@ export class CoordinatedAutomationAdapter {
     taskId: string,
     retryOfDispatchId?: string
   ): Promise<{ taskId: string; dispatchId: string; outcome: string }> {
-    const run = this.#getRunOrThrow(automationRunId)
-    const snapshot = run.resolvedSnapshot
-    if (!snapshot || !run.orchestrationRunId) {
-      throw new Error(`Run "${automationRunId}" is not ready for dispatch.`)
-    }
-
-    const mapping = (run.childMappings ?? []).find((m) => m.taskId === taskId)
-    if (!mapping) {
-      throw new Error(
-        `Task "${taskId}" has no mapped child definition in run "${automationRunId}".`
-      )
-    }
-    const child = snapshot.resolvedChildren.find(
-      (c) => c.childDefinitionId === mapping.childDefinitionId
-    )
-    if (!child) {
-      throw new Error(`Child definition "${mapping.childDefinitionId}" not found in snapshot.`)
-    }
-
-    const { dispatch } = this.#orchestrationDb.createStartingWorkerDispatch({
-      taskId,
-      taskRunId: run.orchestrationRunId,
-      retryOf: retryOfDispatchId,
-      creator: { kind: 'system' },
-      maxDepth: 5,
-      startOptions: {
-        agent: child.launchConfig.agentId,
-        mode: { mode: 'headless' },
-        timeoutMs: (child.launchConfig.timeoutSeconds ?? 60) * 1000
-      }
-    })
-
-    this.#store.recordCoordinatedChildDispatch({
-      automationRunId: run.id,
-      childDefinitionId: child.childDefinitionId,
-      dispatchId: dispatch.id
-    })
-
     this.#activeTasks.add(taskId)
     try {
-      const identity: CoordinatedWorkerIdentity = {
-        automationRunId: run.id,
-        orchestrationRunId: run.orchestrationRunId,
-        childDefinitionId: child.childDefinitionId,
+      return await executeCoordinatedTaskDispatch({
+        automationRunId,
         taskId,
-        dispatchId: dispatch.id
-      }
-
-      let report: StructuredWorkerResult
-      try {
-        report = await this.#workerProvider.run(identity)
-      } catch (error) {
-        this.#orchestrationDb.settleWorkerReport({
-          taskId,
-          dispatchId: dispatch.id,
-          outcome: 'failed',
-          result: error instanceof Error ? error.message : String(error)
-        })
-        return { taskId, dispatchId: dispatch.id, outcome: 'failed' }
-      }
-
-      // External effects are denied in Phase 4; only fake worker provider runs.
-      if (report.effects && report.effects.length > 0) {
-        this.#orchestrationDb.settleWorkerReport({
-          taskId,
-          dispatchId: dispatch.id,
-          outcome: 'failed',
-          result: 'External effects are denied.'
-        })
-        return { taskId, dispatchId: dispatch.id, outcome: 'failed' }
-      }
-
-      const outcome = report.outcome === 'succeeded' ? 'succeeded' : 'failed'
-      this.#orchestrationDb.settleWorkerReport({
-        taskId,
-        dispatchId: dispatch.id,
-        outcome,
-        result: report.summary || JSON.stringify(report)
+        retryOfDispatchId,
+        store: this.#store,
+        orchestrationDb: this.#orchestrationDb,
+        probe: this.#probe,
+        workerProvider: this.#workerProvider
       })
-
-      return { taskId, dispatchId: dispatch.id, outcome: report.outcome }
     } finally {
       this.#activeTasks.delete(taskId)
     }

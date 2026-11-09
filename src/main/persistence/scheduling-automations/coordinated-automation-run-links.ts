@@ -48,6 +48,36 @@ export function linkCoordinatedOrchestrationRun(
   })
 }
 
+export function recordCoordinatedTasksCreated(
+  operations: CoordinatedAutomationRunOperations,
+  input: {
+    automationRunId: string
+    taskIds: readonly string[]
+    probe: CoordinatedOrchestrationRecordProbe
+  }
+): AutomationRun {
+  const run = requireCoordinatedRun(operations, input.automationRunId)
+  if (run.materializationPhase === 'tasks_created') {
+    return detachCoordinatedRun(run)
+  }
+  assertPhase(run, ['orchestration_run_created'])
+  const orchestrationRunId = run.orchestrationRunId
+  if (!orchestrationRunId || !input.probe.hasRun(orchestrationRunId)) {
+    throw new CoordinatedRunConflictError('Run has no linked orchestration Run.')
+  }
+  for (const taskId of input.taskIds) {
+    if (!input.probe.hasTask(orchestrationRunId, taskId)) {
+      throw new CoordinatedRunConflictError(
+        `Task "${taskId}" does not exist in orchestration Run "${orchestrationRunId}".`
+      )
+    }
+  }
+  return replaceRun(operations, {
+    ...run,
+    materializationPhase: 'tasks_created'
+  })
+}
+
 function sameMappings(
   left: readonly CoordinatedRunChildMapping[],
   right: readonly CoordinatedRunChildMapping[]

@@ -7,6 +7,7 @@ import { mailboxAddressOf } from '../../orchestration-caller-identity'
 export function createRun(
   this: OrchestrationDb,
   params: {
+    id?: string
     objective: string
     coordinatorHandle: string | null
     coordinatorPaneKey: string | null
@@ -19,7 +20,7 @@ export function createRun(
     paneKey: params.coordinatorPaneKey,
     orcaSessionId: params.coordinatorOrcaSessionId ?? null
   }
-  const id = generateId('run')
+  const id = params.id ?? generateId('run')
   this.db.exec('BEGIN IMMEDIATE')
   try {
     this.db

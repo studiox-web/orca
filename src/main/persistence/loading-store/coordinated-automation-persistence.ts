@@ -28,7 +28,8 @@ import {
   persistCoordinatedChildMappings as persistCoordinatedChildMappingsOperation,
   recordCoordinatedChildDispatch as recordCoordinatedChildDispatchOperation,
   recordCoordinatedMaterializationFailure as recordCoordinatedMaterializationFailureOperation,
-  recordCoordinatedRunSettlement as recordCoordinatedRunSettlementOperation
+  recordCoordinatedRunSettlement as recordCoordinatedRunSettlementOperation,
+  recordCoordinatedTasksCreated as recordCoordinatedTasksCreatedOperation
 } from '../scheduling-automations/coordinated-automation-run-links'
 import type { CoordinatedOrchestrationRecordProbe } from '../scheduling-automations/coordinated-automation-run-records'
 import {
@@ -96,6 +97,17 @@ export class CoordinatedAutomationPersistence {
     probe: CoordinatedOrchestrationRecordProbe
   }): AutomationRun {
     return linkCoordinatedOrchestrationRunOperation(
+      getCoordinatedAutomationRunOperations(this[coordinatedAutomationPersistenceContext]),
+      input
+    )
+  }
+
+  recordCoordinatedTasksCreated(input: {
+    automationRunId: string
+    taskIds: readonly string[]
+    probe: CoordinatedOrchestrationRecordProbe
+  }): AutomationRun {
+    return recordCoordinatedTasksCreatedOperation(
       getCoordinatedAutomationRunOperations(this[coordinatedAutomationPersistenceContext]),
       input
     )

@@ -23,8 +23,10 @@ import {
 import {
   CoordinatedAutomationAdapter,
   CoordinatedAutomationLaunchRefusedError,
+  type CoordinatedWorkerIdentity,
   type CoordinatedWorkerProvider
 } from './coordinated-automation-adapter'
+import type { StructuredWorkerResult } from '../../shared/coordinated-automation-receipt-types'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -32,6 +34,28 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
+
+function makeReport(
+  identity: CoordinatedWorkerIdentity,
+  store: ReturnType<typeof createStore>,
+  overrides?: Partial<StructuredWorkerResult>
+): StructuredWorkerResult {
+  const run = store.listAutomationRuns().find((r) => r.id === identity.automationRunId)
+  return {
+    schemaVersion: 1,
+    ...identity,
+    definitionRevision: run?.resolvedSnapshot?.definitionRevision ?? 1,
+    resolvedConfigDigest: run?.resolvedSnapshot?.canonicalDigest ?? `sha256:${'0'.repeat(64)}`,
+    outcome: 'succeeded',
+    summary: `${identity.childDefinitionId} done`,
+    reportMarkdown: `${identity.childDefinitionId} report`,
+    artifacts: [],
+    checks: [],
+    effects: [],
+    blockers: [],
+    ...overrides
+  }
+}
 
 describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
   let db: OrchestrationDb
@@ -56,19 +80,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
       const workerProvider: CoordinatedWorkerProvider = {
         run: async (identity) => {
           executionOrder.push(identity.childDefinitionId)
-          return {
-            schemaVersion: 1,
-            ...identity,
-            definitionRevision: 1,
-            resolvedConfigDigest: '',
-            outcome: 'succeeded',
-            summary: `${identity.childDefinitionId} done`,
-            reportMarkdown: `${identity.childDefinitionId} markdown`,
-            artifacts: [],
-            checks: [],
-            effects: [],
-            blockers: []
-          }
+          return makeReport(identity, store)
         }
       }
 
@@ -148,27 +160,29 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
       let maxParallelBranches = 0
       const order: string[] = []
 
+      let leftStartedResolve: () => void = () => {}
+      const leftStarted = new Promise<void>((r) => {
+        leftStartedResolve = r
+      })
+      let rightStartedResolve: () => void = () => {}
+      const rightStarted = new Promise<void>((r) => {
+        rightStartedResolve = r
+      })
+
       const workerProvider: CoordinatedWorkerProvider = {
         run: async (identity) => {
           activeParallel.add(identity.childDefinitionId)
           maxParallelBranches = Math.max(maxParallelBranches, activeParallel.size)
-          // Yield to allow parallel branch to register
-          await new Promise((r) => setTimeout(r, 10))
+          if (identity.childDefinitionId === 'left') {
+            leftStartedResolve()
+            await rightStarted
+          } else if (identity.childDefinitionId === 'right') {
+            rightStartedResolve()
+            await leftStarted
+          }
           activeParallel.delete(identity.childDefinitionId)
           order.push(identity.childDefinitionId)
-          return {
-            schemaVersion: 1,
-            ...identity,
-            definitionRevision: 1,
-            resolvedConfigDigest: '',
-            outcome: 'succeeded',
-            summary: `${identity.childDefinitionId} done`,
-            reportMarkdown: `${identity.childDefinitionId} markdown`,
-            artifacts: [],
-            checks: [],
-            effects: [],
-            blockers: []
-          }
+          return makeReport(identity, store)
         }
       }
 
@@ -243,24 +257,12 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
             peakConcurrencyInDbLane = Math.max(peakConcurrencyInDbLane, current)
           }
 
-          await new Promise((r) => setTimeout(r, 10))
+          await Promise.resolve()
 
           totalActive -= 1
           laneConcurrencies.set(lane, (laneConcurrencies.get(lane) ?? 1) - 1)
 
-          return {
-            schemaVersion: 1,
-            ...identity,
-            definitionRevision: 1,
-            resolvedConfigDigest: '',
-            outcome: 'succeeded',
-            summary: `${identity.childDefinitionId} done`,
-            reportMarkdown: `${identity.childDefinitionId} report`,
-            artifacts: [],
-            checks: [],
-            effects: [],
-            blockers: []
-          }
+          return makeReport(identity, store)
         }
       }
 
@@ -379,25 +381,16 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
       const workerStarted = new Promise<void>((resolve) => {
         unblockWorker = resolve
       })
+      let finishWorker: () => void = () => {}
+      const allowFinish = new Promise<void>((resolve) => {
+        finishWorker = resolve
+      })
 
       const workerProvider: CoordinatedWorkerProvider = {
         run: async (identity) => {
           unblockWorker()
-          // Block worker so it stays in dispatched state
-          await new Promise((r) => setTimeout(r, 100))
-          return {
-            schemaVersion: 1,
-            ...identity,
-            definitionRevision: 1,
-            resolvedConfigDigest: '',
-            outcome: 'succeeded',
-            summary: 'done',
-            reportMarkdown: 'markdown',
-            artifacts: [],
-            checks: [],
-            effects: [],
-            blockers: []
-          }
+          await allowFinish
+          return makeReport(identity, store)
         }
       }
 
@@ -429,6 +422,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
         /only a ready Task can start/i
       )
 
+      finishWorker()
       await firstDispatchPromise
     })
   })
@@ -443,34 +437,14 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
           if (identity.childDefinitionId === 'flake') {
             attempt += 1
             if (attempt === 1) {
-              return {
-                schemaVersion: 1,
-                ...identity,
-                definitionRevision: 1,
-                resolvedConfigDigest: '',
+              return makeReport(identity, store, {
                 outcome: 'failed',
                 summary: 'Transformed error',
-                reportMarkdown: 'Failed on attempt 1',
-                artifacts: [],
-                checks: [],
-                effects: [],
-                blockers: []
-              }
+                reportMarkdown: 'Failed on attempt 1'
+              })
             }
           }
-          return {
-            schemaVersion: 1,
-            ...identity,
-            definitionRevision: 1,
-            resolvedConfigDigest: '',
-            outcome: 'succeeded',
-            summary: `${identity.childDefinitionId} completed`,
-            reportMarkdown: 'Success',
-            artifacts: [],
-            checks: [],
-            effects: [],
-            blockers: []
-          }
+          return makeReport(identity, store)
         }
       }
 
@@ -571,19 +545,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
       const workerProvider: CoordinatedWorkerProvider = {
         run: async (identity) => {
           executedNames.push(identity.childDefinitionId)
-          return {
-            schemaVersion: 1,
-            ...identity,
-            definitionRevision: 1,
-            resolvedConfigDigest: '',
-            outcome: 'succeeded',
-            summary: 'done',
-            reportMarkdown: 'markdown',
-            artifacts: [],
-            checks: [],
-            effects: [],
-            blockers: []
-          }
+          return makeReport(identity, store)
         }
       }
 
@@ -674,24 +636,16 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
     it('denies external effects reported by worker and settles task as failed', async () => {
       const store = createStore()
       const workerProvider: CoordinatedWorkerProvider = {
-        run: async (identity) => ({
-          schemaVersion: 1,
-          ...identity,
-          definitionRevision: 1,
-          resolvedConfigDigest: '',
-          outcome: 'succeeded',
-          summary: 'Attempted side effect',
-          reportMarkdown: 'Side effect details',
-          artifacts: [],
-          checks: [],
-          effects: [
-            {
-              kind: 'custom',
-              status: 'applied'
-            }
-          ],
-          blockers: []
-        })
+        run: async (identity) =>
+          makeReport(identity, store, {
+            summary: 'Attempted side effect',
+            effects: [
+              {
+                kind: 'custom',
+                status: 'applied'
+              }
+            ]
+          })
       }
 
       const automation = store.createCoordinatedAutomation(
@@ -715,7 +669,7 @@ describe('CoordinatedAutomationAdapter Phase 4 integration', () => {
 
       const tasks = db.listTasks({ runId: settled.orchestrationRunId! })
       expect(tasks[0].status).toBe('failed')
-      expect(tasks[0].result).toBe('External effects are denied.')
+      expect(tasks[0].result).toContain('External effects denied')
     })
   })
 

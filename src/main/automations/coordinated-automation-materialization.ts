@@ -90,18 +90,23 @@ export function materializeCoordinatedRun(
   }
 
   if (run.materializationPhase === 'intent_persisted') {
-    const objective =
-      run.resolvedSnapshot?.outcomeContract.humanStatement ||
-      run.title ||
-      'Coordinated Automation Run'
-    const orchRun = orchestrationDb.createRun({
-      objective,
-      coordinatorHandle: null,
-      coordinatorPaneKey: null
-    })
+    const exactRunId = run.orchestrationRunId ?? `run_${run.id}`
+    const existingRun = orchestrationDb.getRun(exactRunId)
+    if (!existingRun) {
+      const objective =
+        run.resolvedSnapshot?.outcomeContract.humanStatement ||
+        run.title ||
+        'Coordinated Automation Run'
+      orchestrationDb.createRun({
+        id: exactRunId,
+        objective,
+        coordinatorHandle: null,
+        coordinatorPaneKey: null
+      })
+    }
     run = store.linkCoordinatedOrchestrationRun({
       automationRunId: run.id,
-      orchestrationRunId: orchRun.id,
+      orchestrationRunId: exactRunId,
       probe
     })
   }
@@ -112,25 +117,45 @@ export function materializeCoordinatedRun(
       snapshot.resolvedChildren.filter((child) => child.enabled)
     )
     const childToTask = new Map<string, string>()
+    const createdTaskIds: string[] = []
 
     for (const child of includedChildren) {
-      const deps = child.dependencies
-        .map((d) => childToTask.get(d.childId))
-        .filter((id): id is string => Boolean(id))
+      const exactTaskId = `task_${run.orchestrationRunId}_${child.childDefinitionId}`
+      childToTask.set(child.childDefinitionId, exactTaskId)
+      createdTaskIds.push(exactTaskId)
 
-      const task = orchestrationDb.createTask({
-        runId: run.orchestrationRunId!,
-        spec: child.prompt.text,
-        displayName: child.name,
-        taskTitle: `${child.name} (${child.role})`,
-        deps
-      })
-      childToTask.set(child.childDefinitionId, task.id)
+      const existingTask = orchestrationDb.getTask(exactTaskId)
+      if (!existingTask) {
+        const deps = child.dependencies
+          .map((d) => childToTask.get(d.childId))
+          .filter((id): id is string => Boolean(id))
+
+        orchestrationDb.createTask({
+          id: exactTaskId,
+          runId: run.orchestrationRunId!,
+          spec: child.prompt.text,
+          displayName: child.name,
+          taskTitle: `${child.name} (${child.role})`,
+          deps
+        })
+      }
     }
 
-    const mappings = Array.from(childToTask.entries()).map(([childDefinitionId, taskId]) => ({
-      childDefinitionId,
-      taskId
+    run = store.recordCoordinatedTasksCreated({
+      automationRunId: run.id,
+      taskIds: createdTaskIds,
+      probe
+    })
+  }
+
+  if (run.materializationPhase === 'tasks_created') {
+    const snapshot = run.resolvedSnapshot!
+    const includedChildren = topologicallySortChildren(
+      snapshot.resolvedChildren.filter((child) => child.enabled)
+    )
+    const mappings = includedChildren.map((child) => ({
+      childDefinitionId: child.childDefinitionId,
+      taskId: `task_${run.orchestrationRunId}_${child.childDefinitionId}`
     }))
 
     run = store.persistCoordinatedChildMappings({
