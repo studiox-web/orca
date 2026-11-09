@@ -1,4 +1,5 @@
 import React from 'react'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { selectAgentLaunchRouteView } from '@/lib/agent-launch-route-input'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
@@ -212,6 +213,15 @@ export function AutomationEditorDialog({
         <div className="flex min-h-0 flex-1 flex-row">
           {isCoordinated ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 scrollbar-sleek gap-5">
+              {!isCoordinatedFeatureEnabled ? (
+                <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-2xs text-warning-foreground">
+                  {translate(
+                    'auto.components.automations.editor.flagOffNotice',
+                    'Coordinated automations require the experimental feature flag to be enabled in Settings. Viewing in safe read-only mode.'
+                  )}
+                </div>
+              ) : null}
+
               <div className="space-y-1.5">
                 <Label
                   htmlFor="automation-outcome-statement"
@@ -221,12 +231,12 @@ export function AutomationEditorDialog({
                 </Label>
                 <Textarea
                   id="automation-outcome-statement"
-                  value={draft.outcomeContract?.humanStatement ?? draft.prompt}
+                  value={draft.outcomeContract?.humanStatement ?? ''}
+                  disabled={!isCoordinatedFeatureEnabled}
                   onChange={(e) => {
                     const text = e.target.value
                     onDraftChange((curr) => ({
                       ...curr,
-                      prompt: text,
                       outcomeContract: {
                         humanStatement: text,
                         acceptanceCriteria: curr.outcomeContract?.acceptanceCriteria ?? [],
@@ -245,7 +255,7 @@ export function AutomationEditorDialog({
 
               <AutomationWorkersSection
                 workers={draft.children ?? []}
-                definitionRevision={draft.definitionRevision ?? 1}
+                definitionRevision={isEditing ? (draft.definitionRevision ?? 1) : null}
                 outcomeContract={draft.outcomeContract}
                 inheritedDefaults={{
                   agentId: draft.agentId,
@@ -257,8 +267,8 @@ export function AutomationEditorDialog({
                   setupDecision: draft.setupDecision,
                   reuseSession: draft.reuseSession
                 }}
-                isEditing={true}
-                hasModifications={true}
+                isEditing={isEditing && isCoordinatedFeatureEnabled}
+                hasModifications={false}
                 onWorkersChange={(children) => {
                   onDraftChange((curr) => ({
                     ...curr,
@@ -310,8 +320,9 @@ export function AutomationEditorDialog({
           isSaving={isSaving}
           canSave={canSave && (surface !== 'chat' || chatSupported === true)}
           hasProjects={repos.length > 0}
+          isCoordinated={isCoordinated}
           onOpenChange={onOpenChange}
-          onSave={onSave}
+          onSave={isCoordinated ? () => {} : onSave}
         />
       </DialogContent>
     </Dialog>

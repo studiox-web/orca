@@ -13,9 +13,9 @@ type AutomationWorkersValidationSummaryProps = {
 
 function formatErrorCode(code: string): string {
   return code
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ')
+    .replace(/^INVALID_COORDINATED_/, '')
+    .replace(/_/g, ' ')
+    .toLowerCase()
 }
 
 export function AutomationWorkersValidationSummary({
@@ -23,14 +23,13 @@ export function AutomationWorkersValidationSummary({
   onSelectChild,
   className = ''
 }: AutomationWorkersValidationSummaryProps): React.JSX.Element | null {
-  if (!errors || errors.length === 0) {
+  if (errors.length === 0) {
     return null
   }
 
   return (
     <div
       role="alert"
-      aria-live="polite"
       className={`rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-destructive dark:border-destructive/50 dark:bg-destructive/15 ${className}`}
       data-testid="automation-workers-validation-summary"
     >
@@ -51,7 +50,7 @@ export function AutomationWorkersValidationSummary({
           return (
             <li
               key={key}
-              className="flex items-start justify-between gap-2 rounded bg-background/50 px-2.5 py-1.5 text-foreground"
+              className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded bg-background/50 px-2.5 py-2 text-foreground"
             >
               <div className="flex min-w-0 items-start gap-2">
                 <Badge
@@ -63,7 +62,9 @@ export function AutomationWorkersValidationSummary({
                 <div className="min-w-0">
                   <p className="break-words font-normal text-xs text-foreground">{error.message}</p>
                   {error.path ? (
-                    <p className="font-mono text-3xs text-muted-foreground">{error.path}</p>
+                    <p className="font-mono text-3xs text-muted-foreground break-all">
+                      {error.path}
+                    </p>
                   ) : null}
                 </div>
               </div>
@@ -73,7 +74,7 @@ export function AutomationWorkersValidationSummary({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-6 shrink-0 gap-1 px-1.5 text-2xs text-muted-foreground hover:text-foreground"
+                  className="h-6 shrink-0 self-end sm:self-center gap-1 px-1.5 text-2xs text-muted-foreground hover:text-foreground"
                   onClick={() => onSelectChild(error.childId!)}
                   aria-label={translate(
                     'auto.components.automations.workers.jumpToChild',

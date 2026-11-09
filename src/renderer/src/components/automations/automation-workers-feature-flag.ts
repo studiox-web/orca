@@ -9,8 +9,9 @@ export function shouldShowWorkersSection(
   automation?: { kind?: AutomationKind } | null,
   settings?: GlobalSettings | null
 ): boolean {
-  if (automation?.kind === 'coordinated') {
-    return true
+  const isEnabled = isCoordinatedAutomationsFeatureEnabled(settings)
+  if (!isEnabled) {
+    return false
   }
-  return isCoordinatedAutomationsFeatureEnabled(settings)
+  return automation?.kind === 'coordinated'
 }

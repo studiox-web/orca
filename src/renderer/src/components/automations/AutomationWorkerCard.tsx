@@ -6,7 +6,8 @@ import {
   ChevronDown,
   Layers,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  CheckCircle
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -30,6 +31,7 @@ type AutomationWorkerCardProps = {
   totalCount: number
   parentDefaults?: CoordinatedAutomationInheritedDefaults
   isEditing?: boolean
+  isSelected?: boolean
   allChildren?: readonly CoordinatedAutomationChildDefinition[]
   errors?: readonly CoordinatedAutomationValidationError[]
   onUpdate?: (childId: string, patch: Partial<CoordinatedAutomationChildDefinition>) => void
@@ -47,6 +49,7 @@ export function AutomationWorkerCard({
   totalCount,
   parentDefaults,
   isEditing = false,
+  isSelected = false,
   allChildren = EMPTY_CHILDREN,
   errors = EMPTY_ERRORS,
   onUpdate,
@@ -60,16 +63,19 @@ export function AutomationWorkerCard({
   const childErrors = errors.filter((e) => e.childId === child.id)
   const hasErrors = childErrors.length > 0
   const promptDigest = computePromptDigest(child.promptSource)
-
   const childMap = new Map(allChildren.map((c) => [c.id, c]))
 
   return (
     <div
       role="listitem"
+      id={`worker-card-${child.id}`}
+      tabIndex={-1}
       aria-label={`Worker: ${child.name}`}
       data-testid={`worker-card-${child.id}`}
       data-child-id={child.id}
-      className={`relative rounded-lg border transition-colors ${
+      className={`relative rounded-lg border transition-all ${
+        isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''
+      } ${
         hasErrors
           ? 'border-destructive/60 bg-destructive/5'
           : child.enabled
@@ -79,17 +85,20 @@ export function AutomationWorkerCard({
     >
       {/* Header row */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge
             variant={child.enabled ? 'secondary' : 'outline'}
             className="font-semibold text-2xs uppercase tracking-wider"
           >
             {child.role}
           </Badge>
-          <span className="truncate font-semibold text-sm text-foreground" title={child.name}>
+          <span
+            className="truncate font-semibold text-sm text-foreground max-w-[200px]"
+            title={child.name}
+          >
             {child.name}
           </span>
-          <span className="font-mono text-3xs text-muted-foreground" title={child.id}>
+          <span className="font-mono text-3xs text-muted-foreground truncate" title={child.id}>
             ({child.id})
           </span>
           {!child.enabled ? (
@@ -101,7 +110,7 @@ export function AutomationWorkerCard({
 
         {/* Action buttons in edit mode */}
         {isEditing ? (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -150,6 +159,7 @@ export function AutomationWorkerCard({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
+                  aria-pressed={child.enabled}
                   aria-label={
                     child.enabled
                       ? translate(
@@ -164,7 +174,9 @@ export function AutomationWorkerCard({
                   onClick={() => onUpdate?.(child.id, { enabled: !child.enabled })}
                 >
                   <span
-                    className={`size-2 rounded-full ${child.enabled ? 'bg-green-500' : 'bg-muted-foreground'}`}
+                    className={`size-2 rounded-full ${
+                      child.enabled ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-muted-foreground'
+                    }`}
                   />
                 </Button>
               </TooltipTrigger>
@@ -185,9 +197,7 @@ export function AutomationWorkerCard({
                     aria-label={translate(
                       'auto.components.automations.workers.editWorker',
                       'Edit worker {{name}}',
-                      {
-                        name: child.name
-                      }
+                      { name: child.name }
                     )}
                     onClick={() => onEditWorker(child)}
                   >
@@ -211,9 +221,7 @@ export function AutomationWorkerCard({
                     aria-label={translate(
                       'auto.components.automations.workers.removeWorker',
                       'Remove worker {{name}}',
-                      {
-                        name: child.name
-                      }
+                      { name: child.name }
                     )}
                     onClick={() => onRemove(child.id)}
                   >
@@ -246,23 +254,21 @@ export function AutomationWorkerCard({
       ) : null}
 
       {/* Prompt source / digest */}
-      <div className="mt-3 rounded border border-border/50 bg-muted/30 p-2.5">
+      <div className="mt-3 rounded border border-border/50 bg-muted/30 p-2.5 min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-1 text-2xs text-muted-foreground">
-          <div className="flex items-center gap-1.5 font-medium">
-            <FileText className="size-3.5" aria-hidden="true" />
-            <span>
+          <div className="flex items-center gap-1.5 font-medium min-w-0">
+            <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="truncate">
               {child.promptSource.kind === 'inline'
                 ? translate('auto.components.automations.workers.inlinePrompt', 'Inline prompt')
                 : translate(
                     'auto.components.automations.workers.sourceRefPrompt',
                     'Source reference: {{path}}',
-                    {
-                      path: child.promptSource.path
-                    }
+                    { path: child.promptSource.path }
                   )}
             </span>
           </div>
-          <span className="font-mono text-3xs" title={promptDigest}>
+          <span className="font-mono text-3xs shrink-0" title={promptDigest}>
             {promptDigest.slice(0, 20)}…
           </span>
         </div>
@@ -293,7 +299,7 @@ export function AutomationWorkerCard({
       {child.dependencies.length > 0 ? (
         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-2xs">
           <div className="flex items-center gap-1 font-medium text-muted-foreground">
-            <Layers className="size-3.5" aria-hidden="true" />
+            <Layers className="size-3.5 shrink-0" aria-hidden="true" />
             <span>
               {translate('auto.components.automations.workers.dependencies', 'Dependencies:')}
             </span>
@@ -316,23 +322,48 @@ export function AutomationWorkerCard({
         child.stageAcceptance.requiredChecks?.length ||
         child.stageAcceptance.requiredApprovals?.length ||
         child.stageAcceptance.criteria?.length) ? (
-        <div className="mt-2.5 rounded border border-border/40 bg-muted/15 p-2 text-2xs">
+        <div className="mt-2.5 rounded border border-border/40 bg-muted/15 p-2 text-2xs min-w-0">
           <div className="font-semibold text-3xs uppercase tracking-wider text-muted-foreground">
             {translate('auto.components.automations.workers.stageAcceptance', 'Stage Acceptance')}
           </div>
-          <div className="mt-1 flex flex-wrap gap-2 text-muted-foreground">
+          <div className="mt-1.5 flex flex-wrap gap-2 text-muted-foreground">
+            {child.stageAcceptance.criteria?.map((crit, idx) => (
+              <div
+                key={crit.id ?? `crit-${idx}`}
+                className="flex items-center gap-1 text-foreground"
+              >
+                <CheckCircle
+                  className="size-3 shrink-0 text-emerald-500 dark:text-emerald-400"
+                  aria-hidden="true"
+                />
+                <span className="font-medium text-xs">{crit.description}</span>
+              </div>
+            ))}
+            {child.stageAcceptance.requiredChecks?.map((chk, idx) => (
+              <div
+                key={chk.id ?? `chk-${idx}`}
+                className="flex items-center gap-1 font-mono text-3xs"
+              >
+                <span className="text-muted-foreground">check:</span>
+                <span className="text-foreground">{chk.description || chk.id}</span>
+              </div>
+            ))}
             {child.stageAcceptance.requiredArtifacts?.map((art, idx) => (
-              <div key={idx} className="flex items-center gap-1">
-                <span className="font-medium text-foreground">Artifact:</span>
+              <div key={`art-${idx}`} className="flex items-center gap-1">
+                <span className="font-medium text-foreground">
+                  {translate('auto.components.automations.workers.artifactLabel', 'Artifact:')}
+                </span>
                 <span className="font-mono text-3xs">{art.kind}</span>
               </div>
             ))}
             {child.stageAcceptance.requiredApprovals?.map((app, idx) => (
-              <div key={idx} className="flex items-center gap-1">
-                <span className="font-medium text-foreground">Approval:</span>
+              <div key={`app-${idx}`} className="flex items-center gap-1">
+                <span className="font-medium text-foreground">
+                  {translate('auto.components.automations.workers.approvalLabel', 'Approval:')}
+                </span>
                 <span className="font-mono text-3xs">{app.role}</span>
                 {app.disallowAuthorApproval ? (
-                  <Badge variant="outline" className="text-3xs text-amber-500">
+                  <Badge variant="outline" className="text-3xs text-amber-600 dark:text-amber-400">
                     non-author
                   </Badge>
                 ) : null}

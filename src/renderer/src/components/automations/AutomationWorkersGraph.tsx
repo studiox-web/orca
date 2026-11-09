@@ -2,12 +2,16 @@ import React from 'react'
 import { ArrowRight, Layers, ShieldAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { AgentIcon } from '@/lib/agent-catalog'
-import type { CoordinatedAutomationChildDefinition } from '../../../../shared/coordinated-automation-types'
+import type {
+  CoordinatedAutomationChildDefinition,
+  CoordinatedAutomationInheritedDefaults
+} from '../../../../shared/coordinated-automation-types'
 import { computeWorkerGraphLayout } from './automation-workers-graph-layout'
 import { translate } from '@/i18n/i18n'
 
 type AutomationWorkersGraphProps = {
   workers: readonly CoordinatedAutomationChildDefinition[]
+  parentDefaults?: CoordinatedAutomationInheritedDefaults
   selectedChildId?: string | null
   onSelectChild?: (childId: string) => void
   className?: string
@@ -15,6 +19,7 @@ type AutomationWorkersGraphProps = {
 
 export function AutomationWorkersGraph({
   workers,
+  parentDefaults,
   selectedChildId,
   onSelectChild,
   className = ''
@@ -81,6 +86,13 @@ export function AutomationWorkersGraph({
             <div className="space-y-2">
               {layer.nodes.map((node) => {
                 const isSelected = selectedChildId === node.child.id
+                const effectiveAgent =
+                  node.child.launchConfig.agentId ?? parentDefaults?.agentId ?? 'claude'
+                const effectiveModel =
+                  node.child.launchConfig.model === null
+                    ? null
+                    : (node.child.launchConfig.model ?? parentDefaults?.model ?? null)
+
                 return (
                   <button
                     key={node.child.id}
@@ -115,17 +127,23 @@ export function AutomationWorkersGraph({
                     </div>
 
                     <div className="mt-2 flex items-center justify-between text-2xs text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <AgentIcon agent={node.child.launchConfig.agentId ?? 'claude'} size={12} />
-                        <span className="truncate max-w-[90px] font-mono text-3xs">
-                          {node.child.launchConfig.model ??
-                            node.child.launchConfig.agentId ??
-                            'claude'}
+                      <div className="flex items-center gap-1 min-w-0">
+                        <AgentIcon agent={effectiveAgent} size={12} />
+                        <span
+                          className="truncate max-w-[120px] font-mono text-3xs"
+                          title={
+                            effectiveModel
+                              ? `${effectiveAgent} (${effectiveModel})`
+                              : effectiveAgent
+                          }
+                        >
+                          {effectiveAgent}
+                          {effectiveModel ? `/${effectiveModel}` : ''}
                         </span>
                       </div>
 
                       {node.upstreamIds.length > 0 ? (
-                        <div className="flex items-center gap-0.5 text-3xs text-muted-foreground">
+                        <div className="flex items-center gap-0.5 text-3xs text-muted-foreground shrink-0">
                           <span>in:{node.upstreamIds.length}</span>
                         </div>
                       ) : null}
@@ -135,8 +153,11 @@ export function AutomationWorkersGraph({
                       <div className="mt-1 flex items-center gap-1 border-t border-border/30 pt-1 text-3xs text-muted-foreground">
                         <ArrowRight className="size-2.5" />
                         <span className="truncate">
-                          feeds {node.downstreamIds.length} worker
-                          {node.downstreamIds.length > 1 ? 's' : ''}
+                          {translate(
+                            'auto.components.automations.workers.feedsCount',
+                            'feeds {{count}} worker(s)',
+                            { count: node.downstreamIds.length }
+                          )}
                         </span>
                       </div>
                     ) : null}

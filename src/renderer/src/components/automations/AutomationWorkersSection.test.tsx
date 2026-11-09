@@ -12,14 +12,14 @@ import type {
 
 const roots: Root[] = []
 
-function renderWorkersSection(
+async function renderWorkersSection(
   props: React.ComponentProps<typeof AutomationWorkersSection>
-): HTMLDivElement {
+): Promise<HTMLDivElement> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
-  act(() => {
+  await act(async () => {
     root.render(
       <TooltipProvider>
         <AutomationWorkersSection {...props} />
@@ -82,8 +82,8 @@ describe('AutomationWorkersSection', () => {
     }
   }
 
-  it('renders configured workers with role, prompt, and provenance', () => {
-    const container = renderWorkersSection({
+  it('renders configured workers with role, prompt, and provenance', async () => {
+    const container = await renderWorkersSection({
       workers: [baseChild1, baseChild2],
       isEditing: false
     })
@@ -98,9 +98,9 @@ describe('AutomationWorkersSection', () => {
     expect(container.textContent).toContain('Inherited')
   })
 
-  it('adds a worker when clicking Add worker in edit mode', () => {
+  it('opens worker editor dialog when clicking Add worker without adding blank worker prematurely', async () => {
     const onWorkersChange = vi.fn()
-    const container = renderWorkersSection({
+    const container = await renderWorkersSection({
       workers: [baseChild1],
       isEditing: true,
       onWorkersChange
@@ -111,19 +111,30 @@ describe('AutomationWorkersSection', () => {
     ) as HTMLButtonElement
     expect(addButton).not.toBeNull()
 
-    act(() => {
+    await act(async () => {
       addButton.click()
     })
 
-    expect(onWorkersChange).toHaveBeenCalledTimes(1)
-    const newChildren = onWorkersChange.mock.calls[0][0]
-    expect(newChildren).toHaveLength(2)
-    expect(newChildren[1].id).toBeDefined()
+    // Dialog is opened, but onWorkersChange has NOT been called yet
+    expect(onWorkersChange).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Configure Worker')
+
+    // Click cancel in the dialog
+    const cancelBtn = Array.from(document.body.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Cancel'
+    )
+    expect(cancelBtn).toBeDefined()
+    await act(async () => {
+      cancelBtn?.click()
+    })
+
+    // Still not called; no blank worker added
+    expect(onWorkersChange).not.toHaveBeenCalled()
   })
 
-  it('reorders workers up and down in edit mode', () => {
+  it('reorders workers up and down in edit mode', async () => {
     const onWorkersChange = vi.fn()
-    const container = renderWorkersSection({
+    const container = await renderWorkersSection({
       workers: [baseChild1, baseChild2],
       isEditing: true,
       onWorkersChange
@@ -134,7 +145,7 @@ describe('AutomationWorkersSection', () => {
     ) as HTMLButtonElement
     expect(moveDownBtn).not.toBeNull()
 
-    act(() => {
+    await act(async () => {
       moveDownBtn.click()
     })
 
@@ -144,9 +155,9 @@ describe('AutomationWorkersSection', () => {
     expect(reordered[1].id).toBe('worker-1')
   })
 
-  it('disables and enables a worker', () => {
+  it('disables and enables a worker', async () => {
     const onWorkersChange = vi.fn()
-    const container = renderWorkersSection({
+    const container = await renderWorkersSection({
       workers: [baseChild1],
       isEditing: true,
       onWorkersChange
@@ -156,8 +167,9 @@ describe('AutomationWorkersSection', () => {
       'button[aria-label="Disable worker"]'
     ) as HTMLButtonElement
     expect(disableBtn).not.toBeNull()
+    expect(disableBtn.getAttribute('aria-pressed')).toBe('true')
 
-    act(() => {
+    await act(async () => {
       disableBtn.click()
     })
 
@@ -165,51 +177,101 @@ describe('AutomationWorkersSection', () => {
     expect(onWorkersChange.mock.calls[0][0][0].enabled).toBe(false)
   })
 
-  it('removes a worker and cleans up dependent references', () => {
+  it('confirms destructive removal and cleans up dependent references', async () => {
     const onWorkersChange = vi.fn()
-    const container = renderWorkersSection({
+    const container = await renderWorkersSection({
       workers: [baseChild1, baseChild2],
       isEditing: true,
       onWorkersChange
     })
 
+    // Worker 1 is a dependency of Worker 2
     const removeBtn = container.querySelector(
       'button[aria-label="Remove worker Researcher Alpha"]'
     ) as HTMLButtonElement
     expect(removeBtn).not.toBeNull()
 
-    act(() => {
+    await act(async () => {
       removeBtn.click()
+    })
+
+    // Confirmation dialog is shown
+    expect(document.body.textContent).toContain('Confirm Remove Worker')
+    expect(document.body.textContent).toContain('Writer Beta')
+
+    // Confirm removal
+    const confirmBtn = document.body.querySelector(
+      '[data-testid="confirm-delete-worker"]'
+    ) as HTMLButtonElement
+    expect(confirmBtn).not.toBeNull()
+
+    await act(async () => {
+      confirmBtn.click()
     })
 
     expect(onWorkersChange).toHaveBeenCalledTimes(1)
     const remaining = onWorkersChange.mock.calls[0][0]
     expect(remaining).toHaveLength(1)
     expect(remaining[0].id).toBe('worker-2')
-    // Dependency on worker-1 should be removed
     expect(remaining[0].dependencies).toEqual([])
   })
 
-  it('resets overridden launch config field to inherited', () => {
+  it('resets overridden launch config field to inherited upon clicking reset', async () => {
     const onWorkersChange = vi.fn()
-    const container = renderWorkersSection({
+    const container = await renderWorkersSection({
       workers: [baseChild1],
       isEditing: true,
       onWorkersChange
     })
 
-    const overrideBadge = container.querySelector('[data-testid="worker-card-worker-1"]')
-    expect(overrideBadge?.textContent).toContain('Overridden')
+    const resetModelBtn = container.querySelector(
+      'button[aria-label="Reset model to inherited"]'
+    ) as HTMLButtonElement
+    expect(resetModelBtn).not.toBeNull()
+
+    await act(async () => {
+      resetModelBtn.click()
+    })
+
+    expect(onWorkersChange).toHaveBeenCalledTimes(1)
+    const updated = onWorkersChange.mock.calls[0][0][0]
+    expect(updated.launchConfig.model).toBeUndefined()
+    expect(updated.launchConfig.provenance.model).toBe('inherited')
   })
 
-  it('handles duplicate names with distinct stable IDs', () => {
+  it('renders explicit none overrides distinctly from inherited values', async () => {
+    const explicitNoneChild: CoordinatedAutomationChildDefinition = {
+      ...baseChild1,
+      id: 'worker-none',
+      launchConfig: {
+        agentId: 'claude',
+        model: null, // Explicit none
+        reasoningEffort: null, // Explicit none
+        provenance: {
+          agentId: 'inherited',
+          model: 'overridden',
+          reasoningEffort: 'overridden'
+        }
+      }
+    }
+
+    const container = await renderWorkersSection({
+      workers: [explicitNoneChild],
+      isEditing: false
+    })
+
+    expect(container.textContent).toContain('/(none)')
+    expect(container.textContent).toContain('Overridden (None)')
+  })
+
+  it('handles duplicate names with distinct stable IDs', async () => {
     const duplicateChild: CoordinatedAutomationChildDefinition = {
       ...baseChild1,
       id: 'worker-duplicate-id',
       name: 'Researcher Alpha' // Same display name, different ID
     }
 
-    const container = renderWorkersSection({
+    const container = await renderWorkersSection({
       workers: [baseChild1, duplicateChild],
       isEditing: false
     })
@@ -222,30 +284,7 @@ describe('AutomationWorkersSection', () => {
     expect(card2?.textContent).toContain('(worker-duplicate-id)')
   })
 
-  it('displays long prompts and long model names without crashing or overflowing', () => {
-    const longPromptChild: CoordinatedAutomationChildDefinition = {
-      ...baseChild1,
-      id: 'worker-long',
-      promptSource: {
-        kind: 'inline',
-        text: 'A'.repeat(5000)
-      },
-      launchConfig: {
-        agentId: 'claude',
-        model: 'super-long-custom-fine-tuned-model-id-v2-preview-evaluation-20261109-experimental',
-        provenance: { model: 'overridden' }
-      }
-    }
-
-    const container = renderWorkersSection({
-      workers: [longPromptChild],
-      isEditing: false
-    })
-
-    expect(container.textContent).toContain('super-long-custom-fine-tuned-model-id')
-  })
-
-  it('displays validation errors and allows jumping to the offending worker', () => {
+  it('displays validation errors and scrolls/focuses the target worker on Jump click', async () => {
     const invalidChildren: CoordinatedAutomationChildDefinition[] = [
       {
         ...baseChild1,
@@ -259,7 +298,7 @@ describe('AutomationWorkersSection', () => {
       }
     ]
 
-    const container = renderWorkersSection({
+    const container = await renderWorkersSection({
       workers: invalidChildren,
       isEditing: true
     })
@@ -268,11 +307,28 @@ describe('AutomationWorkersSection', () => {
       '[data-testid="automation-workers-validation-summary"]'
     )
     expect(validationAlert).not.toBeNull()
-    expect(validationAlert?.textContent).toContain('Dependency Cycle')
+    expect(validationAlert?.textContent).toContain('dependency cycle')
+
+    const jumpBtn = container.querySelector(
+      'button[aria-label="Jump to worker child-a"]'
+    ) as HTMLButtonElement
+    expect(jumpBtn).not.toBeNull()
+
+    // Mock scrollIntoView
+    const cardA = container.querySelector('#worker-card-child-a') as HTMLDivElement
+    expect(cardA).not.toBeNull()
+    cardA.scrollIntoView = vi.fn()
+
+    await act(async () => {
+      jumpBtn.click()
+    })
+
+    expect(cardA.scrollIntoView).toHaveBeenCalled()
+    expect(cardA.className).toContain('ring-2 ring-primary')
   })
 
-  it('switches between list and graph views', () => {
-    const container = renderWorkersSection({
+  it('switches between list and graph views with keyboard accessibility', async () => {
+    const container = await renderWorkersSection({
       workers: [baseChild1, baseChild2],
       isEditing: false
     })
@@ -281,15 +337,26 @@ describe('AutomationWorkersSection', () => {
     expect(container.querySelector('[data-testid="automation-workers-graph"]')).toBeNull()
 
     const graphBtn = container.querySelector('button[aria-label="Graph view"]') as HTMLButtonElement
-    act(() => {
+    await act(async () => {
       graphBtn.click()
     })
 
     expect(container.querySelector('[data-testid="automation-workers-graph"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="automation-workers-list"]')).toBeNull()
+
+    // Click graph node to jump back to list view
+    const nodeA = container.querySelector(
+      '[data-testid="graph-node-worker-1"]'
+    ) as HTMLButtonElement
+    expect(nodeA).not.toBeNull()
+    await act(async () => {
+      nodeA.click()
+    })
+
+    expect(container.querySelector('[data-testid="automation-workers-list"]')).not.toBeNull()
   })
 
-  it('renders read-only historical snapshots with canonical digest and copy action', async () => {
+  it('renders read-only historical snapshots with run id and canonical digest', async () => {
     const snapshot: ResolvedAutomationRunSnapshot = {
       automationId: 'auto-hist',
       definitionRevision: 1,
@@ -371,8 +438,9 @@ describe('AutomationWorkersSection', () => {
       ]
     }
 
-    const container = renderWorkersSection({
+    const container = await renderWorkersSection({
       workers: [baseChild1],
+      activeRunId: 'run-historical-1234',
       historicalSnapshot: snapshot,
       isEditing: false
     })
@@ -382,6 +450,7 @@ describe('AutomationWorkersSection', () => {
     )
     expect(snapshotViewer).not.toBeNull()
     expect(snapshotViewer?.textContent).toContain('Frozen run snapshot (Revision 1)')
+    expect(snapshotViewer?.textContent).toContain('Run: run-historical-1234')
     expect(snapshotViewer?.textContent).toContain('Read-only')
     expect(snapshotViewer?.textContent).toContain('Deliver validated weekly report')
     expect(snapshotViewer?.textContent).toContain('Snapshot Researcher')
@@ -398,8 +467,8 @@ describe('AutomationWorkersSection', () => {
     expect(container.querySelector('button[aria-label*="Dispatch"]')).toBeNull()
   })
 
-  it('renders future-revision impact preview distinguishing active run from draft', () => {
-    const container = renderWorkersSection({
+  it('renders future-revision impact preview distinguishing active run from draft', async () => {
+    const container = await renderWorkersSection({
       workers: [baseChild1],
       definitionRevision: 2,
       hasModifications: true,

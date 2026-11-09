@@ -1,7 +1,41 @@
 import type {
+  ChildLaunchConfigField,
   CoordinatedAutomationChildDefinition,
+  OverrideProvenance,
   ResolvedAutomationRunSnapshot
 } from '../../../../shared/coordinated-automation-types'
+
+const DEFAULT_SNAPSHOT_PROVENANCE = Object.fromEntries(
+  [
+    'agentId',
+    'model',
+    'reasoningEffort',
+    'surface',
+    'extraAgentArgs',
+    'reuseSession',
+    'workspaceMode',
+    'workspaceId',
+    'baseBranch',
+    'setupDecision',
+    'timeoutSeconds',
+    'maxRetries',
+    'maxReviewIterations'
+  ].map((k) => [k, 'inherited'])
+) as Record<ChildLaunchConfigField, OverrideProvenance>
+
+const DEFAULT_SNAPSHOT_LAUNCH_CONFIG = {
+  agentId: 'claude' as const,
+  surface: 'terminal' as const,
+  extraAgentArgs: '',
+  reuseSession: false,
+  workspaceMode: 'existing' as const,
+  workspaceId: 'ws-historical',
+  baseBranch: 'main',
+  setupDecision: 'inherit' as const,
+  timeoutSeconds: 1800,
+  maxRetries: 3,
+  maxReviewIterations: 2
+}
 
 export const sampleConfiguredWorkers: CoordinatedAutomationChildDefinition[] = [
   {
@@ -27,6 +61,11 @@ export const sampleConfiguredWorkers: CoordinatedAutomationChildDefinition[] = [
       }
     },
     stageAcceptance: {
+      criteria: [
+        { id: 'c-1', description: 'Topic brief matches factual citations', required: true },
+        { id: 'c-2', description: 'Zero duplicate references', required: true }
+      ],
+      requiredChecks: [{ id: 'chk-1', description: 'pnpm test:sources', required: true }],
       requiredArtifacts: [
         { kind: 'research-brief', pathPattern: 'research/*.json', required: true }
       ]
@@ -214,34 +253,13 @@ export const sampleHistoricalSnapshot: ResolvedAutomationRunSnapshot = {
         digest: 'sha256:a1b2c3d4e5f60102030405060708090a1b2c3d4e5f60102030405060708090a1'
       },
       launchConfig: {
-        agentId: 'claude',
+        ...DEFAULT_SNAPSHOT_LAUNCH_CONFIG,
         model: 'claude-3-5-sonnet',
-        reasoningEffort: null,
-        surface: 'terminal',
-        extraAgentArgs: '',
-        reuseSession: false,
-        workspaceMode: 'existing',
-        workspaceId: 'ws-historical',
-        baseBranch: 'main',
-        setupDecision: 'inherit',
-        timeoutSeconds: 1800,
-        maxRetries: 3,
-        maxReviewIterations: 2
+        reasoningEffort: null
       },
       provenance: {
-        agentId: 'inherited',
-        model: 'overridden',
-        reasoningEffort: 'inherited',
-        surface: 'inherited',
-        extraAgentArgs: 'inherited',
-        reuseSession: 'inherited',
-        workspaceMode: 'inherited',
-        workspaceId: 'inherited',
-        baseBranch: 'inherited',
-        setupDecision: 'inherited',
-        timeoutSeconds: 'inherited',
-        maxRetries: 'inherited',
-        maxReviewIterations: 'inherited'
+        ...DEFAULT_SNAPSHOT_PROVENANCE,
+        model: 'overridden'
       },
       dependencies: [],
       mutationClass: 'read_only',
@@ -259,34 +277,14 @@ export const sampleHistoricalSnapshot: ResolvedAutomationRunSnapshot = {
         digest: 'sha256:b2c3d4e5f6a10102030405060708090a1b2c3d4e5f60102030405060708090a2'
       },
       launchConfig: {
-        agentId: 'claude',
+        ...DEFAULT_SNAPSHOT_LAUNCH_CONFIG,
         model: 'claude-3-7-sonnet',
-        reasoningEffort: 'high',
-        surface: 'terminal',
-        extraAgentArgs: '',
-        reuseSession: false,
-        workspaceMode: 'existing',
-        workspaceId: 'ws-historical',
-        baseBranch: 'main',
-        setupDecision: 'inherit',
-        timeoutSeconds: 1800,
-        maxRetries: 3,
-        maxReviewIterations: 2
+        reasoningEffort: 'high'
       },
       provenance: {
-        agentId: 'inherited',
+        ...DEFAULT_SNAPSHOT_PROVENANCE,
         model: 'overridden',
-        reasoningEffort: 'overridden',
-        surface: 'inherited',
-        extraAgentArgs: 'inherited',
-        reuseSession: 'inherited',
-        workspaceMode: 'inherited',
-        workspaceId: 'inherited',
-        baseBranch: 'inherited',
-        setupDecision: 'inherited',
-        timeoutSeconds: 'inherited',
-        maxRetries: 'inherited',
-        maxReviewIterations: 'inherited'
+        reasoningEffort: 'overridden'
       },
       dependencies: [{ childId: 'worker-researcher', condition: 'accepted' }],
       mutationClass: 'exclusive_writer',

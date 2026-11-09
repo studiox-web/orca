@@ -1,5 +1,5 @@
 import React from 'react'
-import { RotateCcw, HardDrive, Clock } from 'lucide-react'
+import { RotateCcw, HardDrive, Clock, Brain, Bot } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -17,153 +17,182 @@ type WorkerConfigGridProps = {
   onResetField?: (childId: string, field: ChildLaunchConfigField) => void
 }
 
+function ProvenanceBadge({
+  isOverridden,
+  isExplicitNone
+}: {
+  isOverridden: boolean
+  isExplicitNone: boolean
+}): React.JSX.Element {
+  if (isOverridden && isExplicitNone) {
+    return (
+      <Badge variant="outline" className="border-warning/50 text-warning text-3xs">
+        {translate('auto.components.automations.workers.overriddenNone', 'Overridden (None)')}
+      </Badge>
+    )
+  }
+  if (isOverridden) {
+    return (
+      <Badge variant="outline" className="border-primary/50 text-primary text-3xs">
+        {translate('auto.components.automations.workers.explicitOverride', 'Overridden')}
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="outline" className="text-muted-foreground text-3xs">
+      {translate('auto.components.automations.workers.inherited', 'Inherited')}
+    </Badge>
+  )
+}
+
+function ResetFieldButton({
+  label,
+  onClick
+}: {
+  label: string
+  onClick: () => void
+}): React.JSX.Element {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className="h-5 gap-1 px-1 text-3xs text-muted-foreground hover:text-foreground"
+      aria-label={label}
+      onClick={onClick}
+    >
+      <RotateCcw className="size-2.5" />
+      <span>{translate('auto.components.automations.workers.reset', 'Reset')}</span>
+    </Button>
+  )
+}
+
 export function WorkerConfigGrid({
   child,
   parentDefaults,
   isEditing = false,
   onResetField
 }: WorkerConfigGridProps): React.JSX.Element {
-  const effectiveAgent = child.launchConfig.agentId ?? parentDefaults?.agentId ?? 'claude'
+  // Agent
   const isAgentOverridden = child.launchConfig.provenance?.agentId === 'overridden'
+  const isAgentExplicitNone = child.launchConfig.agentId === null
+  const effectiveAgent = isAgentExplicitNone
+    ? null
+    : (child.launchConfig.agentId ?? parentDefaults?.agentId ?? null)
 
-  const effectiveModel = child.launchConfig.model ?? parentDefaults?.model ?? null
+  // Model
   const isModelOverridden = child.launchConfig.provenance?.model === 'overridden'
+  const isModelExplicitNone = child.launchConfig.model === null
+  const effectiveModel = isModelExplicitNone
+    ? null
+    : (child.launchConfig.model ?? parentDefaults?.model ?? null)
 
-  const effectiveEffort =
-    child.launchConfig.reasoningEffort ?? parentDefaults?.reasoningEffort ?? null
+  // Reasoning Effort
   const isEffortOverridden = child.launchConfig.provenance?.reasoningEffort === 'overridden'
+  const isEffortExplicitNone = child.launchConfig.reasoningEffort === null
+  const effectiveEffort = isEffortExplicitNone
+    ? null
+    : (child.launchConfig.reasoningEffort ?? parentDefaults?.reasoningEffort ?? null)
 
-  const effectiveWorkspaceMode =
-    child.launchConfig.workspaceMode ?? parentDefaults?.workspaceMode ?? 'existing'
-  const isWorkspaceModeOverridden = child.launchConfig.provenance?.workspaceMode === 'overridden'
+  // Workspace Mode
+  const isWorkspaceOverridden = child.launchConfig.provenance?.workspaceMode === 'overridden'
+  const isWorkspaceExplicitNone = child.launchConfig.workspaceMode === null
+  const effectiveWorkspace = isWorkspaceExplicitNone
+    ? null
+    : (child.launchConfig.workspaceMode ?? parentDefaults?.workspaceMode ?? null)
 
-  const effectiveTimeout =
-    child.launchConfig.timeoutSeconds ?? parentDefaults?.timeoutSeconds ?? 1800
+  // Timeout Seconds
   const isTimeoutOverridden = child.launchConfig.provenance?.timeoutSeconds === 'overridden'
+  const isTimeoutExplicitNone = child.launchConfig.timeoutSeconds === null
+  const effectiveTimeout = isTimeoutExplicitNone
+    ? null
+    : (child.launchConfig.timeoutSeconds ?? parentDefaults?.timeoutSeconds ?? null)
 
   return (
-    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
-      {/* Agent & Model */}
-      <div className="rounded border border-border/40 bg-muted/20 p-2">
-        <div className="flex items-center justify-between">
-          <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
+    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      {/* 1. Agent & Model */}
+      <div className="rounded border border-border/40 bg-muted/20 p-2 min-w-0">
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground truncate">
             {translate('auto.components.automations.workers.agentAndModel', 'Agent / Model')}
           </span>
-          {isEditing && isAgentOverridden && onResetField ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-5 gap-1 px-1 text-3xs text-muted-foreground hover:text-foreground"
-              aria-label={translate(
-                'auto.components.automations.workers.resetAgent',
-                'Reset agent to inherited'
-              )}
-              onClick={() => onResetField(child.id, 'agentId')}
-            >
-              <RotateCcw className="size-2.5" />
-              <span>Reset</span>
-            </Button>
-          ) : null}
+          <div className="flex items-center gap-0.5 shrink-0">
+            {isEditing && isAgentOverridden && onResetField ? (
+              <ResetFieldButton
+                label={translate(
+                  'auto.components.automations.workers.resetAgent',
+                  'Reset agent to inherited'
+                )}
+                onClick={() => onResetField(child.id, 'agentId')}
+              />
+            ) : null}
+            {isEditing && isModelOverridden && onResetField ? (
+              <ResetFieldButton
+                label={translate(
+                  'auto.components.automations.workers.resetModel',
+                  'Reset model to inherited'
+                )}
+                onClick={() => onResetField(child.id, 'model')}
+              />
+            ) : null}
+          </div>
         </div>
-        <div className="mt-1 flex items-center gap-1.5 font-medium">
-          <AgentIcon agent={effectiveAgent} size={14} />
-          <span className="truncate">{effectiveAgent}</span>
+
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 font-medium text-xs min-w-0">
+          {effectiveAgent ? (
+            <>
+              <AgentIcon agent={effectiveAgent} size={14} />
+              <span className="truncate">{effectiveAgent}</span>
+            </>
+          ) : (
+            <div className="flex items-center gap-1 text-muted-foreground italic">
+              <Bot className="size-3.5" />
+              <span>{isAgentExplicitNone ? 'No agent' : 'Default agent'}</span>
+            </div>
+          )}
+
           {effectiveModel ? (
             <span
-              className="truncate font-mono text-3xs text-muted-foreground"
+              className="truncate font-mono text-3xs text-muted-foreground max-w-[140px]"
               title={effectiveModel}
             >
               /{effectiveModel}
             </span>
+          ) : isModelExplicitNone ? (
+            <span className="font-mono text-3xs text-muted-foreground italic">/(none)</span>
           ) : null}
         </div>
-        <div className="mt-1 flex items-center gap-1">
-          <Badge
-            variant="outline"
-            className={`text-3xs ${
-              isAgentOverridden || isModelOverridden || isEffortOverridden
-                ? 'border-primary/40 text-primary'
-                : 'text-muted-foreground'
-            }`}
-          >
-            {isAgentOverridden || isModelOverridden || isEffortOverridden
-              ? translate('auto.components.automations.workers.explicitOverride', 'Overridden')
-              : translate('auto.components.automations.workers.inherited', 'Inherited')}
-          </Badge>
-          {effectiveEffort ? (
-            <Badge variant="outline" className="font-mono text-3xs text-muted-foreground">
-              effort:{effectiveEffort}
-            </Badge>
+
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <ProvenanceBadge isOverridden={isAgentOverridden} isExplicitNone={isAgentExplicitNone} />
+          {isModelOverridden ? (
+            <ProvenanceBadge isOverridden={true} isExplicitNone={isModelExplicitNone} />
           ) : null}
         </div>
       </div>
 
-      {/* Destination / Workspace */}
-      <div className="rounded border border-border/40 bg-muted/20 p-2">
-        <div className="flex items-center justify-between">
-          <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
-            {translate('auto.components.automations.workers.workspacePolicy', 'Workspace policy')}
+      {/* 2. Reasoning Effort & Lane */}
+      <div className="rounded border border-border/40 bg-muted/20 p-2 min-w-0">
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground truncate">
+            {translate('auto.components.automations.workers.effortAndLane', 'Effort & Lane')}
           </span>
-          {isEditing && isWorkspaceModeOverridden && onResetField ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-5 gap-1 px-1 text-3xs text-muted-foreground hover:text-foreground"
-              aria-label={translate(
-                'auto.components.automations.workers.resetWorkspace',
-                'Reset workspace to inherited'
+          {isEditing && isEffortOverridden && onResetField ? (
+            <ResetFieldButton
+              label={translate(
+                'auto.components.automations.workers.resetEffort',
+                'Reset reasoning effort to inherited'
               )}
-              onClick={() => onResetField(child.id, 'workspaceMode')}
-            >
-              <RotateCcw className="size-2.5" />
-              <span>Reset</span>
-            </Button>
+              onClick={() => onResetField(child.id, 'reasoningEffort')}
+            />
           ) : null}
         </div>
-        <div className="mt-1 flex items-center gap-1.5 font-medium text-xs">
-          <HardDrive className="size-3.5 text-muted-foreground" aria-hidden="true" />
-          <span className="capitalize">{effectiveWorkspaceMode.replace('_', ' ')}</span>
-        </div>
-        <div className="mt-1">
-          <Badge
-            variant="outline"
-            className={`text-3xs ${
-              isWorkspaceModeOverridden ? 'border-primary/40 text-primary' : 'text-muted-foreground'
-            }`}
-          >
-            {isWorkspaceModeOverridden
-              ? translate('auto.components.automations.workers.explicitOverride', 'Overridden')
-              : translate('auto.components.automations.workers.inherited', 'Inherited')}
-          </Badge>
-        </div>
-      </div>
 
-      {/* Mutation lane & Timeout */}
-      <div className="rounded border border-border/40 bg-muted/20 p-2">
-        <div className="flex items-center justify-between">
-          <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground">
-            {translate('auto.components.automations.workers.laneAndLimits', 'Lane & limits')}
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs font-medium min-w-0">
+          <Brain className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="capitalize">
+            {effectiveEffort ? `effort: ${effectiveEffort}` : 'effort: default'}
           </span>
-          {isEditing && isTimeoutOverridden && onResetField ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-5 gap-1 px-1 text-3xs text-muted-foreground hover:text-foreground"
-              aria-label={translate(
-                'auto.components.automations.workers.resetTimeout',
-                'Reset timeout to inherited'
-              )}
-              onClick={() => onResetField(child.id, 'timeoutSeconds')}
-            >
-              <RotateCcw className="size-2.5" />
-              <span>Reset</span>
-            </Button>
-          ) : null}
-        </div>
-        <div className="mt-1 flex items-center gap-1.5 font-medium text-xs">
           <Badge
             variant="outline"
             className="text-3xs uppercase tracking-wider text-muted-foreground"
@@ -171,14 +200,77 @@ export function WorkerConfigGrid({
             {child.mutationClass}
           </Badge>
           {child.mutationLane ? (
-            <span className="font-mono text-3xs text-muted-foreground">
+            <span className="font-mono text-3xs text-muted-foreground truncate max-w-[100px]">
               lane:{child.mutationLane}
             </span>
           ) : null}
         </div>
-        <div className="mt-1 flex items-center gap-1 text-2xs text-muted-foreground">
-          <Clock className="size-3" />
-          <span>{Math.round(effectiveTimeout / 60)}m timeout</span>
+
+        <div className="mt-1.5 flex items-center gap-1">
+          <ProvenanceBadge
+            isOverridden={isEffortOverridden}
+            isExplicitNone={isEffortExplicitNone}
+          />
+        </div>
+      </div>
+
+      {/* 3. Destination & Limits */}
+      <div className="rounded border border-border/40 bg-muted/20 p-2 min-w-0">
+        <div className="flex items-center justify-between gap-1">
+          <span className="text-3xs font-medium uppercase tracking-wider text-muted-foreground truncate">
+            {translate(
+              'auto.components.automations.workers.workspaceAndTimeout',
+              'Workspace & Timeout'
+            )}
+          </span>
+          <div className="flex items-center gap-0.5 shrink-0">
+            {isEditing && isWorkspaceOverridden && onResetField ? (
+              <ResetFieldButton
+                label={translate(
+                  'auto.components.automations.workers.resetWorkspace',
+                  'Reset workspace to inherited'
+                )}
+                onClick={() => onResetField(child.id, 'workspaceMode')}
+              />
+            ) : null}
+            {isEditing && isTimeoutOverridden && onResetField ? (
+              <ResetFieldButton
+                label={translate(
+                  'auto.components.automations.workers.resetTimeout',
+                  'Reset timeout to inherited'
+                )}
+                onClick={() => onResetField(child.id, 'timeoutSeconds')}
+              />
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium min-w-0">
+          <div className="flex items-center gap-1 min-w-0">
+            <HardDrive className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="capitalize truncate">
+              {effectiveWorkspace ? effectiveWorkspace.replace('_', ' ') : 'default workspace'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 text-2xs text-muted-foreground">
+            <Clock className="size-3 shrink-0" aria-hidden="true" />
+            <span>
+              {effectiveTimeout != null
+                ? `${Math.round(effectiveTimeout / 60)}m`
+                : 'default timeout'}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <ProvenanceBadge
+            isOverridden={isWorkspaceOverridden}
+            isExplicitNone={isWorkspaceExplicitNone}
+          />
+          {isTimeoutOverridden ? (
+            <ProvenanceBadge isOverridden={true} isExplicitNone={isTimeoutExplicitNone} />
+          ) : null}
         </div>
       </div>
     </div>

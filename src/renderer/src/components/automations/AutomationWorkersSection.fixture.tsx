@@ -182,6 +182,7 @@ export const historical = defineFixture({
       <AutomationWorkersSection
         workers={sampleConfiguredWorkers}
         definitionRevision={2}
+        activeRunId="run-coord-historical-7788"
         historicalSnapshot={sampleHistoricalSnapshot}
         isEditing={false}
       />
@@ -197,6 +198,7 @@ export const historical_mobile = defineFixture({
       <AutomationWorkersSection
         workers={sampleConfiguredWorkers}
         definitionRevision={2}
+        activeRunId="run-coord-historical-7788"
         historicalSnapshot={sampleHistoricalSnapshot}
         isEditing={false}
       />

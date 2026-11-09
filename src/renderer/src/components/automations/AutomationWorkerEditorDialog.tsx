@@ -9,7 +9,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import {
   Select,
@@ -18,15 +17,20 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type {
   ChildDependency,
   ChildPromptSource,
   CoordinatedAutomationChildDefinition,
   CoordinatedAutomationInheritedDefaults,
-  MutationClass
+  MutationClass,
+  StageAcceptanceContract
 } from '../../../../shared/coordinated-automation-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { AutomationWorkerPromptSourceFields } from './AutomationWorkerPromptSourceFields'
+import {
+  AutomationWorkerLaunchConfigFields,
+  type LaunchConfigFormState
+} from './AutomationWorkerLaunchConfigFields'
+import { AutomationWorkerStageAcceptanceFields } from './AutomationWorkerStageAcceptanceFields'
 import { translate } from '@/i18n/i18n'
 
 type AutomationWorkerEditorDialogProps = {
@@ -57,6 +61,7 @@ function AutomationWorkerEditorForm({
   const [role, setRole] = useState(worker.role)
   const [description, setDescription] = useState(worker.description ?? '')
   const [enabled, setEnabled] = useState(worker.enabled)
+
   const [promptKind, setPromptKind] = useState<'inline' | 'source_reference'>(
     worker.promptSource.kind
   )
@@ -70,22 +75,30 @@ function AutomationWorkerEditorForm({
     worker.promptSource.kind === 'source_reference' ? (worker.promptSource.digest ?? '') : ''
   )
 
-  const [overrideAgent, setOverrideAgent] = useState(
-    worker.launchConfig.provenance?.agentId === 'overridden'
-  )
-  const [agentId, setAgentId] = useState<TuiAgent>(
-    worker.launchConfig.agentId ?? parentDefaults?.agentId ?? 'claude'
-  )
-
-  const [overrideModel, setOverrideModel] = useState(
-    worker.launchConfig.provenance?.model === 'overridden'
-  )
-  const [model, setModel] = useState(worker.launchConfig.model ?? '')
-
   const [mutationClass, setMutationClass] = useState<MutationClass>(worker.mutationClass)
   const [mutationLane, setMutationLane] = useState(worker.mutationLane ?? '')
-
   const [dependencies, setDependencies] = useState<ChildDependency[]>(worker.dependencies)
+  const [stageAcceptance, setStageAcceptance] = useState<StageAcceptanceContract>(
+    worker.stageAcceptance ?? {}
+  )
+
+  const [launchConfigState, setLaunchConfigState] = useState<LaunchConfigFormState>({
+    overrideAgent: worker.launchConfig.provenance?.agentId === 'overridden',
+    agentId: worker.launchConfig.agentId ?? parentDefaults?.agentId ?? 'claude',
+    overrideModel: worker.launchConfig.provenance?.model === 'overridden',
+    modelExplicitNone: worker.launchConfig.model === null,
+    model: worker.launchConfig.model ?? '',
+    overrideEffort: worker.launchConfig.provenance?.reasoningEffort === 'overridden',
+    effortExplicitNone: worker.launchConfig.reasoningEffort === null,
+    effort: worker.launchConfig.reasoningEffort ?? 'medium',
+    overrideWorkspace: worker.launchConfig.provenance?.workspaceMode === 'overridden',
+    workspaceMode: worker.launchConfig.workspaceMode ?? parentDefaults?.workspaceMode ?? 'existing',
+    overrideTimeout: worker.launchConfig.provenance?.timeoutSeconds === 'overridden',
+    timeoutExplicitNone: worker.launchConfig.timeoutSeconds === null,
+    timeoutMinutes: worker.launchConfig.timeoutSeconds
+      ? String(Math.round(worker.launchConfig.timeoutSeconds / 60))
+      : ''
+  })
 
   const otherWorkers = allWorkers.filter((w) => w.id !== worker.id)
 
@@ -109,6 +122,14 @@ function AutomationWorkerEditorForm({
             digest: promptDigest.trim() || undefined
           }
 
+    const nextTimeoutSeconds = launchConfigState.overrideTimeout
+      ? launchConfigState.timeoutExplicitNone
+        ? undefined
+        : Number(launchConfigState.timeoutMinutes) > 0
+          ? Number(launchConfigState.timeoutMinutes) * 60
+          : undefined
+      : undefined
+
     const saved: CoordinatedAutomationChildDefinition = {
       ...worker,
       name: name.trim() || worker.name,
@@ -119,14 +140,31 @@ function AutomationWorkerEditorForm({
       mutationClass,
       mutationLane: mutationLane.trim() || undefined,
       dependencies,
+      stageAcceptance,
       launchConfig: {
         ...worker.launchConfig,
-        agentId: overrideAgent ? agentId : undefined,
-        model: overrideModel ? model.trim() || null : undefined,
+        agentId: launchConfigState.overrideAgent ? launchConfigState.agentId : undefined,
+        model: launchConfigState.overrideModel
+          ? launchConfigState.modelExplicitNone
+            ? null
+            : launchConfigState.model.trim() || null
+          : undefined,
+        reasoningEffort: launchConfigState.overrideEffort
+          ? launchConfigState.effortExplicitNone
+            ? null
+            : launchConfigState.effort
+          : undefined,
+        workspaceMode: launchConfigState.overrideWorkspace
+          ? launchConfigState.workspaceMode
+          : undefined,
+        timeoutSeconds: nextTimeoutSeconds,
         provenance: {
           ...worker.launchConfig.provenance,
-          agentId: overrideAgent ? 'overridden' : 'inherited',
-          model: overrideModel ? 'overridden' : 'inherited'
+          agentId: launchConfigState.overrideAgent ? 'overridden' : 'inherited',
+          model: launchConfigState.overrideModel ? 'overridden' : 'inherited',
+          reasoningEffort: launchConfigState.overrideEffort ? 'overridden' : 'inherited',
+          workspaceMode: launchConfigState.overrideWorkspace ? 'overridden' : 'inherited',
+          timeoutSeconds: launchConfigState.overrideTimeout ? 'overridden' : 'inherited'
         }
       }
     }
@@ -192,142 +230,39 @@ function AutomationWorkerEditorForm({
         </div>
 
         {/* Prompt Source */}
-        <div className="space-y-2 rounded-md border border-border/50 p-3">
-          <div className="flex items-center justify-between">
-            <Label className="font-semibold">Prompt source</Label>
-            <div className="flex rounded-md border border-border p-0.5 text-2xs">
-              <button
-                type="button"
-                className={`rounded px-2 py-0.5 ${
-                  promptKind === 'inline'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground'
-                }`}
-                onClick={() => setPromptKind('inline')}
-              >
-                Inline
-              </button>
-              <button
-                type="button"
-                className={`rounded px-2 py-0.5 ${
-                  promptKind === 'source_reference'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground'
-                }`}
-                onClick={() => setPromptKind('source_reference')}
-              >
-                Source file
-              </button>
-            </div>
-          </div>
+        <AutomationWorkerPromptSourceFields
+          promptKind={promptKind}
+          promptText={promptText}
+          promptPath={promptPath}
+          promptDigest={promptDigest}
+          onPromptKindChange={setPromptKind}
+          onPromptTextChange={setPromptText}
+          onPromptPathChange={setPromptPath}
+          onPromptDigestChange={setPromptDigest}
+        />
 
-          {promptKind === 'inline' ? (
-            <div className="space-y-1">
-              <Textarea
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="Enter the specialist instructions for this worker..."
-                rows={4}
-                className="font-mono text-xs"
-              />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <Label htmlFor="prompt-path">File path</Label>
-                <Input
-                  id="prompt-path"
-                  value={promptPath}
-                  onChange={(e) => setPromptPath(e.target.value)}
-                  placeholder="automations/goals/writer/GOAL.md"
-                  className="font-mono"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="prompt-digest">Pinned sha256 digest (optional)</Label>
-                <Input
-                  id="prompt-digest"
-                  value={promptDigest}
-                  onChange={(e) => setPromptDigest(e.target.value)}
-                  placeholder="sha256:..."
-                  className="font-mono text-3xs"
-                />
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Launch Config: Agent, Model, Effort, Workspace, Timeout */}
+        <AutomationWorkerLaunchConfigFields
+          state={launchConfigState}
+          onChange={setLaunchConfigState}
+          parentDefaults={parentDefaults}
+        />
 
-        {/* Agent & Model overrides */}
-        <div className="space-y-3 rounded-md border border-border/50 p-3">
-          <Label className="font-semibold">Execution provider</Label>
-
-          {/* Agent */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-2xs text-muted-foreground">Override agent</span>
-              <Switch
-                checked={overrideAgent}
-                onCheckedChange={setOverrideAgent}
-                aria-label="Override agent"
-              />
-            </div>
-            {overrideAgent ? (
-              <Select value={agentId} onValueChange={(val) => setAgentId(val as TuiAgent)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {getAgentCatalog().map((agent) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      <div className="flex items-center gap-2">
-                        <AgentIcon agent={agent.id} size={14} />
-                        <span>{agent.label}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="text-2xs text-muted-foreground italic">
-                Inheriting parent default ({parentDefaults?.agentId ?? 'claude'})
-              </div>
-            )}
-          </div>
-
-          {/* Model */}
-          <div className="space-y-1.5 border-t border-border/40 pt-2">
-            <div className="flex items-center justify-between">
-              <span className="text-2xs text-muted-foreground">Override model</span>
-              <Switch
-                checked={overrideModel}
-                onCheckedChange={setOverrideModel}
-                aria-label="Override model"
-              />
-            </div>
-            {overrideModel ? (
-              <Input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="e.g. claude-3-5-sonnet, gpt-5.6-sol"
-                className="font-mono"
-              />
-            ) : (
-              <div className="text-2xs text-muted-foreground italic">
-                Inheriting parent default model ({parentDefaults?.model ?? 'Default'})
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Stage Acceptance */}
+        <AutomationWorkerStageAcceptanceFields
+          stageAcceptance={stageAcceptance}
+          onChange={setStageAcceptance}
+        />
 
         {/* Mutation Class & Lane */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label>Mutation class</Label>
+            <Label htmlFor="mutation-class-select">Mutation class</Label>
             <Select
               value={mutationClass}
               onValueChange={(val) => setMutationClass(val as MutationClass)}
             >
-              <SelectTrigger>
+              <SelectTrigger id="mutation-class-select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -348,7 +283,7 @@ function AutomationWorkerEditorForm({
           </div>
         </div>
 
-        {/* Dependencies */}
+        {/* Dependencies with disambiguated labels */}
         {otherWorkers.length > 0 ? (
           <div className="space-y-2 rounded-md border border-border/50 p-3">
             <Label className="font-semibold">Dependencies</Label>
@@ -360,16 +295,16 @@ function AutomationWorkerEditorForm({
                     key={other.id}
                     className="flex cursor-pointer items-center justify-between rounded p-1.5 hover:bg-muted/30"
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       <input
                         type="checkbox"
                         checked={isDep}
                         onChange={() => handleToggleDependency(other.id)}
                         className="size-3.5 rounded border-border"
                       />
-                      <span className="font-medium">{other.name}</span>
-                      <span className="font-mono text-3xs text-muted-foreground">
-                        ({other.role})
+                      <span className="font-medium truncate">{other.name}</span>
+                      <span className="font-mono text-3xs text-muted-foreground truncate">
+                        ({other.role}) [{other.id}]
                       </span>
                     </div>
                   </label>
@@ -405,6 +340,7 @@ export function AutomationWorkerEditorDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <AutomationWorkerEditorForm
+        key={worker.id}
         worker={worker}
         allWorkers={allWorkers}
         parentDefaults={parentDefaults}

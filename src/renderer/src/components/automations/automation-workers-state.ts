@@ -2,10 +2,10 @@ import type {
   ChildLaunchConfig,
   ChildLaunchConfigField,
   ChildPromptSource,
-  CoordinatedAutomationChildDefinition,
-  CoordinatedAutomationInheritedDefaults
+  CoordinatedAutomationChildDefinition
 } from '../../../../shared/coordinated-automation-types'
 import { sha256Hex } from '../../../../shared/coordinated-automation-canonical-digest'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function computePromptDigest(promptSource: ChildPromptSource): string {
   if (promptSource.kind === 'inline') {
@@ -14,11 +14,8 @@ export function computePromptDigest(promptSource: ChildPromptSource): string {
   return promptSource.digest ?? `sha256:ref(${promptSource.path})`
 }
 
-export function createDefaultChildDefinition(
-  index: number,
-  inheritedDefaults?: CoordinatedAutomationInheritedDefaults
-): CoordinatedAutomationChildDefinition {
-  const id = `worker-${Date.now()}-${index + 1}`
+export function createDefaultChildDefinition(index: number): CoordinatedAutomationChildDefinition {
+  const id = createBrowserUuid()
   return {
     id,
     role: `worker-${index + 1}`,
@@ -32,17 +29,15 @@ export function createDefaultChildDefinition(
     mutationClass: 'read_only',
     enabled: true,
     launchConfig: {
-      agentId: inheritedDefaults?.agentId,
-      model: inheritedDefaults?.model ?? null,
-      reasoningEffort: inheritedDefaults?.reasoningEffort ?? null,
-      surface: inheritedDefaults?.surface ?? 'terminal',
-      workspaceMode: inheritedDefaults?.workspaceMode ?? 'existing',
       provenance: {
         agentId: 'inherited',
         model: 'inherited',
         reasoningEffort: 'inherited',
         surface: 'inherited',
-        workspaceMode: 'inherited'
+        workspaceMode: 'inherited',
+        timeoutSeconds: 'inherited',
+        maxRetries: 'inherited',
+        maxReviewIterations: 'inherited'
       }
     }
   }
@@ -50,10 +45,9 @@ export function createDefaultChildDefinition(
 
 export function addChildWorker(
   children: readonly CoordinatedAutomationChildDefinition[],
-  child?: Partial<CoordinatedAutomationChildDefinition>,
-  inheritedDefaults?: CoordinatedAutomationInheritedDefaults
+  child?: Partial<CoordinatedAutomationChildDefinition>
 ): CoordinatedAutomationChildDefinition[] {
-  const defaultChild = createDefaultChildDefinition(children.length, inheritedDefaults)
+  const defaultChild = createDefaultChildDefinition(children.length)
   const nextChild: CoordinatedAutomationChildDefinition = {
     ...defaultChild,
     ...child,
@@ -163,6 +157,24 @@ export function setChildLaunchConfigFieldOverridden<K extends ChildLaunchConfigF
   const nextConfig: ChildLaunchConfig = {
     ...child.launchConfig,
     [field]: value,
+    provenance: {
+      ...child.launchConfig.provenance,
+      [field]: 'overridden'
+    }
+  }
+  return {
+    ...child,
+    launchConfig: nextConfig
+  }
+}
+
+export function setChildLaunchConfigFieldExplicitNone(
+  child: CoordinatedAutomationChildDefinition,
+  field: ChildLaunchConfigField
+): CoordinatedAutomationChildDefinition {
+  const nextConfig: ChildLaunchConfig = {
+    ...child.launchConfig,
+    [field]: null,
     provenance: {
       ...child.launchConfig.provenance,
       [field]: 'overridden'

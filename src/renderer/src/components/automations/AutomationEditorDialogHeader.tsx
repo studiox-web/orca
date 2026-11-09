@@ -71,30 +71,52 @@ export function AutomationEditorDialogHeader({
       <div className="flex items-center gap-3">
         <DialogTitle className="min-w-0 truncate text-sm font-medium">{title}</DialogTitle>
         {isCoordinatedFeatureEnabled ? (
-          <div className="flex items-center rounded-md border border-border/60 bg-muted/40 p-0.5 text-xs">
+          <div
+            role="radiogroup"
+            aria-label={translate(
+              'auto.components.automations.editor.modeGroupAria',
+              'Automation execution mode'
+            )}
+            className="flex items-center rounded-md border border-border/60 bg-muted/40 p-0.5 text-xs"
+          >
             <button
               type="button"
+              role="radio"
+              aria-checked={kind !== 'coordinated'}
+              aria-pressed={kind !== 'coordinated'}
               className={`rounded px-2.5 py-1 text-2xs font-medium transition-colors ${
                 kind !== 'coordinated'
                   ? 'bg-card text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => onKindChange?.('single')}
-              aria-label="Single prompt mode"
+              aria-label={translate(
+                'auto.components.automations.editor.singleModeAria',
+                'Single prompt mode'
+              )}
             >
-              Single prompt
+              {translate('auto.components.automations.editor.singleMode', 'Single prompt')}
             </button>
             <button
               type="button"
+              role="radio"
+              aria-checked={kind === 'coordinated'}
+              aria-pressed={kind === 'coordinated'}
               className={`rounded px-2.5 py-1 text-2xs font-medium transition-colors ${
                 kind === 'coordinated'
                   ? 'bg-card text-foreground shadow-xs'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => onKindChange?.('coordinated')}
-              aria-label="Coordinated workers mode"
+              aria-label={translate(
+                'auto.components.automations.editor.coordinatedModeAria',
+                'Coordinated workers mode'
+              )}
             >
-              Coordinated workers
+              {translate(
+                'auto.components.automations.editor.coordinatedMode',
+                'Coordinated workers'
+              )}
             </button>
           </div>
         ) : null}

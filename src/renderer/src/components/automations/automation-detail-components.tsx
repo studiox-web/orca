@@ -48,14 +48,13 @@ export function ToolbarIconButton({
 }: {
   label: string
   children: React.ReactNode
-  onClick: () => void
+  onClick?: () => void
   className?: string
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          type="button"
           variant="ghost"
           size="icon-sm"
           aria-label={label}
@@ -69,5 +68,20 @@ export function ToolbarIconButton({
         {label}
       </TooltipContent>
     </Tooltip>
+  )
+}
+
+export function CoordinatedFlagOffBanner(): React.JSX.Element {
+  return (
+    <div
+      role="status"
+      data-testid="coordinated-flag-off-banner"
+      className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning-foreground shadow-sm"
+    >
+      {translate(
+        'auto.components.automations.detail.coordinatedFlagOffNotice',
+        'This coordinated automation is displayed in safe read-only mode because the experimental feature flag is disabled in Settings. Execution and editing controls are unavailable.'
+      )}
+    </div>
   )
 }

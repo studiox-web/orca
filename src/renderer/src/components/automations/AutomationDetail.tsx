@@ -10,7 +10,6 @@ import {
   type AutomationRun
 } from '../../../../shared/automations-types'
 import { useAppStore } from '@/store'
-import { shouldShowWorkersSection } from './automation-workers-feature-flag'
 import { AutomationWorkersSection } from './AutomationWorkersSection'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
@@ -32,7 +31,12 @@ import { translate } from '@/i18n/i18n'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
 import { automationRunErrorText } from './automation-run-error-copy'
 
-import { DetailMetric, formatGrace, ToolbarIconButton } from './automation-detail-components'
+import {
+  DetailMetric,
+  formatGrace,
+  ToolbarIconButton,
+  CoordinatedFlagOffBanner
+} from './automation-detail-components'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -66,7 +70,9 @@ export function AutomationDetail({
   onToggle,
   onDelete
 }: AutomationDetailProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
+  const isCoordinatedFeatureEnabled = useAppStore(
+    (s) => s.settings?.experimentalCoordinatedAutomations === true
+  )
 
   if (!automation) {
     return (
@@ -108,16 +114,25 @@ export function AutomationDetail({
     hostLabelById
   })
   const isCoordinated = isCoordinatedAutomation(automation)
-  const showWorkers = shouldShowWorkersSection(automation, settings) && isCoordinated
-  const activeRun = runs.find(
-    (r) => r.status === 'pending' || r.status === 'dispatching' || r.status === 'dispatched'
-  )
-  const historicalSnapshot = runs.find((r) => r.resolvedSnapshot)?.resolvedSnapshot ?? null
+  const isFlagOffCoordinated = isCoordinated && !isCoordinatedFeatureEnabled
+  const showWorkers = isCoordinated
+  const activeRun = isCoordinated
+    ? runs.find(
+        (r) =>
+          (r.status === 'pending' || r.status === 'dispatching' || r.status === 'dispatched') &&
+          (r.automationDefinitionRevision != null ||
+            r.resolvedSnapshot != null ||
+            r.orchestrationRunId != null)
+      )
+    : null
+  const snapshotRun = runs.find((r) => r.resolvedSnapshot)
+  const historicalSnapshot = snapshotRun?.resolvedSnapshot ?? null
+  const snapshotRunId = snapshotRun?.id ?? null
   const runNowDisabled = isCoordinated || runNowAvailability?.canRunNow === false
   const runNowMessage = isCoordinated
     ? translate(
         'auto.components.automations.workers.runDisabled',
-        'Execution controls disabled during definition preview (Phase 4)'
+        'Execution controls disabled during definition preview'
       )
     : runNowAvailability?.message
   const latestRun = indexLatestAutomationRuns(runs).get(automation.id)
@@ -170,27 +185,41 @@ export function AutomationDetail({
             ) : null}
           </Tooltip>
           <ToolbarIconButton
-            label={translate(
-              'auto.components.automations.AutomationDetail.4b1ea02d2e',
-              'Edit automation'
-            )}
-            onClick={() => onEdit(automation)}
+            label={
+              isFlagOffCoordinated
+                ? translate(
+                    'auto.components.automations.detail.editDisabledFlagOff',
+                    'Coordinated automation editing disabled while feature flag is off'
+                  )
+                : translate(
+                    'auto.components.automations.AutomationDetail.4b1ea02d2e',
+                    'Edit automation'
+                  )
+            }
+            onClick={isFlagOffCoordinated ? undefined : () => onEdit(automation)}
+            className={isFlagOffCoordinated ? 'opacity-40 cursor-not-allowed' : undefined}
           >
             <Pencil className="size-4" />
           </ToolbarIconButton>
           <ToolbarIconButton
             label={
-              automation.enabled
+              isFlagOffCoordinated
                 ? translate(
-                    'auto.components.automations.AutomationDetail.91a4155e95',
-                    'Pause automation'
+                    'auto.components.automations.detail.toggleDisabledFlagOff',
+                    'Coordinated automation state changes disabled while feature flag is off'
                   )
-                : translate(
-                    'auto.components.automations.AutomationDetail.d79452fb30',
-                    'Resume automation'
-                  )
+                : automation.enabled
+                  ? translate(
+                      'auto.components.automations.AutomationDetail.91a4155e95',
+                      'Pause automation'
+                    )
+                  : translate(
+                      'auto.components.automations.AutomationDetail.d79452fb30',
+                      'Resume automation'
+                    )
             }
-            onClick={() => onToggle(automation)}
+            onClick={isFlagOffCoordinated ? undefined : () => onToggle(automation)}
+            className={isFlagOffCoordinated ? 'opacity-40 cursor-not-allowed' : undefined}
           >
             {automation.enabled ? <Pause className="size-4" /> : <Play className="size-4" />}
           </ToolbarIconButton>
@@ -206,6 +235,8 @@ export function AutomationDetail({
           </ToolbarIconButton>
         </div>
       </div>
+
+      {isFlagOffCoordinated ? <CoordinatedFlagOffBanner /> : null}
 
       {automation.executionTargetType === 'ssh' ? (
         <div className="rounded-md border border-border/50 bg-muted/50 p-3 text-sm text-muted-foreground shadow-sm">
@@ -348,7 +379,7 @@ export function AutomationDetail({
           publicationPolicy={automation.publicationPolicy}
           retentionPolicy={automation.retentionPolicy}
           isEditing={false}
-          activeRunId={activeRun?.id}
+          activeRunId={snapshotRunId ?? activeRun?.id ?? null}
           activeRunRevision={activeRun?.automationDefinitionRevision}
           historicalSnapshot={historicalSnapshot}
         />

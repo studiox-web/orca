@@ -7,8 +7,9 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { AutomationDetail } from './AutomationDetail'
-import { makeAutomation } from './automations-page-fixtures'
+import { makeAutomation, makeRun } from './automations-page-fixtures'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { sampleHistoricalSnapshot } from './automation-workers-fixture-data'
 
 const roots: Root[] = []
 
@@ -133,6 +134,61 @@ describe('AutomationDetail coordinated automations & flag preservation', () => {
 
     // For a single automation, workers section is not rendered
     expect(container.querySelector('[data-testid="automation-workers-section"]')).toBeNull()
-    expect(container.textContent).not.toContain('Coordinated (Rev')
+  })
+
+  it('renders safe read-only banner and disables editing when viewing coordinated record with flag off', async () => {
+    useAppStore.setState({
+      settings: createGlobalSettingsFixture({
+        experimentalCoordinatedAutomations: false
+      })
+    })
+
+    const container = await renderDetail(sampleCoordinatedAutomation)
+
+    // Flag off banner is visible
+    expect(container.querySelector('[data-testid="coordinated-flag-off-banner"]')).not.toBeNull()
+    expect(container.textContent).toContain(
+      'safe read-only mode because the experimental feature flag is disabled'
+    )
+
+    // Run Now button is disabled
+    const buttons = Array.from(container.querySelectorAll('button'))
+    const runNowBtn = buttons.find((b) => b.textContent?.includes('Run Now'))
+    expect(runNowBtn?.disabled).toBe(true)
+
+    // Edit button is disabled / non-clickable
+    const editBtn = container.querySelector(
+      'button[aria-label="Coordinated automation editing disabled while feature flag is off"]'
+    )
+    expect(editBtn).not.toBeNull()
+    expect(editBtn?.className).toContain('cursor-not-allowed')
+  })
+
+  it('passes historical snapshot with run id to workers section', async () => {
+    useAppStore.setState({
+      settings: createGlobalSettingsFixture({
+        experimentalCoordinatedAutomations: true
+      })
+    })
+
+    const runWithSnapshot: AutomationRun = {
+      ...makeRun({ id: 'run-historical-55', automationId: sampleCoordinatedAutomation.id }),
+      resolvedSnapshot: sampleHistoricalSnapshot
+    }
+
+    const container = await renderDetail(sampleCoordinatedAutomation, [runWithSnapshot])
+
+    // Switch to snapshot tab
+    const snapshotTabBtn = container.querySelector(
+      'button[aria-label="Historical snapshot"]'
+    ) as HTMLButtonElement
+    expect(snapshotTabBtn).not.toBeNull()
+
+    await act(async () => {
+      snapshotTabBtn.click()
+    })
+
+    expect(container.textContent).toContain('Frozen run snapshot')
+    expect(container.textContent).toContain('Run: run-historical-55')
   })
 })

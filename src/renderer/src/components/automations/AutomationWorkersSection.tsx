@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Plus, List, Network, History } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import type {
 } from '../../../../shared/coordinated-automation-types'
 import { validateCoordinatedAutomationDefinition } from '../../../../shared/coordinated-automation-validation'
 import {
-  addChildWorker,
+  createDefaultChildDefinition,
   removeChildWorker,
   reorderChildWorkers,
   resetChildLaunchConfigFieldToInherited,
@@ -26,13 +26,14 @@ import { AutomationWorkersValidationSummary } from './AutomationWorkersValidatio
 import { AutomationRevisionImpactPreview } from './AutomationRevisionImpactPreview'
 import { AutomationHistoricalSnapshotViewer } from './AutomationHistoricalSnapshotViewer'
 import { AutomationWorkerEditorDialog } from './AutomationWorkerEditorDialog'
+import { AutomationWorkerDeleteConfirmDialog } from './AutomationWorkerDeleteConfirmDialog'
 import { translate } from '@/i18n/i18n'
 
 type ViewMode = 'list' | 'graph' | 'historical'
 
 type AutomationWorkersSectionProps = {
   workers: readonly CoordinatedAutomationChildDefinition[]
-  definitionRevision?: number
+  definitionRevision?: number | null
   outcomeContract?: AutomationOutcomeContract
   inheritedDefaults?: CoordinatedAutomationInheritedDefaults
   globalCeilings?: CoordinatedAutomationCeilings
@@ -50,7 +51,7 @@ type AutomationWorkersSectionProps = {
 
 export function AutomationWorkersSection({
   workers,
-  definitionRevision = 1,
+  definitionRevision = null,
   outcomeContract,
   inheritedDefaults,
   globalCeilings,
@@ -70,16 +71,29 @@ export function AutomationWorkersSection({
   const [editingChild, setEditingChild] = useState<CoordinatedAutomationChildDefinition | null>(
     null
   )
+  const [isAddingNewWorker, setIsAddingNewWorker] = useState(false)
   const [editorDialogOpen, setEditorDialogOpen] = useState(false)
+  const [workerToDelete, setWorkerToDelete] = useState<CoordinatedAutomationChildDefinition | null>(
+    null
+  )
 
-  // Validate definition against shared Phase 1 validators
+  useEffect(() => {
+    if (selectedChildId && viewMode === 'list') {
+      const el = document.getElementById(`worker-card-${selectedChildId}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        el.focus()
+      }
+    }
+  }, [selectedChildId, viewMode])
+
   const validationResult = useMemo(() => {
     if (!outcomeContract && workers.length === 0) {
       return { valid: true, errors: [] }
     }
     const def = {
       kind: 'coordinated' as const,
-      definitionRevision,
+      definitionRevision: definitionRevision ?? 1,
       outcomeContract: outcomeContract ?? {
         humanStatement: 'Default workflow contract',
         acceptanceCriteria: [],
@@ -104,13 +118,10 @@ export function AutomationWorkersSection({
   ])
 
   const handleAddWorker = (): void => {
-    const next = addChildWorker(workers, undefined, inheritedDefaults)
-    onWorkersChange?.(next)
-    const newlyAdded = next.at(-1)
-    if (newlyAdded) {
-      setEditingChild(newlyAdded)
-      setEditorDialogOpen(true)
-    }
+    const fresh = createDefaultChildDefinition(workers.length)
+    setEditingChild(fresh)
+    setIsAddingNewWorker(true)
+    setEditorDialogOpen(true)
   }
 
   const handleUpdateWorker = (
@@ -121,9 +132,27 @@ export function AutomationWorkersSection({
     onWorkersChange?.(next)
   }
 
-  const handleRemoveWorker = (childId: string): void => {
-    const next = removeChildWorker(workers, childId)
+  const handleRequestRemoveWorker = (childId: string): void => {
+    const target = workers.find((c) => c.id === childId)
+    if (!target) {
+      return
+    }
+    const hasDependents = workers.some((w) => w.dependencies.some((d) => d.childId === childId))
+    if (hasDependents || target.name || target.promptSource.kind === 'source_reference') {
+      setWorkerToDelete(target)
+    } else {
+      const next = removeChildWorker(workers, childId)
+      onWorkersChange?.(next)
+    }
+  }
+
+  const handleConfirmRemoveWorker = (): void => {
+    if (!workerToDelete) {
+      return
+    }
+    const next = removeChildWorker(workers, workerToDelete.id)
     onWorkersChange?.(next)
+    setWorkerToDelete(null)
   }
 
   const handleMoveUp = (index: number): void => {
@@ -152,13 +181,23 @@ export function AutomationWorkersSection({
 
   const handleOpenEditor = (child: CoordinatedAutomationChildDefinition): void => {
     setEditingChild(child)
+    setIsAddingNewWorker(false)
     setEditorDialogOpen(true)
   }
 
   const handleSaveEditor = (saved: CoordinatedAutomationChildDefinition): void => {
-    const next = updateChildWorker(workers, saved.id, saved)
-    onWorkersChange?.(next)
+    if (isAddingNewWorker) {
+      onWorkersChange?.([...workers, saved])
+    } else {
+      const next = updateChildWorker(workers, saved.id, saved)
+      onWorkersChange?.(next)
+    }
+    setIsAddingNewWorker(false)
   }
+
+  const dependentWorkers = workerToDelete
+    ? workers.filter((w) => w.dependencies.some((d) => d.childId === workerToDelete.id))
+    : []
 
   return (
     <section
@@ -169,7 +208,7 @@ export function AutomationWorkersSection({
       className={`space-y-4 ${className}`}
       data-testid="automation-workers-section"
     >
-      {/* Header with Title, Count, View Modes, and Add button */}
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-base text-foreground">
@@ -187,7 +226,6 @@ export function AutomationWorkersSection({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Segmented view mode buttons */}
           <div className="flex items-center rounded-md border border-border/60 bg-muted/40 p-0.5 text-xs">
             <Button
               type="button"
@@ -229,7 +267,6 @@ export function AutomationWorkersSection({
             ) : null}
           </div>
 
-          {/* Add worker button in edit mode */}
           {isEditing ? (
             <Button
               type="button"
@@ -263,12 +300,13 @@ export function AutomationWorkersSection({
         activeRunRevision={activeRunRevision}
       />
 
-      {/* Main presentation: Historical vs Graph vs List */}
+      {/* View modes */}
       {viewMode === 'historical' && historicalSnapshot ? (
-        <AutomationHistoricalSnapshotViewer snapshot={historicalSnapshot} />
+        <AutomationHistoricalSnapshotViewer snapshot={historicalSnapshot} runId={activeRunId} />
       ) : viewMode === 'graph' ? (
         <AutomationWorkersGraph
           workers={workers}
+          parentDefaults={inheritedDefaults}
           selectedChildId={selectedChildId}
           onSelectChild={(id) => {
             setSelectedChildId(id)
@@ -317,10 +355,11 @@ export function AutomationWorkersSection({
               totalCount={workers.length}
               parentDefaults={inheritedDefaults}
               isEditing={isEditing}
+              isSelected={selectedChildId === child.id}
               allChildren={workers}
               errors={validationResult.errors}
               onUpdate={handleUpdateWorker}
-              onRemove={handleRemoveWorker}
+              onRemove={handleRequestRemoveWorker}
               onMoveUp={handleMoveUp}
               onMoveDown={handleMoveDown}
               onResetField={handleResetField}
@@ -336,8 +375,21 @@ export function AutomationWorkersSection({
         worker={editingChild}
         allWorkers={workers}
         parentDefaults={inheritedDefaults}
-        onOpenChange={setEditorDialogOpen}
+        onOpenChange={(open) => {
+          setEditorDialogOpen(open)
+          if (!open) {
+            setIsAddingNewWorker(false)
+          }
+        }}
         onSave={handleSaveEditor}
+      />
+
+      {/* Delete confirmation dialog */}
+      <AutomationWorkerDeleteConfirmDialog
+        worker={workerToDelete}
+        dependentWorkers={dependentWorkers}
+        onCancel={() => setWorkerToDelete(null)}
+        onConfirm={handleConfirmRemoveWorker}
       />
     </section>
   )
