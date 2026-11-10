@@ -1,5 +1,4 @@
 import type { AutomationRun } from '../../shared/automations-types'
-import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
 import type { ResolvedAutomationRunSnapshot } from '../../shared/coordinated-automation-types'
 import { currentWorkspaceArtifactDigest } from './coordinated-automation-artifact-validation'
 import {
@@ -27,22 +26,21 @@ import { acceptedStageReports } from './coordinated-automation-accepted-reports'
 import { admitSettledAttempts } from './coordinated-automation-stage-admission'
 import { resolveRunWorkspacePath } from './coordinated-automation-attempt-validation'
 import { dispatchRunnableStages } from './coordinated-automation-stage-dispatch'
-import { reconcileStartingAttempts } from './coordinated-automation-attempt-lineage'
+import {
+  reconcileStartingAttempts,
+  repairNativeChildDispatchMappings
+} from './coordinated-automation-attempt-lineage'
 import { syncNativeReadiness } from './coordinated-automation-native-readiness'
+import {
+  haltedOrNativeUncertain,
+  nativeSettlementHolds
+} from './coordinated-automation-halt-outcome'
+import type { CoordinatedRunOutcome } from './coordinated-automation-halt-outcome'
 
-export type CoordinatedRunOutcomeState =
-  | 'completed'
-  | 'failed'
-  | 'blocked'
-  | 'outcome_uncertain'
-  | 'waiting'
-
-export type CoordinatedRunOutcome = Readonly<{
-  state: CoordinatedRunOutcomeState
-  reason: string | null
-  run: AutomationRun
-  progress: CoordinatedRunProgress | null
-}>
+export type {
+  CoordinatedRunOutcome,
+  CoordinatedRunOutcomeState
+} from './coordinated-automation-halt-outcome'
 
 const MAX_PASSES = 500
 
@@ -185,27 +183,6 @@ async function tryComplete(
   return { state: 'completed', reason: null, run: completed, progress }
 }
 
-function haltedOutcome(ctx: CoordinatedPassContext, run: AutomationRun): CoordinatedRunOutcome {
-  assertCoordinatorActive(ctx)
-  const halt = ctx.ledger.progress.halt!
-  // Failure is final; blocked and uncertain stay non-final holds that never read as complete.
-  const settled =
-    halt.state === 'failed'
-      ? run.status === 'dispatch_failed'
-        ? run
-        : ctx.store.recordCoordinatedRunSettlement({
-            automationRunId: run.id,
-            status: 'dispatch_failed',
-            error: halt.reason
-          })
-      : ctx.store.recordCoordinatedRunHold({
-          automationRunId: run.id,
-          state: halt.state,
-          reason: halt.reason
-        })
-  return { state: halt.state, reason: halt.reason, run: settled, progress: ctx.ledger.progress }
-}
-
 /**
  * Derives every next action from persisted Automation, orchestration, artifact, and effect
  * evidence. A replacement generation first admits orphaned attempts and queries effects,
@@ -246,6 +223,7 @@ export async function reconcileCoordinatedRun(
     assertCoordinatorActive(ctx)
     run = requireRun(ctx, automationRunId)
     let progressed = reconcileStartingAttempts(ctx, run)
+    progressed = repairNativeChildDispatchMappings(ctx, run) || progressed
     progressed = admitSettledAttempts(ctx, run, snapshot) || progressed
     syncNativeReadiness(ctx, run, snapshot)
     reverifyAcceptedArtifacts(ctx, run, snapshot)
@@ -254,7 +232,7 @@ export async function reconcileCoordinatedRun(
       assertCoordinatorActive(ctx)
     }
     if (ctx.ledger.progress.halt) {
-      return haltedOutcome(ctx, requireRun(ctx, automationRunId))
+      return haltedOrNativeUncertain(ctx, automationRunId)
     }
     const completion = await tryComplete(ctx, run, snapshot)
     if (completion) {
@@ -269,11 +247,21 @@ export async function reconcileCoordinatedRun(
   assertCoordinatorActive(ctx)
   run = requireRun(ctx, automationRunId)
   if (ctx.ledger.progress.halt) {
-    return haltedOutcome(ctx, run)
+    return haltedOrNativeUncertain(ctx, automationRunId)
   }
   const effects = unresolvedEffects(snapshot, ctx.ledger.progress)
   if (effects.uncertain.length > 0) {
     const reason = `Effects ${effects.uncertain.join(', ')} are uncertain and need a human decision.`
+    const held = ctx.store.recordCoordinatedRunHold({
+      automationRunId,
+      state: 'outcome_uncertain',
+      reason
+    })
+    return { state: 'outcome_uncertain', reason, run: held, progress: ctx.ledger.progress }
+  }
+  const nativeHolds = nativeSettlementHolds(ctx, run)
+  if (nativeHolds.length > 0) {
+    const reason = nativeHolds.join(' ')
     const held = ctx.store.recordCoordinatedRunHold({
       automationRunId,
       state: 'outcome_uncertain',
@@ -294,5 +282,5 @@ export async function reconcileCoordinatedRun(
   ctx.ledger.update('no-progress', (progress) =>
     withHalt(progress, { state: 'failed', reason, at: ctx.clock.now() })
   )
-  return haltedOutcome(ctx, run)
+  return haltedOrNativeUncertain(ctx, automationRunId)
 }

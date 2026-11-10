@@ -5,6 +5,7 @@ import { readFileSync, realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { RuntimeStore } from './runtime-store-contract'
+import type { NativeStubPhysicalIdentity } from './native-stub-physical-spawn'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
@@ -45,6 +46,8 @@ export type NativeStubLaunchRecord = {
   launchConfig: SleepingAgentLaunchConfig
   phase: 'prepared' | 'creating' | 'dispatched'
   surface?: Readonly<{ handle: string; tabId: string; leafId: string; token: string }>
+  observePhysicalSpawn?: (identity: NativeStubPhysicalIdentity) => void
+  assertDispatchCurrent?: () => void
 }
 
 function canonical(path: string): string {
@@ -259,6 +262,7 @@ export function requireNativeStubLaunch(
   ) {
     throw new Error('native_stub_workspace_changed')
   }
+  record.assertDispatchCurrent?.()
   return record
 }
 
@@ -282,4 +286,26 @@ export function isDispatchedNativeStubLaunch(
   permit: PreparedNativeStubLaunch | undefined
 ): boolean {
   return permit !== undefined && permits.get(permit)?.phase === 'dispatched'
+}
+
+export type NativeStubCompositionIdentity = Readonly<{ profile: string; generation: string }>
+
+export function assertNativeStubComposition(
+  candidate: NativeStubSessionTestComposition,
+  runtime: OrcaRuntimeService,
+  store: RuntimeStore
+): NativeStubCompositionIdentity {
+  const composition = compositions.get(candidate)
+  if (!composition || composition.binding?.store !== store) {
+    throw new Error('native_stub_composition_invalid')
+  }
+  assertBinding(composition, runtime)
+  return { profile: composition.profile!, generation: composition.generation! }
+}
+
+/** Permit-state seam for the physical-spawn observation module; never a serialized authority. */
+export function readNativeStubLaunchRecord(
+  permit: PreparedNativeStubLaunch
+): NativeStubLaunchRecord | undefined {
+  return permits.get(permit)
 }

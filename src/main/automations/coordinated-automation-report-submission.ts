@@ -1,3 +1,4 @@
+import { isCoordinatedNativeAttempt } from './coordinated-automation-native-attempt'
 import { StructuredWorkerResultSchema } from '../../shared/coordinated-automation-receipt-schemas'
 import type {
   CoordinatedAdmittedReport,
@@ -26,6 +27,9 @@ export function submitCoordinatedWorkerReport(
   ledger: CoordinatedProgressLedger,
   input: { automationRunId: string; taskId: string; dispatchId: string; report: unknown }
 ): CoordinatedReportSubmission {
+  if (isCoordinatedNativeAttempt(ctx.orchestrationDb, input.dispatchId)) {
+    throw new Error('native_stub_requires_authenticated_worker_done')
+  }
   const run = ctx.store.listAutomationRuns().find((r) => r.id === input.automationRunId)
   const mapping = (run?.childMappings ?? []).find((m) => m.taskId === input.taskId)
   const reportDigest = structuredReportDigest(input.report)

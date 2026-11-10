@@ -1,3 +1,5 @@
+import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration-compatibility-evidence'
+import { assertCoordinatedNativeReportCaller } from '../../../../../automations/coordinated-automation-native-report-admission'
 import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
@@ -20,6 +22,7 @@ type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipi
 
 export function sendPointToPointMessage(args: {
   params: SendParamsInput
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   from: string
@@ -56,6 +59,15 @@ export function sendPointToPointMessage(args: {
     ? resolveProcessIncarnation()
     : undefined
   const commitMessage = (): { receipt: unknown; nudge: () => void } => {
+    if (messageType === 'worker_done') {
+      assertCoordinatedNativeReportCaller({
+        runtime,
+        db,
+        dispatchId,
+        from,
+        evidence: args.orchestrationCompatibilityEvidence
+      })
+    }
     const dispatch = dispatchId ? db.getDispatchContextById(dispatchId) : undefined
     const msg = db.insertMessage({
       from,

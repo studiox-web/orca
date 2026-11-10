@@ -1,3 +1,4 @@
+import type { CoordinatedNativeStubWorker } from './coordinated-automation-native-stub-worker'
 import type { SemanticReceiptEffect } from '../../shared/coordinated-automation-receipt-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import type { Store } from '../persistence/loading-store/store'
@@ -74,6 +75,7 @@ export type CoordinatedRecoveryContext = {
   orchestrationDb: OrchestrationDb
   probe: CoordinatedOrchestrationRecordProbe
   workerProvider: CoordinatedWorkerProvider
+  nativeStubWorker?: CoordinatedNativeStubWorker
   progressStore: CoordinatedRunProgressStore
   clock: CoordinatedClock
   boundary: CoordinatedBoundaryHook

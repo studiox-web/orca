@@ -53,7 +53,7 @@ type WorkerAgentPlacementArgs = {
   db: OrchestrationDb
   dispatchId: string
   taskId: string
-  params: WorkerStartInput
+  params: Omit<WorkerStartInput, 'from'> & { from?: string }
   requestedWorktree: string
   /** Present only when this start creates a worktree. */
   creationTarget: WorkerWorktreeCreationTarget | undefined
@@ -176,13 +176,16 @@ async function launchWorkerAgent(
           })
         },
         createWorktree: async ({ startupAgent, promisedAgentChat, onWorkspaceCreated }) => {
+          if (!args.params.from) {
+            throw new Error('worker_coordinator_required')
+          }
           created = await createWorkerWorktree({
             runtime: args.runtime,
             db: args.db,
             dispatchId: args.dispatchId,
             requestedWorktree: args.requestedWorktree,
             target: requirePlacement(args.creationTarget),
-            params: args.params,
+            params: { ...args.params, from: args.params.from },
             agent,
             // The executor withholds the startup agent exactly when the worker is to be a session.
             withAgentTerminal: startupAgent !== undefined,

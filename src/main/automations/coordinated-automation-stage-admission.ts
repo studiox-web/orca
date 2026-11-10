@@ -1,3 +1,7 @@
+import {
+  isCoordinatedNativeAttempt,
+  nativeAttemptSemanticAdmissionProblem
+} from './coordinated-automation-native-attempt'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
 import { StructuredWorkerResultSchema } from '../../shared/coordinated-automation-receipt-schemas'
@@ -231,6 +235,13 @@ export function admitSettledAttempts(
     }
     let latest = ctx.orchestrationDb.getDispatchContext(mapping.taskId)
     if (!latest || isAdmitted(ctx.ledger.progress, latest.id)) {
+      continue
+    }
+    const native = isCoordinatedNativeAttempt(ctx.orchestrationDb, latest.id)
+    if (
+      native &&
+      nativeAttemptSemanticAdmissionProblem(ctx.store, ctx.orchestrationDb, run, latest.id)
+    ) {
       continue
     }
     if (latest.status === 'pending' || latest.status === 'dispatched') {

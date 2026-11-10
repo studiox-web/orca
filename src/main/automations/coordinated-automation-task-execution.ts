@@ -1,5 +1,12 @@
-import type { StructuredWorkerResult } from '../../shared/coordinated-automation-receipt-types'
-import type { Store } from '../persistence/loading-store/store'
+import {
+  inNativeStubDispatchLane,
+  prepareCoordinatedNativeStubAttempt
+} from './coordinated-automation-native-stub-worker'
+import {
+  isCoordinatedNativeAttempt,
+  nativeAttemptBindingProblem,
+  runHasCoordinatedNativeAttempt
+} from './coordinated-automation-native-attempt'
 import { CoordinatedAutomationLaunchRefusedError } from './coordinated-automation-materialization'
 import { validateLaunchPolicy } from './coordinated-automation-result-validation'
 import {
@@ -16,44 +23,27 @@ import {
   COORDINATED_TIMEOUT_PREFIX
 } from './coordinated-automation-attempt-prefixes'
 import { encodeCoordinatedWorkerReport } from './coordinated-automation-worker-report-envelope'
-
-export function createDefaultFakeNoEffectsWorkerProvider(store: Store): CoordinatedWorkerProvider {
-  return {
-    capability: 'fake_no_effects',
-    run: async (id): Promise<StructuredWorkerResult> => {
-      const run = store.listAutomationRuns().find((r) => r.id === id.automationRunId)
-      const checks = (run?.resolvedSnapshot?.outcomeContract.acceptanceCriteria ?? []).map((c) => ({
-        id: c.id,
-        outcome: 'passed' as const,
-        evidence: [`Criterion ${c.id} verified passed by fake worker`]
-      }))
-      return {
-        schemaVersion: 1,
-        ...id,
-        definitionRevision: run?.resolvedSnapshot?.definitionRevision ?? 1,
-        resolvedConfigDigest: run?.resolvedSnapshot?.canonicalDigest ?? `sha256:${'0'.repeat(64)}`,
-        outcome: 'succeeded',
-        summary: `Fake worker ${id.childDefinitionId} completed`,
-        reportMarkdown: `Fake worker ${id.childDefinitionId} report`,
-        artifacts: [],
-        checks,
-        effects: [],
-        blockers: []
-      }
-    }
-  }
-}
+export { createDefaultFakeNoEffectsWorkerProvider } from './coordinated-automation-fake-worker-provider'
 
 const FAKE_WORKER_CAPABILITIES = new Set(['fake_no_effects', 'shadow_fake_worker'])
 
 function hasFakeWorkerCapability(provider: CoordinatedWorkerProvider): boolean {
-  return (
-    (provider.capability !== undefined && FAKE_WORKER_CAPABILITIES.has(provider.capability)) ||
-    (provider.capabilities ?? []).some((capability) => FAKE_WORKER_CAPABILITIES.has(capability))
-  )
+  const declared = [provider.capability, ...(provider.capabilities ?? [])]
+  return declared.some((c) => c !== undefined && FAKE_WORKER_CAPABILITIES.has(c))
 }
 
-export async function executeCoordinatedTaskDispatch(
+export function executeCoordinatedTaskDispatch(
+  ...args: Parameters<typeof executeTaskDispatch>
+): ReturnType<typeof executeTaskDispatch> {
+  const [ctx, input] = args
+  return ctx.nativeStubWorker
+    ? inNativeStubDispatchLane(ctx.orchestrationDb, input.taskId, () =>
+        executeTaskDispatch(...args)
+      )
+    : executeTaskDispatch(...args)
+}
+
+async function executeTaskDispatch(
   ctx: CoordinatedRecoveryContext,
   input: {
     automationRunId: string
@@ -119,18 +109,51 @@ export async function executeCoordinatedTaskDispatch(
   if (!policyCheck.allowed) {
     throw new CoordinatedAutomationLaunchRefusedError(policyCheck.reason)
   }
-  if (!hasFakeWorkerCapability(workerProvider)) {
+  if (!ctx.nativeStubWorker && !hasFakeWorkerCapability(workerProvider)) {
     throw new CoordinatedAutomationLaunchRefusedError(
       'Provider rejected: the disabled shadow implementation requires an explicit host-owned fake/no-effect provider capability.'
     )
   }
 
-  const { dispatch } = orchestrationDb.createStartingWorkerDispatch({
+  const deadlineAt = input.deadlineAt ?? ctx.clock.now() + child.launchConfig.timeoutSeconds * 1000
+  const existing = orchestrationDb.getDispatchContext(taskId)
+  if (existing && isCoordinatedNativeAttempt(orchestrationDb, existing.id)) {
+    const current = store.listAutomationRuns().find((r) => r.id === run.id)!
+    const problem = nativeAttemptBindingProblem(orchestrationDb, current, existing.id)
+    if (problem) {
+      throw new Error(problem)
+    }
+    return { taskId, dispatchId: existing.id, outcome: 'native_retained' }
+  }
+  const mixedRefusal =
+    !ctx.nativeStubWorker && runHasCoordinatedNativeAttempt(orchestrationDb, run.orchestrationRunId)
+      ? 'Native stub attempts exist; a fresh launch without the native host is refused.'
+      : null
+  if (mixedRefusal) {
+    throw new CoordinatedAutomationLaunchRefusedError(mixedRefusal)
+  }
+  const prepareInput = {
+    run,
+    child,
+    taskId,
+    retryOfDispatchId,
+    deadlineAt,
+    assertCurrent: input.assertCurrent
+  }
+  const native = ctx.nativeStubWorker
+    ? await prepareCoordinatedNativeStubAttempt(ctx, prepareInput)
+    : undefined
+  input.assertCurrent?.()
+  if (native && existing) {
+    throw new Error('native_stub_existing_attempt_refused')
+  }
+  const started = orchestrationDb.createStartingWorkerDispatch({
     taskId,
     taskRunId: run.orchestrationRunId,
     retryOf: retryOfDispatchId,
     creator: { kind: 'system' },
     maxDepth: 5,
+    runtimeEpoch: native?.binding.runtimeGeneration,
     startOptions: {
       agent: child.launchConfig.agentId,
       model: child.launchConfig.model,
@@ -145,9 +168,11 @@ export async function executeCoordinatedTaskDispatch(
       timeoutMs: (child.launchConfig.timeoutSeconds ?? 60) * 1000,
       maxRetries: child.launchConfig.maxRetries,
       maxReviewIterations: child.launchConfig.maxReviewIterations,
-      mode: { mode: 'headless' }
+      mode: { mode: native ? 'terminal' : 'headless' },
+      ...(native ? { coordinatedNativeStub: native.binding } : {})
     }
   })
+  const { dispatch } = started
   const boundaryDetail = {
     automationRunId,
     childDefinitionId: child.childDefinitionId,
@@ -162,6 +187,14 @@ export async function executeCoordinatedTaskDispatch(
     dispatchId: dispatch.id
   })
   ctx.boundary('dispatch.after-mapping', boundaryDetail)
+
+  if (native) {
+    await store.flushPendingOrThrowAsync()
+    input.assertCurrent?.()
+    await raceWorkerDeadline(ctx, native.launch(started), deadlineAt)
+    input.assertCurrent?.()
+    return { taskId, dispatchId: dispatch.id, outcome: 'native_retained' }
+  }
 
   const identity: CoordinatedWorkerIdentity = {
     automationRunId: run.id,

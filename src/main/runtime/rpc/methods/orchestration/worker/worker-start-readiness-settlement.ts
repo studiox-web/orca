@@ -33,6 +33,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   structuredSession: Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
   terminalHandle: string
   coordinatorHandle: string
+  systemCoordinator?: { runId: string; assertCurrent: () => void }
   devMode: boolean | undefined
   requestId: string
   agent: string | null
@@ -52,6 +53,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
 }): Promise<unknown> {
   const { runtime, db, run, task, structuredSession, terminalHandle, effects } = args
 
+  args.systemCoordinator?.assertCurrent()
   args.onStage('dispatch_input')
   const deliveryStartedAt = Date.now()
   const delivery = await deliverWorkerDispatchPreamble({
@@ -65,11 +67,13 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     taskId: task.id,
     taskSpec: task.spec,
     coordinatorHandle: args.coordinatorHandle,
+    systemCoordinator: args.systemCoordinator,
     devMode: args.devMode,
     requestId: args.requestId,
     launchedAgent: args.launchedAgent,
     readinessTimeoutMs: Math.max(0, args.readinessDeadline - Date.now())
   })
+  args.systemCoordinator?.assertCurrent()
   effects.push({
     kind: 'dispatch_input',
     role: 'agent',
@@ -92,6 +96,7 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
         Math.max(0, ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS - (Date.now() - deliveryStartedAt))
       )
     }))
+  args.systemCoordinator?.assertCurrent()
   const deliveredPrompt = turnStart.prompt ?? promptDelivery
   monitorWorkerSetup({
     runtime,

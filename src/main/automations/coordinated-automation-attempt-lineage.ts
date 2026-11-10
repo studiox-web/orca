@@ -11,7 +11,12 @@ import type {
   ResolvedChildSnapshot
 } from '../../shared/coordinated-automation-types'
 import { stageAttemptLimit } from './coordinated-automation-ceilings'
-import { withStage } from './coordinated-automation-progress-ledger'
+import { withHalt, withStage } from './coordinated-automation-progress-ledger'
+import {
+  isCoordinatedNativeAttempt,
+  nativeAttemptBindingProblem
+} from './coordinated-automation-native-attempt'
+import { nativeDispatchLineageProblem } from './coordinated-automation-native-validation'
 import type { CoordinatedPassContext } from './coordinated-automation-recovery-context'
 
 export const DEFAULT_MAX_ACTIVE_FIXERS_PER_ARTIFACT = 1
@@ -161,6 +166,59 @@ export function reconcileStartingAttempts(
         id
       )
     }
+  }
+  return ctx.ledger.progress.sequence !== before
+}
+
+/**
+ * A crash between native Dispatch creation and the Store child mapping leaves the mapping
+ * dispatchId null while durable lineage already bound the attempt. Repair the Store mapping only
+ * after recovering exact deterministic/system provenance; anything unproven holds the run
+ * safely, and no path here respawns.
+ */
+export function repairNativeChildDispatchMappings(
+  ctx: CoordinatedPassContext,
+  run: AutomationRun
+): boolean {
+  const before = ctx.ledger.progress.sequence
+  for (const mapping of run.childMappings ?? []) {
+    if (mapping.dispatchId || ctx.inFlightTaskIds.has(mapping.taskId)) {
+      continue
+    }
+    const stage = ctx.ledger.progress.stages[mapping.childDefinitionId]
+    const dispatchId =
+      stage?.lineage.findLast((r) => r.status === 'active' && r.dispatchId !== null)?.dispatchId ??
+      ctx.orchestrationDb.getDispatchContext(mapping.taskId)?.id ??
+      null
+    if (!dispatchId || !isCoordinatedNativeAttempt(ctx.orchestrationDb, dispatchId)) {
+      continue
+    }
+    // Evaluate the exact binding check against the mapping this dispatch would repair; the
+    // persisted mapping is still null from the crash, so key it by child for the check only.
+    const provenanceRun: AutomationRun = {
+      ...run,
+      childMappings: (run.childMappings ?? []).map((m) =>
+        m.childDefinitionId === mapping.childDefinitionId ? { ...m, dispatchId } : m
+      )
+    }
+    const problem =
+      nativeDispatchLineageProblem(
+        ctx.orchestrationDb,
+        ctx.orchestrationDb.getDispatchContextById(dispatchId),
+        { dispatchId, taskId: mapping.taskId, orchestrationRunId: run.orchestrationRunId! }
+      ) ?? nativeAttemptBindingProblem(ctx.orchestrationDb, provenanceRun, dispatchId)
+    if (problem) {
+      const detail = `Native attempt ${dispatchId} for Task ${mapping.taskId} cannot be proven exactly after the mapping crash: ${problem}`
+      ctx.ledger.update('native-mapping-unproven', (progress) =>
+        withHalt(progress, { state: 'outcome_uncertain', reason: detail, at: ctx.clock.now() })
+      )
+      continue
+    }
+    ctx.store.recordCoordinatedChildDispatch({
+      automationRunId: run.id,
+      childDefinitionId: mapping.childDefinitionId,
+      dispatchId
+    })
   }
   return ctx.ledger.progress.sequence !== before
 }

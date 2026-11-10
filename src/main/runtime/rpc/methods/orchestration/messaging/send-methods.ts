@@ -263,6 +263,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         }
         const sent = sendPointToPointMessage({
           params,
+          orchestrationCompatibilityEvidence,
           runtime,
           db,
           from,

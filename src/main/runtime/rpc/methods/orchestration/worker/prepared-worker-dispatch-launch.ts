@@ -1,4 +1,7 @@
-import type { PreparedNativeStubLaunch } from '../../../../native-stub-session-test-host'
+import {
+  isDispatchedNativeStubLaunch,
+  type PreparedNativeStubLaunch
+} from '../../../../native-stub-session-test-host'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow } from '../../../../orchestration/types'
@@ -28,7 +31,8 @@ type PreparedWorkerDispatchLaunch = {
   preparedNativeStub?: PreparedNativeStubLaunch
   runtime: OrcaRuntimeService
   db: OrchestrationDb
-  params: WorkerStartInput
+  params: Omit<WorkerStartInput, 'from'> & { from?: string }
+  systemCoordinator?: { kind: 'coordinated_run'; runId: string; assertCurrent: () => void }
   run: RunRow
   started: ReturnType<OrchestrationDb['createStartingWorkerDispatch']>
   requestedWorktree: string
@@ -64,6 +68,17 @@ export async function launchPreparedWorkerDispatch(
     recordStart
   } = args
   let { mode, resolvedWorktree } = args
+  const systemCoordinator = args.systemCoordinator
+  if (
+    systemCoordinator &&
+    (!args.preparedNativeStub || systemCoordinator.runId !== run.id || params.from)
+  ) {
+    throw new Error('native_stub_system_coordinator_mismatch')
+  }
+  if (!systemCoordinator && !params.from) {
+    throw new Error('worker_coordinator_required')
+  }
+  systemCoordinator?.assertCurrent()
   const effects: WorkerEffect[] = []
   const task = started.task
   if (resolvedWorktree) {
@@ -97,6 +112,7 @@ export async function launchPreparedWorkerDispatch(
       onStage,
       followUp: args.followUp
     })
+    systemCoordinator?.assertCurrent()
     // New worktrees resolve host support after creation, so the final mode receipt may differ from preflight.
     mode = placed.mode
     resolvedWorktree = placed.worktree
@@ -138,6 +154,7 @@ export async function launchPreparedWorkerDispatch(
             creation: placed.terminalCreation,
             timeoutMs: params.timeoutMs ?? 60_000
           })
+    systemCoordinator?.assertCurrent()
     if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
       if (!wait.satisfied) {
@@ -176,7 +193,10 @@ export async function launchPreparedWorkerDispatch(
       dispatchDepth: started.dispatch.depth,
       structuredSession,
       terminalHandle,
-      coordinatorHandle: params.from,
+      coordinatorHandle: params.from ?? `run:${run.id}`,
+      systemCoordinator: systemCoordinator
+        ? { runId: run.id, assertCurrent: systemCoordinator.assertCurrent }
+        : undefined,
       devMode: params.devMode,
       requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
       agent: agent ?? null,
@@ -199,7 +219,13 @@ export async function launchPreparedWorkerDispatch(
       taskId: task.id,
       dispatchId: started.dispatch.id,
       failedStage,
-      error,
+      error:
+        systemCoordinator && isDispatchedNativeStubLaunch(args.preparedNativeStub)
+          ? Object.assign(
+              new Error(error instanceof Error ? error.message : String(error), { cause: error }),
+              { code: 'operation_unknown' }
+            )
+          : error,
       setup: placed?.setupReceipt ?? EXISTING_WORKTREE_SETUP,
       launch: launch.receipt,
       mode

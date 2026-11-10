@@ -38,6 +38,7 @@ export async function deliverWorkerDispatchPreamble(args: {
   taskId: string
   taskSpec: string
   coordinatorHandle: string
+  systemCoordinator?: { runId: string; assertCurrent: () => void }
   devMode: boolean | undefined
   requestId: string
   /** The agent this worker start launched into `terminalHandle`; absent for a caller's terminal. */
@@ -68,6 +69,7 @@ export async function deliverWorkerDispatchPreamble(args: {
           ? formatOrcaSessionAddress(chat)
           : terminalHandle,
     devMode: args.devMode,
+    systemCoordinatorRunId: args.systemCoordinator?.runId,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
     unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
   })
@@ -106,13 +108,24 @@ export async function deliverWorkerDispatchPreamble(args: {
     }
   }
   // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.
+  args.systemCoordinator?.assertCurrent()
   const briefGuard = createWorkerBriefWriteGuard(runtime, args.launchedAgent, !!args.launchedAgent)
   try {
     const sent = await sendAgentTurn({
       kind: 'terminal',
       runtime,
       handle: terminalHandle,
-      ...(briefGuard ? { beforeWrite: briefGuard.beforeWrite } : {}),
+      ...(args.systemCoordinator
+        ? {
+            beforeWrite: async (ptyId: string) => {
+              args.systemCoordinator?.assertCurrent()
+              await briefGuard?.beforeWrite(ptyId)
+              args.systemCoordinator?.assertCurrent()
+            }
+          }
+        : briefGuard
+          ? { beforeWrite: briefGuard.beforeWrite }
+          : {}),
       turn: { purpose: 'dispatch-preamble', body: preamble, operationId: args.requestId }
     })
     return { prompt: sent.prompt }

@@ -1,16 +1,14 @@
-import { join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
+import {
+  coordinatedNativeStubHostIsActive,
+  type CoordinatedNativeStubWorker
+} from './coordinated-automation-native-stub-worker'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
-import { isCoordinatedAutomation } from '../../shared/coordinated-automation-types'
 import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
 import type { SemanticReceiptEffect } from '../../shared/coordinated-automation-receipt-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import type { Store } from '../persistence/loading-store/store'
 import type { CoordinatedOrchestrationRecordProbe } from '../persistence/scheduling-automations/coordinated-automation-run-records'
-import type {
-  HeadlessAutomationDispatcher,
-  HeadlessAutomationDispatchLaunch
-} from './headless-dispatch'
+import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import type {
   CoordinatedHostApproval,
@@ -27,10 +25,8 @@ import {
   createDefaultFakeNoEffectsWorkerProvider,
   executeCoordinatedTaskDispatch
 } from './coordinated-automation-task-execution'
-import {
-  createFileCoordinatedRunProgressStore,
-  type CoordinatedRunProgressStore
-} from './coordinated-automation-progress-store'
+import type { CoordinatedRunProgressStore } from './coordinated-automation-progress-store'
+import { defaultCoordinatedProgressStore } from './coordinated-automation-dispatcher'
 import {
   type CoordinatedBoundaryHook,
   CoordinatedProgressLedger
@@ -70,6 +66,7 @@ export type CoordinatedAutomationAdapterContext = {
   store: Store
   orchestrationDb: OrchestrationDb
   workerProvider?: CoordinatedWorkerProvider
+  nativeStubWorker?: CoordinatedNativeStubWorker
   runInParentLane?: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
   /** Host-owned approvals; a function is re-read at every evaluation. */
   hostApprovals?: readonly CoordinatedHostApproval[] | (() => readonly CoordinatedHostApproval[])
@@ -100,7 +97,8 @@ export class CoordinatedAutomationAdapter {
       orchestrationDb: ctx.orchestrationDb,
       probe: orchestrationRecordProbe(ctx.orchestrationDb),
       workerProvider: ctx.workerProvider ?? createDefaultFakeNoEffectsWorkerProvider(ctx.store),
-      progressStore: ctx.progressStore ?? defaultProgressStore(),
+      nativeStubWorker: ctx.nativeStubWorker,
+      progressStore: ctx.progressStore ?? defaultCoordinatedProgressStore(),
       clock: ctx.clock ?? {
         now: () => Date.now(),
         setTimer: (delayMs, callback) => {
@@ -117,7 +115,9 @@ export class CoordinatedAutomationAdapter {
       trustedAuthorIdentity: ctx.trustedAuthorIdentity,
       inFlightTaskIds: new Set(),
       pendingWaits: new Set(),
-      isActive: ctx.isActive ?? (() => true)
+      // A revoked or re-bound native host fences every claim, ledger write and receipt, not only launches.
+      isActive: () =>
+        (ctx.isActive?.() ?? true) && coordinatedNativeStubHostIsActive(ctx.nativeStubWorker)
     }
     this.#runInParentLane =
       ctx.runInParentLane ??
@@ -310,22 +310,4 @@ export class CoordinatedAutomationAdapter {
   }
 }
 
-const defaultProgressStore = (): CoordinatedRunProgressStore =>
-  createFileCoordinatedRunProgressStore(
-    join(getAppEnvironment().getPath('userData'), 'coordinated-automation-progress')
-  )
-
-export function createCoordinatedAutomationDispatcher(
-  adapter: CoordinatedAutomationAdapter,
-  fallbackDispatcher?: HeadlessAutomationDispatcher
-): HeadlessAutomationDispatcher {
-  return async (request) => {
-    if (!isCoordinatedAutomation(request.automation)) {
-      if (!fallbackDispatcher) {
-        throw new Error('No fallback dispatcher provided for single automation.')
-      }
-      return fallbackDispatcher(request)
-    }
-    return adapter.dispatch(request)
-  }
-}
+export { createCoordinatedAutomationDispatcher } from './coordinated-automation-dispatcher'

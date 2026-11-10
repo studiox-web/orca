@@ -1,3 +1,4 @@
+import { recordNativeStubPhysicalSpawn } from '../../runtime/native-stub-physical-spawn'
 import { createGitBashConsoleCapacityDetector } from '../../../shared/git-bash-console-capacity'
 import { withInitialOutputDiagnostic } from '../../../shared/terminal-start-failure'
 import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
@@ -82,6 +83,9 @@ export function recordLocalPtySpawnIdentity(args: LocalPtySessionActivation): vo
   }
   ptyLoadGeneration.set(id, getLoadGeneration())
   ptyIncarnations.set(id, incarnationId)
+  if (spawn.preparedNativeStub) {
+    recordNativeStubPhysicalSpawn(spawn.preparedNativeStub, id, incarnationId)
+  }
   ptyAgentForegroundContextPaths.set(
     id,
     getAgentForegroundContextPaths({ cwd: spawn.cwd, worktreeId: spawn.worktreeId })
