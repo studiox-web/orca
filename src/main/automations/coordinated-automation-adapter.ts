@@ -239,9 +239,7 @@ export class CoordinatedAutomationAdapter {
     abandonCoordinatorWaits(this.#ctx)
   }
 
-  async runUntilSettled(automationRunId: string): Promise<AutomationRun> {
-    return (await this.reconcileRun(automationRunId)).run
-  }
+  runUntilSettled = async (id: string): Promise<AutomationRun> => (await this.reconcileRun(id)).run
 
   /** Admits a worker report through the native worker-report path; duplicates are idempotent. */
   submitWorkerReport(input: {
@@ -296,7 +294,8 @@ export class CoordinatedAutomationAdapter {
       orchestrationRunId: run.orchestrationRunId,
       snapshot: run.resolvedSnapshot,
       now: this.#ctx.clock.now(),
-      boundary: this.#ctx.boundary
+      boundary: this.#ctx.boundary,
+      isActive: this.#ctx.isActive
     })
     this.#ledgers.set(automationRunId, ledger)
     return ledger

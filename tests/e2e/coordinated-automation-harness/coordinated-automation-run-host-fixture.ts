@@ -20,6 +20,7 @@ import {
 import { COORDINATED_PROGRESS_DIRECTORY } from '../../../src/main/automations/coordinated-automation-run-host'
 import { createFileCoordinatedRunProgressStore } from '../../../src/main/automations/coordinated-automation-progress-store'
 import { LOCAL_STAGE_EFFECT, RecoveryEnv } from './coordinated-automation-recovery-env'
+import type { FakeEffectState } from './isolated-adapters'
 
 /**
  * Real createRuntimeAutomationService + AutomationService over a RecoveryEnv. Test files mock
@@ -136,7 +137,7 @@ export function effectDefinition(): CoordinatedAutomationCreateInput {
   })
 }
 
-export async function seedEffect(automationId: string, states: ('verified' | 'uncertain')[]) {
+export async function seedEffect(automationId: string, states: FakeEffectState[]) {
   // The effect id derives from the run id, which manual start creates; seed lazily from the stage worker.
   env.scripts.set('stage', async (identity) => {
     const effectId = env.effectId(identity.automationRunId, 'stage', LOCAL_STAGE_EFFECT)

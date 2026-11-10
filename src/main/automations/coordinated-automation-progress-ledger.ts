@@ -9,6 +9,7 @@ import type {
   ResolvedChildSnapshot
 } from '../../shared/coordinated-automation-types'
 import type { CoordinatedRunProgressStore } from './coordinated-automation-progress-store'
+import { CoordinatedHostStoppedError } from './coordinated-automation-recovery-context'
 
 /** Every durable write the coordinator makes; tests crash at each one. */
 export type CoordinatedDurableBoundary =
@@ -126,7 +127,8 @@ export class CoordinatedProgressLedger {
     readonly store: CoordinatedRunProgressStore,
     readonly generation: number,
     current: CoordinatedRunProgress,
-    readonly boundary: CoordinatedBoundaryHook
+    readonly boundary: CoordinatedBoundaryHook,
+    readonly isActive: () => boolean = () => true
   ) {
     this.#current = current
   }
@@ -138,6 +140,8 @@ export class CoordinatedProgressLedger {
     snapshot: CoordinatedLedgerSnapshot
     now: number
     boundary: CoordinatedBoundaryHook
+    /** Host lifetime gate; once false, every later commit is refused before it is written. */
+    isActive?: () => boolean
   }): CoordinatedProgressLedger {
     const stored = input.store.read(input.automationRunId)
     const problem = stored
@@ -181,7 +185,13 @@ export class CoordinatedProgressLedger {
       automationRunId: input.automationRunId,
       label: 'generation-claimed'
     })
-    return new CoordinatedProgressLedger(input.store, next.generation, next, input.boundary)
+    return new CoordinatedProgressLedger(
+      input.store,
+      next.generation,
+      next,
+      input.boundary,
+      input.isActive
+    )
   }
 
   get progress(): CoordinatedRunProgress {
@@ -213,6 +223,10 @@ export class CoordinatedProgressLedger {
       return current
     }
     const next = { ...mutated, sequence: current.sequence + 1, generation: this.generation }
+    // A stopped host's late continuation leaves prior durable intent for the next generation.
+    if (!this.isActive()) {
+      throw new CoordinatedHostStoppedError()
+    }
     this.store.write(next, current.sequence)
     this.#current = next
     this.boundary('progress.after-write', {

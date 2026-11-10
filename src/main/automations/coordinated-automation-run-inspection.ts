@@ -10,6 +10,10 @@ import type {
 } from '../../shared/coordinated-automation-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import { progressIdentityProblem } from './coordinated-automation-progress-ledger'
+import {
+  coordinatedMappingProblem,
+  nativeDispatchLineageProblem
+} from './coordinated-automation-native-validation'
 import type { CoordinatedRunProgressStore } from './coordinated-automation-progress-store'
 import type {
   Availability,
@@ -75,8 +79,16 @@ function stageEvidenceProblem(
     ...stage.lineage.map((r) => r.dispatchId)
   ]
   for (const dispatchId of named) {
-    if (dispatchId !== null && db.getDispatchContextById(dispatchId)?.task_id !== taskId) {
-      return `Dispatch ${dispatchId} is not an attempt of Task ${taskId}.`
+    const problem =
+      dispatchId === null
+        ? null
+        : nativeDispatchLineageProblem(db, db.getDispatchContextById(dispatchId), {
+            dispatchId,
+            taskId,
+            orchestrationRunId
+          })
+    if (problem) {
+      return problem
     }
   }
   if (stage.status !== 'accepted') {
@@ -211,20 +223,31 @@ export function inspectCoordinatedRun(input: {
   const snapshot = run.resolvedSnapshot ?? null
   const orchestrationRunId = run.orchestrationRunId ?? null
   const progress = readTrustedProgress(input.progressStore, run, snapshot)
+  // Nothing native or semantic is exposed unless the whole mapping is exactly the materialized one.
+  const mappingProblem =
+    snapshot && run.materializationPhase === 'ready_for_dispatch'
+      ? coordinatedMappingProblem(db, run, snapshot)
+      : null
   const stages: CoordinatedStageInspection[] = (snapshot?.resolvedChildren ?? []).map((child) => {
     const mapping = (run.childMappings ?? []).find(
       (m) => m.childDefinitionId === child.childDefinitionId
     )
     const taskId = mapping?.taskId ?? null
+    const untrusted = mappingProblem
+      ? {
+          kind: 'unavailable' as const,
+          reason: `Child mappings are not trusted: ${mappingProblem}`
+        }
+      : null
     return {
       childDefinitionId: child.childDefinitionId,
       name: child.name,
       role: child.role,
       enabled: child.enabled,
-      taskId,
-      mappedDispatchId: mapping?.dispatchId ?? null,
-      native: nativeStage(db, orchestrationRunId, taskId),
-      semantic: semanticStage(db, run, child, taskId, progress),
+      taskId: untrusted ? null : taskId,
+      mappedDispatchId: untrusted ? null : (mapping?.dispatchId ?? null),
+      native: untrusted ?? nativeStage(db, orchestrationRunId, taskId),
+      semantic: untrusted ?? semanticStage(db, run, child, taskId, progress),
       sessionTarget: { kind: 'unavailable', reason: NO_SESSION_TARGET }
     }
   })
@@ -251,7 +274,9 @@ export function inspectCoordinatedRun(input: {
             reportCount: progress.progress.reports.length
           }
         : progress,
-    receipt: trustedReceipt(db, run, snapshot),
+    receipt: mappingProblem
+      ? { kind: 'unavailable', reason: `Child mappings are not trusted: ${mappingProblem}` }
+      : trustedReceipt(db, run, snapshot),
     humanResolution: { available: false, reason: HUMAN_RESOLUTION_UNAVAILABLE }
   }
 }

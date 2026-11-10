@@ -151,6 +151,7 @@ async function tryComplete(
     )
     return null
   }
+  assertCoordinatorActive(ctx)
   const acceptance = evaluateParentOutcomeAcceptance({
     run,
     snapshot,
@@ -185,6 +186,7 @@ async function tryComplete(
 }
 
 function haltedOutcome(ctx: CoordinatedPassContext, run: AutomationRun): CoordinatedRunOutcome {
+  assertCoordinatorActive(ctx)
   const halt = ctx.ledger.progress.halt!
   // Failure is final; blocked and uncertain stay non-final holds that never read as complete.
   const settled =
@@ -234,7 +236,8 @@ export async function reconcileCoordinatedRun(
     orchestrationRunId: run.orchestrationRunId,
     snapshot,
     now: base.clock.now(),
-    boundary: base.boundary
+    boundary: base.boundary,
+    isActive: base.isActive
   })
   onClaimed?.(ledger)
   const ctx: CoordinatedPassContext = { ...base, ledger }
@@ -248,6 +251,7 @@ export async function reconcileCoordinatedRun(
     reverifyAcceptedArtifacts(ctx, run, snapshot)
     if (ctx.effectAdapter) {
       progressed = (await advanceStageEffects(ctx, snapshot)) || progressed
+      assertCoordinatorActive(ctx)
     }
     if (ctx.ledger.progress.halt) {
       return haltedOutcome(ctx, requireRun(ctx, automationRunId))
@@ -262,6 +266,7 @@ export async function reconcileCoordinatedRun(
       break
     }
   }
+  assertCoordinatorActive(ctx)
   run = requireRun(ctx, automationRunId)
   if (ctx.ledger.progress.halt) {
     return haltedOutcome(ctx, run)

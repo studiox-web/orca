@@ -10,9 +10,10 @@ import type {
   StageEffectRequirement
 } from '../../shared/coordinated-automation-types'
 import { withEscalation, withHalt } from './coordinated-automation-progress-ledger'
-import type {
-  CoordinatedFakeEffectObservation,
-  CoordinatedPassContext
+import {
+  assertCoordinatorActive,
+  type CoordinatedFakeEffectObservation,
+  type CoordinatedPassContext
 } from './coordinated-automation-recovery-context'
 
 /** One effect per run, stage, kind, and namespace, so retries and fixes can never mint another. */
@@ -147,6 +148,8 @@ async function applyOnce(
     label: entry.effectId
   })
   const observation = await adapter.apply(entry.effectId)
+  // The apply may have happened; a stopped host records nothing and the next generation queries.
+  assertCoordinatorActive(ctx)
   ctx.boundary('effect.after-adapter-ack', {
     automationRunId: ctx.ledger.progress.automationRunId,
     childDefinitionId: entry.childDefinitionId,
@@ -199,6 +202,7 @@ export async function advanceStageEffects(
       continue
     }
     const observation = await ctx.effectAdapter!.query(entry.effectId)
+    assertCoordinatorActive(ctx)
     const status = observedStatus(observation)
     if (status === null && entry.status === 'intent_recorded') {
       await applyOnce(ctx, entry)

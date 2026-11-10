@@ -8,6 +8,11 @@ import {
   deterministicCoordinatedRunId,
   deterministicCoordinatedTaskId
 } from './coordinated-automation-deterministic-ids'
+import {
+  coordinatedRunObjective,
+  nativeRunOwnershipProblem,
+  nativeTaskDefinitionProblem
+} from './coordinated-automation-native-validation'
 
 export class CoordinatedAutomationLaunchRefusedError extends Error {
   constructor(message: string) {
@@ -101,24 +106,15 @@ export function materializeCoordinatedRun(
   if (run.materializationPhase === 'intent_persisted') {
     const exactRunId = run.orchestrationRunId ?? deterministicCoordinatedRunId(run.id)
     const existingRun = orchestrationDb.getRun(exactRunId)
-    const objective =
-      run.resolvedSnapshot?.outcomeContract.humanStatement ||
-      run.title ||
-      'Coordinated Automation Run'
+    const objective = coordinatedRunObjective(run)
 
     if (existingRun) {
-      if (
-        existingRun.id !== exactRunId ||
-        (run.orchestrationRunId && existingRun.id !== run.orchestrationRunId) ||
-        existingRun.objective !== objective ||
-        existingRun.coordinator_handle !== null ||
-        existingRun.coordinator_pane_key !== null ||
-        existingRun.coordinator_orca_session_id !== null ||
-        existingRun.coordinator_orca_session_id_generation !== 1 ||
-        existingRun.consumer_generation !== 1 ||
-        existingRun.legacy !== 0 ||
-        existingRun.home_database !== 'this_database'
-      ) {
+      const problem = nativeRunOwnershipProblem(existingRun, {
+        exactRunId,
+        linkedRunId: run.orchestrationRunId ?? null,
+        objective
+      })
+      if (problem) {
         throw new CoordinatedAutomationLaunchRefusedError(
           `Existing native Run "${exactRunId}" does not match coordinated run ownership or objective.`
         )
@@ -160,36 +156,16 @@ export function materializeCoordinatedRun(
 
       const existingTask = orchestrationDb.getTask(exactTaskId)
       if (existingTask) {
-        let existingDeps: string[] = []
-        try {
-          existingDeps = JSON.parse(existingTask.deps ?? '[]')
-        } catch {
-          existingDeps = []
-        }
-        const depsMatch =
-          Array.isArray(existingDeps) &&
-          existingDeps.length === deps.length &&
-          existingDeps.every((d, i) => d === deps[i])
-        const validStatus = ['pending', 'ready', 'dispatched', 'completed'].includes(
-          existingTask.status
-        )
-
-        if (
-          existingTask.id !== exactTaskId ||
-          existingTask.run_id !== run.orchestrationRunId ||
-          existingTask.parent_id !== null ||
-          existingTask.task_title !== child.name ||
-          existingTask.display_name !== child.name ||
-          existingTask.spec !== child.prompt.text ||
-          !depsMatch ||
-          existingTask.created_by_terminal_handle !== null ||
-          existingTask.created_by_pane_key !== null ||
-          existingTask.created_by_process_incarnation !== null ||
-          existingTask.created_by_run_generation !== null ||
-          !validStatus
-        ) {
+        const problem = nativeTaskDefinitionProblem(existingTask, {
+          exactTaskId,
+          orchestrationRunId: run.orchestrationRunId!,
+          child,
+          dependencyTaskIds: deps,
+          requireAdoptableStatus: true
+        })
+        if (problem) {
           throw new CoordinatedAutomationLaunchRefusedError(
-            `Existing native Task "${exactTaskId}" does not match coordinated child definition "${child.childDefinitionId}".`
+            `Existing ${problem.charAt(0).toLowerCase()}${problem.slice(1)}`
           )
         }
       } else {
