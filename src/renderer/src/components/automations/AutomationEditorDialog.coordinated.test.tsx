@@ -135,7 +135,7 @@ describe('AutomationEditorDialog coordinated automations', () => {
     expect(updated.kind).toBe('coordinated')
   })
 
-  it('disables save with persistence-unavailable notice and does not write outcome to prompt', async () => {
+  it('enables save with the saved-disabled policy notice and does not write outcome to prompt', async () => {
     const settings = createGlobalSettingsFixture({
       experimentalCoordinatedAutomations: true
     })
@@ -163,25 +163,20 @@ describe('AutomationEditorDialog coordinated automations', () => {
       onSave
     })
 
-    // Verify persistence-unavailable notice
-    const notice = document.body.querySelector(
-      '[data-testid="coordinated-persistence-unavailable-message"]'
-    )
+    const notice = document.body.querySelector('[data-testid="coordinated-save-policy-message"]')
     expect(notice).not.toBeNull()
-    expect(notice?.textContent).toContain('persistence is not available yet in this preview')
+    expect(notice?.textContent).toContain('Saved disabled')
 
     // Verify Save/Create button is disabled
     const saveButton = Array.from(document.body.querySelectorAll('button')).find((b) =>
       ['Create', 'Save', 'Save Changes'].includes(b.textContent?.trim() ?? '')
     ) as HTMLButtonElement | undefined
     expect(saveButton).toBeDefined()
-    expect(saveButton?.disabled).toBe(true)
-
-    // Attempting to click disabled save button must not invoke onSave
+    expect(saveButton?.disabled).toBe(false)
     await act(async () => {
       saveButton?.click()
     })
-    expect(onSave).not.toHaveBeenCalled()
+    expect(onSave).toHaveBeenCalledTimes(1)
 
     // Test typing in outcome statement textarea
     const textarea = document.body.querySelector(

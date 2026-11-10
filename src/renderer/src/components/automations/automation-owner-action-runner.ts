@@ -88,7 +88,8 @@ function conflictOutcome(
   }
 }
 
-function classify(error: unknown): AutomationActionOutcome<never> {
+/** Shared classifier so coordinated definition writes surface the same owner/host notices. */
+export function classifyAutomationActionError(error: unknown): AutomationActionOutcome<never> {
   const conflict = matchAutomationOwnerConflict(error)
   if (conflict) {
     return conflictOutcome(conflict, error)
@@ -136,7 +137,7 @@ async function attempt<TValue>(
     }
     return { status: 'ok', value: await orphanFenced() }
   } catch (error) {
-    return classify(error)
+    return classifyAutomationActionError(error)
   }
 }
 
@@ -247,6 +248,6 @@ export async function createAutomationAtDestination(
       value: await createAutomationForDestination(authority, input, destination)
     }
   } catch (error) {
-    return classify(error)
+    return classifyAutomationActionError(error)
   }
 }

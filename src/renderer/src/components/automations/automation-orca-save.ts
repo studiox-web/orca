@@ -10,11 +10,7 @@ import {
   automationLaunchWorkspace
 } from './automation-launch-surface'
 import { toast } from 'sonner'
-import type {
-  Automation,
-  AutomationCreateInput,
-  AutomationUpdateInput
-} from '../../../../shared/automations-types'
+import type { Automation, AutomationUpdateInput } from '../../../../shared/automations-types'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { buildAutomationRrule } from '../../../../shared/automation-schedule-occurrences'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
@@ -35,6 +31,11 @@ import {
   saveExistingAutomation
 } from './automation-orca-save-operations'
 import type { AutomationSaveContext } from './automation-save-context'
+import { buildOrcaAutomationCreateInput } from './automation-create-input'
+import {
+  coordinatedDraftDefinition,
+  saveCoordinatedDefinition
+} from './automation-coordinated-save'
 
 /** Saves an Orca automation, including destination validation and host moves. */
 export async function saveOrcaAutomation(
@@ -62,6 +63,7 @@ export async function saveOrcaAutomation(
   } = destination
   const { dialogRepos, editHostResolution, automationDialogTarget } = destinationForm
 
+  const coordinated = draft.kind === 'coordinated' ? coordinatedDraftDefinition(draft) : null
   // Fence the destination before hook probes/trust prompts or any other transaction side effect.
   const createCheck = editingAutomationId === null ? createDestination.check(draft.projectId) : null
   if (createCheck && !createCheck.ok) {
@@ -220,29 +222,17 @@ export async function saveOrcaAutomation(
     updates.rrule = rrule
     updates.dtstart = time.now
   }
-  const createInput: AutomationCreateInput = {
-    name: currentAutomation ? currentAutomation.name : draft.name,
-    prompt: currentAutomation ? currentAutomation.prompt : draft.prompt,
-    precheck: currentAutomation ? currentAutomation.precheck : precheck,
-    agentId: currentAutomation ? currentAutomation.agentId : draft.agentId,
-    ...launchSetup,
-    runContext: currentAutomation ? currentAutomation.runContext : runContext,
-    projectId: currentAutomation ? currentAutomation.projectId : draft.projectId,
-    workspaceMode: currentAutomation ? currentAutomation.workspaceMode : draft.workspaceMode,
-    workspaceId: currentAutomation ? currentAutomation.workspaceId : draft.workspaceId,
-    baseBranch: currentAutomation ? currentAutomation.baseBranch : draft.baseBranch.trim() || null,
-    setupDecision: currentAutomation ? currentAutomation.setupDecision : setupDecision,
-    reuseSession: currentAutomation
-      ? currentAutomation.reuseSession
-      : draft.workspaceMode === 'existing' && draft.reuseSession,
+  const createInput = buildOrcaAutomationCreateInput(currentAutomation, draft, {
+    precheck,
+    launchSetup,
+    runContext,
+    setupDecision,
     timezone,
-    rrule: currentAutomation ? currentAutomation.rrule : rrule,
-    dtstart: currentAutomation ? currentAutomation.dtstart : (updates.dtstart ?? time.now),
-    missedRunGraceMinutes: currentAutomation
-      ? currentAutomation.missedRunGraceMinutes
-      : missedRunGraceMinutes,
-    ...updates
-  }
+    rrule,
+    missedRunGraceMinutes,
+    updates,
+    now: time.now
+  })
 
   const destinationResult = resolveAutomationEditDestination({
     currentAutomation,
@@ -263,7 +253,17 @@ export async function saveOrcaAutomation(
 
   let saved: AutomationDispatchResult<Automation>
   let originalRemoved = true
-  if (moveTarget) {
+  if (coordinated?.ok) {
+    saved = await saveCoordinatedDefinition(context, {
+      definition: coordinated.definition,
+      currentAutomation,
+      createInput,
+      updates,
+      createDestination: createCheck?.ok ? createCheck.destination : null,
+      editDestination,
+      moveTarget
+    })
+  } else if (moveTarget) {
     const moved = await moveAutomationToDestination(
       {
         automationDispatchContext,

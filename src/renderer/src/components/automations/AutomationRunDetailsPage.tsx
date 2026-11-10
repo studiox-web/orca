@@ -4,7 +4,13 @@ import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import { useAppStore } from '@/store'
+import {
+  isCoordinatedAutomation,
+  type Automation,
+  type AutomationRun
+} from '../../../../shared/automations-types'
+import { AutomationCoordinatedRunPanel } from './AutomationCoordinatedRunPanel'
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
 import { getAutomationRunContent } from './automation-run-content'
 import { automationRunErrorText } from './automation-run-error-copy'
@@ -40,8 +46,19 @@ export function AutomationRunDetailsPage({
   onOpenWorkspace: () => void
   onBack: () => void
 }): React.JSX.Element {
+  const isCoordinatedFeatureEnabled = useAppStore(
+    (s) => s.settings?.experimentalCoordinatedAutomations === true
+  )
   const content = getAutomationRunContent(run)
   const errorText = automationRunErrorText(run)
+  const showCoordinatedRunPanel = Boolean(
+    automation &&
+    (isCoordinatedAutomation(automation) ||
+      run.resolvedSnapshot ||
+      run.completionReceipt ||
+      run.materializationPhase ||
+      run.coordinatedQuarantine)
+  )
   return (
     <section className="flex min-h-0 flex-1 p-5">
       <AutomationRunPageFrame
@@ -94,6 +111,17 @@ export function AutomationRunDetailsPage({
             label={translate('auto.components.automations.AutomationsPage.runError', 'Error:')}
             error={errorText}
           />
+        ) : null}
+        {showCoordinatedRunPanel && automation ? (
+          <div className="mb-4">
+            <AutomationCoordinatedRunPanel
+              automation={automation}
+              run={run}
+              workspaceLabel={workspaceDisplay?.detailLabel ?? null}
+              isFeatureFlagEnabled={isCoordinatedFeatureEnabled}
+              now={relativeNow}
+            />
+          </div>
         ) : null}
         <CommentMarkdown
           variant="document"

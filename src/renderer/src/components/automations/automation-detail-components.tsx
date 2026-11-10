@@ -89,3 +89,30 @@ export function CoordinatedFlagOffBanner(): React.JSX.Element {
     </div>
   )
 }
+
+export function focusConfiguredWorkerCard(childId: string): void {
+  const el = document.getElementById(`worker-card-${childId}`)
+  el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  el?.focus()
+}
+
+export function getAutomationToolbarLabels(input: {
+  isFlagOffCoordinated: boolean
+  enabled: boolean
+}): { editLabel: string; toggleLabel: string } {
+  const editLabel = input.isFlagOffCoordinated
+    ? translate(
+        'auto.components.automations.detail.editDisabledFlagOff',
+        'Coordinated automation editing disabled while feature flag is off'
+      )
+    : translate('auto.components.automations.AutomationDetail.4b1ea02d2e', 'Edit automation')
+  const toggleLabel = input.isFlagOffCoordinated
+    ? translate(
+        'auto.components.automations.detail.toggleDisabledFlagOff',
+        'Coordinated automation state changes disabled while feature flag is off'
+      )
+    : input.enabled
+      ? translate('auto.components.automations.AutomationDetail.91a4155e95', 'Pause automation')
+      : translate('auto.components.automations.AutomationDetail.d79452fb30', 'Resume automation')
+  return { editLabel, toggleLabel }
+}

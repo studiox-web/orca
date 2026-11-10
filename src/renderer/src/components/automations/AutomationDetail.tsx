@@ -10,6 +10,7 @@ import {
   type AutomationRun
 } from '../../../../shared/automations-types'
 import { useAppStore } from '@/store'
+import { AutomationCoordinatedRunPanel } from './AutomationCoordinatedRunPanel'
 import { AutomationWorkersSection } from './AutomationWorkersSection'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
@@ -30,10 +31,11 @@ import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
 import { automationRunErrorText } from './automation-run-error-copy'
-
 import {
   DetailMetric,
+  focusConfiguredWorkerCard,
   formatGrace,
+  getAutomationToolbarLabels,
   ToolbarIconButton,
   CoordinatedFlagOffBanner
 } from './automation-detail-components'
@@ -138,6 +140,10 @@ export function AutomationDetail({
   const latestRun = indexLatestAutomationRuns(runs).get(automation.id)
   const latestRunError =
     latestRun?.status === 'dispatch_failed' ? automationRunErrorText(latestRun) : null
+  const toolbarLabels = getAutomationToolbarLabels({
+    isFlagOffCoordinated,
+    enabled: automation.enabled
+  })
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -185,17 +191,7 @@ export function AutomationDetail({
             ) : null}
           </Tooltip>
           <ToolbarIconButton
-            label={
-              isFlagOffCoordinated
-                ? translate(
-                    'auto.components.automations.detail.editDisabledFlagOff',
-                    'Coordinated automation editing disabled while feature flag is off'
-                  )
-                : translate(
-                    'auto.components.automations.AutomationDetail.4b1ea02d2e',
-                    'Edit automation'
-                  )
-            }
+            label={toolbarLabels.editLabel}
             onClick={isFlagOffCoordinated ? undefined : () => onEdit(automation)}
             disabled={isFlagOffCoordinated}
             className={isFlagOffCoordinated ? 'opacity-40 cursor-not-allowed' : undefined}
@@ -203,22 +199,7 @@ export function AutomationDetail({
             <Pencil className="size-4" />
           </ToolbarIconButton>
           <ToolbarIconButton
-            label={
-              isFlagOffCoordinated
-                ? translate(
-                    'auto.components.automations.detail.toggleDisabledFlagOff',
-                    'Coordinated automation state changes disabled while feature flag is off'
-                  )
-                : automation.enabled
-                  ? translate(
-                      'auto.components.automations.AutomationDetail.91a4155e95',
-                      'Pause automation'
-                    )
-                  : translate(
-                      'auto.components.automations.AutomationDetail.d79452fb30',
-                      'Resume automation'
-                    )
-            }
+            label={toolbarLabels.toggleLabel}
             onClick={isFlagOffCoordinated ? undefined : () => onToggle(automation)}
             disabled={isFlagOffCoordinated}
             className={isFlagOffCoordinated ? 'opacity-40 cursor-not-allowed' : undefined}
@@ -372,21 +353,34 @@ export function AutomationDetail({
       </div>
 
       {showWorkers ? (
-        <AutomationWorkersSection
-          workers={automation.children ?? []}
-          definitionRevision={automation.definitionRevision ?? 1}
-          outcomeContract={automation.outcomeContract}
-          inheritedDefaults={automation.inheritedDefaults}
-          globalCeilings={automation.globalCeilings}
-          publicationPolicy={automation.publicationPolicy}
-          retentionPolicy={automation.retentionPolicy}
-          isEditing={false}
-          activeRunId={activeRun?.id ?? null}
-          activeRunRevision={activeRun?.automationDefinitionRevision}
-          activeRunStatus={activeRun?.status ?? null}
-          snapshotRunId={snapshotRunId}
-          historicalSnapshot={historicalSnapshot}
-        />
+        <>
+          <AutomationWorkersSection
+            workers={automation.children ?? []}
+            definitionRevision={automation.definitionRevision ?? 1}
+            outcomeContract={automation.outcomeContract}
+            inheritedDefaults={automation.inheritedDefaults}
+            globalCeilings={automation.globalCeilings}
+            publicationPolicy={automation.publicationPolicy}
+            retentionPolicy={automation.retentionPolicy}
+            isEditing={false}
+            activeRunId={activeRun?.id ?? null}
+            activeRunRevision={activeRun?.automationDefinitionRevision}
+            activeRunStatus={activeRun?.status ?? null}
+            snapshotRunId={snapshotRunId}
+            historicalSnapshot={historicalSnapshot}
+          />
+          {runs.length > 0 ? (
+            <AutomationCoordinatedRunPanel
+              automation={automation}
+              runs={runs}
+              hostLabel={hostDisplay.label}
+              workspaceLabel={runLocationLabel}
+              isFeatureFlagEnabled={isCoordinatedFeatureEnabled}
+              now={now}
+              onInspectChildDefinition={focusConfiguredWorkerCard}
+            />
+          ) : null}
+        </>
       ) : (
         <AutomationPromptDisclosure
           key={`${automation.id}:${automation.prompt}`}

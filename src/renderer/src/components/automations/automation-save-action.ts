@@ -15,6 +15,7 @@ import {
   parseDraftTime
 } from './automation-draft-model'
 import { saveOrcaAutomation } from './automation-orca-save'
+import { coordinatedDraftDefinition } from './automation-coordinated-save'
 import type { AutomationSaveContext } from './automation-save-context'
 
 /** Validates editor input then runs the Orca save transaction. */
@@ -51,6 +52,12 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
           'Choose a run location and enter a prompt before saving.'
         )
       )
+      return
+    }
+    // Why: refuse an incomplete coordinated definition before any probe or prompt.
+    const coordinated = draft.kind === 'coordinated' ? coordinatedDraftDefinition(draft) : null
+    if (coordinated && !coordinated.ok) {
+      toast.error(coordinated.message)
       return
     }
     if (scheduleEdited && draft.scheduleWarning) {

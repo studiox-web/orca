@@ -29,8 +29,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { closeUnfocusedMonacoFindOrPreventDialogDismiss } from '@/components/editor/monaco-find-widget'
 import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
@@ -43,7 +41,7 @@ import { AutomationEditorPromptSection } from './AutomationEditorPromptSection'
 import { AutomationEditorSettingsSidebar } from './AutomationEditorSettingsSidebar'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
 import { isCoordinatedAutomationsFeatureEnabled } from './automation-workers-feature-flag'
-import { AutomationWorkersSection } from './AutomationWorkersSection'
+import { AutomationCoordinatedEditorFields } from './AutomationCoordinatedEditorFields'
 
 export const AUTOMATION_EDITOR_PICKER_TRIGGER_CLASS =
   'border-input bg-input/30 shadow-xs hover:bg-accent/60 dark:bg-input/30 dark:hover:bg-input/50'
@@ -212,71 +210,12 @@ export function AutomationEditorDialog({
 
         <div className="flex min-h-0 flex-1 flex-row">
           {isCoordinated ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5 scrollbar-sleek gap-5">
-              {!isCoordinatedFeatureEnabled ? (
-                <div className="rounded-md border border-status-warning-border bg-status-warning-background p-3 text-2xs text-status-warning-text">
-                  {translate(
-                    'auto.components.automations.editor.flagOffNotice',
-                    'Coordinated automations require the experimental feature flag to be enabled in Settings. Viewing in safe read-only mode.'
-                  )}
-                </div>
-              ) : null}
-
-              <div className="space-y-1.5">
-                <Label
-                  htmlFor="automation-outcome-statement"
-                  className="font-semibold text-2xs uppercase tracking-wider text-muted-foreground"
-                >
-                  Outcome statement
-                </Label>
-                <Textarea
-                  id="automation-outcome-statement"
-                  value={draft.outcomeContract?.humanStatement ?? ''}
-                  disabled={!isCoordinatedFeatureEnabled}
-                  onChange={(e) => {
-                    const text = e.target.value
-                    onDraftChange((curr) => ({
-                      ...curr,
-                      outcomeContract: {
-                        humanStatement: text,
-                        acceptanceCriteria: curr.outcomeContract?.acceptanceCriteria ?? [],
-                        requiredApprovals: curr.outcomeContract?.requiredApprovals ?? [],
-                        allowedFinalStates: curr.outcomeContract?.allowedFinalStates ?? [
-                          'completed'
-                        ]
-                      }
-                    }))
-                  }}
-                  placeholder="Describe the desired end-to-end outcome that specialist workers must achieve..."
-                  rows={2}
-                  className="text-xs"
-                />
-              </div>
-
-              <AutomationWorkersSection
-                workers={draft.children ?? []}
-                definitionRevision={isEditing ? (draft.definitionRevision ?? 1) : null}
-                outcomeContract={draft.outcomeContract}
-                inheritedDefaults={{
-                  agentId: draft.agentId,
-                  surface: draft.surface,
-                  extraAgentArgs: draft.extraAgentArgs,
-                  workspaceMode: draft.workspaceMode,
-                  workspaceId: draft.workspaceId,
-                  baseBranch: draft.baseBranch,
-                  setupDecision: draft.setupDecision,
-                  reuseSession: draft.reuseSession
-                }}
-                isEditing={isCoordinatedFeatureEnabled}
-                hasModifications={false}
-                onWorkersChange={(children) => {
-                  onDraftChange((curr) => ({
-                    ...curr,
-                    children
-                  }))
-                }}
-              />
-            </div>
+            <AutomationCoordinatedEditorFields
+              draft={draft}
+              isEditing={isEditing}
+              isCoordinatedFeatureEnabled={isCoordinatedFeatureEnabled}
+              onDraftChange={onDraftChange}
+            />
           ) : (
             <AutomationEditorPromptSection
               draft={draft}
@@ -321,8 +260,16 @@ export function AutomationEditorDialog({
           canSave={canSave && (surface !== 'chat' || chatSupported === true)}
           hasProjects={repos.length > 0}
           isCoordinated={isCoordinated}
+          coordinatedSaveBlockedReason={
+            isCoordinated && !isCoordinatedFeatureEnabled
+              ? translate(
+                  'auto.components.automations.editor.coordinatedSaveFlagOff',
+                  'Enable experimental coordinated automations in Settings to save changes.'
+                )
+              : null
+          }
           onOpenChange={onOpenChange}
-          onSave={isCoordinated ? () => {} : onSave}
+          onSave={onSave}
         />
       </DialogContent>
     </Dialog>

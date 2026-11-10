@@ -9,6 +9,8 @@ type AutomationEditorDialogFooterProps = {
   canSave: boolean
   hasProjects: boolean
   isCoordinated?: boolean
+  /** Coordinated only: why saving is unavailable here; null when the host decides. */
+  coordinatedSaveBlockedReason?: string | null
   onOpenChange: (open: boolean) => void
   onSave: () => void
 }
@@ -19,6 +21,7 @@ export function AutomationEditorDialogFooter({
   canSave,
   hasProjects,
   isCoordinated = false,
+  coordinatedSaveBlockedReason = null,
   onOpenChange,
   onSave
 }: AutomationEditorDialogFooterProps): React.JSX.Element {
@@ -28,7 +31,8 @@ export function AutomationEditorDialogFooter({
       ? translate('auto.components.automations.AutomationEditorDialog.a9d9dccf77', 'Save')
       : translate('auto.components.automations.AutomationEditorDialog.e46c1aa9ad', 'Create')
 
-  const isSaveDisabled = isCoordinated || isSaving || (!isEditing && !hasProjects) || !canSave
+  const coordinatedBlocked = isCoordinated && coordinatedSaveBlockedReason !== null
+  const isSaveDisabled = coordinatedBlocked || isSaving || (!isEditing && !hasProjects) || !canSave
 
   return (
     <div className="flex items-center justify-between gap-3 border-t border-border/50 px-5 py-3">
@@ -38,12 +42,13 @@ export function AutomationEditorDialogFooter({
             <Info className="size-3.5 shrink-0 text-status-warning" aria-hidden="true" />
             <span
               className="truncate text-status-warning-text"
-              data-testid="coordinated-persistence-unavailable-message"
+              data-testid="coordinated-save-policy-message"
             >
-              {translate(
-                'auto.components.automations.editor.persistenceUnavailable',
-                'Coordinated automation persistence is not available yet in this preview. Workers can be designed and tested here, but cannot be saved.'
-              )}
+              {coordinatedSaveBlockedReason ??
+                translate(
+                  'auto.components.automations.editor.coordinatedSavedDisabled',
+                  'Saved disabled. Coordinated automations do not run on a schedule yet.'
+                )}
             </span>
           </>
         ) : (
@@ -63,16 +68,9 @@ export function AutomationEditorDialogFooter({
           {translate('auto.components.automations.AutomationEditorDialog.fb1896a5e7', 'Cancel')}
         </Button>
         <Button
-          onClick={isCoordinated ? undefined : onSave}
+          onClick={coordinatedBlocked ? undefined : onSave}
           disabled={isSaveDisabled}
-          title={
-            isCoordinated
-              ? translate(
-                  'auto.components.automations.editor.persistenceDisabledTooltip',
-                  'Coordinated automations cannot be saved in this preview (persistence not integrated)'
-                )
-              : undefined
-          }
+          title={coordinatedBlocked ? (coordinatedSaveBlockedReason ?? undefined) : undefined}
         >
           {saveLabel}
         </Button>
