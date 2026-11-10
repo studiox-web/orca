@@ -1,12 +1,12 @@
 # Outcome-oriented parent/child automations
 
-Status: design exploration only
+Status: original design baseline; isolated implementation subsequently authorized and in progress. See [Implementation completion plan](#implementation-completion-plan).
 
 Date: 2026-11-08
 
 Decision owner: Graham
 
-Implementation, migration, scheduling, and execution authorization: **not granted**
+Original design authorization: implementation, migration, scheduling, and execution were **not granted**. Graham subsequently authorized isolated implementation using Orca workers. Live migration, scheduling changes, publishing, deployment, push, and merge remain unauthorized. Runtime observations and boundary statements in the original design below describe the design investigation, not the subsequent worker build.
 
 ## Recommendation
 
@@ -741,3 +741,24 @@ The reusable functionality is ready for a shadow pilot only when all of the foll
 ## Boundary confirmation
 
 The only repository deliverable/source change is this Markdown design file in the independent worktree. It did not implement the feature, package or run the DJVibe pilot, dispatch workers, modify other worktrees, change any live Automation or schedule, publish content, touch production, or couple/alter independent backups and recovery safeguards.
+
+## Implementation completion plan
+
+This addendum records the later authorized build. The preceding boundary confirmation applies to the original design investigation. Accepted code is integrated only in the independent coordinator branch through `2a32f152d447bbd1a628875855755c59d0f7a871`; it has not been deployed. Contracts, persistence, definition UI components, the test harness, and native materialization have passed their scoped reviews. Recovery at `953d4034d50` is provisional and under correction. Passing component tests does not yet establish an operable app journey.
+
+The read-only integration audit (`task_c5989a127cac`) found six remaining connections. Work ownership and acceptance are now explicit:
+
+| Connection                                    | Owner / ordering                                                                                    | Evidence required                                                                                                                                                                                                            |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dedicated definition API and host capability  | Codex, `task_71bf489ab212`; parallel with recovery/UI                                               | Existing coordinated schemas reach Store create/update through native RPC; durable save/reload, exact owner/revision fences, capability refusal before writes; definitions remain disabled.                                  |
+| Definition save/reopen and worker activity UI | Antigravity, `task_c2e187bfadbe`; renderer preparation now, bind API when its contract is available | Complete definition fields survive save/reopen; child IDs are stable; historical snapshots remain frozen; unavailable actions show reasons.                                                                                  |
+| Manual isolated fake-run entrypoint           | Runtime owner after recovery acceptance                                                             | One idempotent AutomationRun and native Run/Tasks/Dispatches from the frozen snapshot; ordinary scheduler, scripts, setup hooks, and real providers remain unreachable.                                                      |
+| Durable recovery attached to app lifetime     | Claude recovery owner, after its safety fixes pass review                                           | Profile-scoped durable state; startup reconciliation before new work; same IDs and accepted receipts after a process restart; uncertain effects cannot replay.                                                               |
+| Selected-run projection and operator bindings | Runtime/API owner with renderer owner                                                               | Authority-qualified snapshot, native observations, validated progress and receipts; host-checked action availability; exact native worker destinations. A fake Dispatch row alone does not prove an openable session exists. |
+| Hidden end-to-end app journey                 | Verification owner after the five connections converge                                              | Actual create/save/reopen, held fake run, configuration edit, exact worker navigation, refusal checks, same-profile process restart, and persisted accepted receipt; fixed viewport/theme; zero real provider/effect calls.  |
+
+Key integration locations are `src/main/runtime/rpc/methods/automations.ts`, `src/shared/rpc-contract/coordinated-automation-params.ts`, `src/shared/automation-runtime-capabilities.ts`, `src/main/runtime/workspaces/persisted-surfaces/automation-api-operations.ts`, renderer `automation-orca-save.ts` / `automation-save-action.ts`, `src/main/automations/runtime-automation-service.ts`, `service.ts`, and `run-completion-watcher.ts`. Use existing RPC CRUD rather than adding another preload IPC write path. Reuse native crew open targets and `open-agent-message-sender.ts` for navigation.
+
+To reduce repeated review cycles, each fix submission must address the complete finding list and related missing, mismatched, stale, retry, and restart cases together. Reviewers should report all supported blocking findings in one pass, distinguishing optional polish. Run focused regression checks for each change and reuse successful exact-revision evidence; repeat broader suites when changed code or new findings justify them, then run combined integration checks. Safety defects remain blockers, and repeated failure in the same area requires revisiting the implementation approach rather than another superficial patch.
+
+The next completion milestone is the demonstrated isolated no-effect app journey above, with the feature off by default. Component previews or in-process harness success alone do not satisfy it. Real-provider enablement, DJVibe packaging and shadow evaluation, remote execution enablement, and live adoption remain separate later gates; unsupported hosts must refuse safely. No live schedule, publisher, content, or independent backup may be changed to obtain test evidence.
