@@ -50,12 +50,13 @@ function installReadOnlyHost(view: typeof settledView): void {
     }
   }
 }
-function renderPanel() {
+function renderPanel(pinned = false) {
   return (
     <div className="bg-background p-3">
       <AutomationCoordinatedHostRunPanel
         automation={{ ...sampleCoordinatedArticleAutomation, enabled: false }}
         runs={[run]}
+        pinnedRun={pinned ? run : null}
         hostEntry={coordinatedHostFixtureEntry}
         capturedOwner={{ owner: coordinatedHostFixtureEntry.owner, selector: { kind: 'self' } }}
         requests={new Map()}
@@ -67,21 +68,32 @@ function renderPanel() {
 export const host_receipt = defineFixture({
   width: 1280,
   setup: () => installReadOnlyHost(readOnlyView),
-  render: renderPanel
+  render: () => renderPanel()
 })
 export const host_receipt_mobile = defineFixture({
   width: 375,
   setup: () => installReadOnlyHost(readOnlyView),
-  render: renderPanel
+  render: () => renderPanel()
 })
 // Why: controls render from host-reported availability; this fixture host still refuses every operation.
 export const host_controls = defineFixture({
   width: 1280,
   setup: () => installReadOnlyHost(coordinatedHostActiveViewFixture()),
-  render: renderPanel
+  render: () => renderPanel()
 })
 export const host_controls_mobile = defineFixture({
   width: 375,
   setup: () => installReadOnlyHost(coordinatedHostActiveViewFixture()),
-  render: renderPanel
+  render: () => renderPanel()
+})
+// Why: the run details route binds the same panel to one exact run, with no start or run switcher.
+export const host_pinned_route = defineFixture({
+  width: 1280,
+  setup: () => installReadOnlyHost(coordinatedHostActiveViewFixture()),
+  render: () => renderPanel(true)
+})
+export const host_pinned_route_mobile = defineFixture({
+  width: 375,
+  setup: () => installReadOnlyHost(coordinatedHostActiveViewFixture()),
+  render: () => renderPanel(true)
 })

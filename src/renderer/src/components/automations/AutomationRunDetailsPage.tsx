@@ -10,7 +10,31 @@ import {
   type Automation,
   type AutomationRun
 } from '../../../../shared/automations-types'
+import { AutomationCoordinatedHostRunPanel } from './AutomationCoordinatedHostRunPanel'
 import { AutomationCoordinatedRunPanel } from './AutomationCoordinatedRunPanel'
+import type { AutomationCapturedOwner } from './automation-captured-owner'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import type { CoordinatedRunOperatorActions } from './coordinated-automation-run-projection'
+import type { CoordinatedRunRequests } from './coordinated-run-api-client'
+
+/** The owning-host identity the route needs before any run control can be bound. */
+export type AutomationRunDetailsCoordinatedHost = {
+  capturedOwner?: AutomationCapturedOwner
+  hostEntry?: AutomationHostCatalogEntry | null
+  historyUnavailable?: string | null
+  requests: CoordinatedRunRequests
+}
+
+// Why: the saved-history projection guesses eligibility from the renderer; only the host-checked controls may submit.
+const HOST_CHECKED_CONTROLS = {
+  supported: false,
+  reason: 'Run controls use host-checked eligibility. Use “Host-observed run and controls” below.'
+}
+const SAVED_PROJECTION_ACTIONS: CoordinatedRunOperatorActions = {
+  stopRun: { availability: HOST_CHECKED_CONTROLS },
+  retryStage: { availability: HOST_CHECKED_CONTROLS },
+  resolveGate: { availability: HOST_CHECKED_CONTROLS }
+}
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
 import { getAutomationRunContent } from './automation-run-content'
 import { automationRunErrorText } from './automation-run-error-copy'
@@ -29,6 +53,7 @@ export function AutomationRunDetailsPage({
   relativeNow,
   workspaceDisplay,
   viewState,
+  coordinatedHost,
   canRerun,
   isRerunPending,
   onRerun,
@@ -40,6 +65,7 @@ export function AutomationRunDetailsPage({
   relativeNow: number
   workspaceDisplay: AutomationRunWorkspaceDisplay | null
   viewState: AutomationRunViewState | null
+  coordinatedHost?: AutomationRunDetailsCoordinatedHost
   canRerun: boolean
   isRerunPending: boolean
   onRerun: () => void
@@ -119,7 +145,23 @@ export function AutomationRunDetailsPage({
               run={run}
               workspaceLabel={workspaceDisplay?.detailLabel ?? null}
               isFeatureFlagEnabled={isCoordinatedFeatureEnabled}
+              operatorActions={coordinatedHost ? SAVED_PROJECTION_ACTIONS : null}
               now={relativeNow}
+            />
+          </div>
+        ) : null}
+        {showCoordinatedRunPanel && automation && coordinatedHost ? (
+          <div className="mb-4">
+            <AutomationCoordinatedHostRunPanel
+              key={run.id}
+              automation={automation}
+              runs={[run]}
+              pinnedRun={run}
+              capturedOwner={coordinatedHost.capturedOwner}
+              hostEntry={coordinatedHost.hostEntry}
+              historyUnavailable={coordinatedHost.historyUnavailable}
+              requests={coordinatedHost.requests}
+              enabled={isCoordinatedFeatureEnabled}
             />
           </div>
         ) : null}

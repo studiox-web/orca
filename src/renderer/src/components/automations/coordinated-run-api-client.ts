@@ -22,6 +22,8 @@ import { REQUEST_TIMEOUT_MS } from './automation-capability-probe'
 export type CoordinatedRunRequest = {
   start?: CoordinatedFakeRunStartInput
   reconcile?: CoordinatedRunSelectionInput
+  /** An operator request that reached the host without a confirmed answer. */
+  unconfirmedOperator?: { kind: 'stop' | 'retry' | 'gate'; label: string }
 }
 export type CoordinatedRunRequests = Map<string, CoordinatedRunRequest>
 export type CoordinatedRunBinding = { automation: Automation; owner: AutomationOwnerRef }

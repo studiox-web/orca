@@ -17,6 +17,8 @@ import {
   type CoordinatedRunRequests
 } from './coordinated-run-api-client'
 import {
+  CoordinatedOperatorUnconfirmedError,
+  operatorActionLabel,
   submitCoordinatedRunOperatorAction,
   type CoordinatedRunOperatorAction,
   type CoordinatedRunOperatorOutcome
@@ -42,27 +44,34 @@ export function useCoordinatedRunApi(input: {
   historyUnavailable?: string | null
   enabled: boolean
   requests: CoordinatedRunRequests
+  /** Binds the panel to exactly this run; it never falls back to the latest history entry. */
+  pinnedRun?: AutomationRun | null
 }) {
-  const { automation, capturedOwner, hostEntry, requests } = input
+  const { automation, capturedOwner, hostEntry, requests, pinnedRun } = input
   const owner = capturedOwner?.owner
   const unavailable = !input.enabled
     ? 'Coordinated automations are disabled.'
-    : (input.historyUnavailable ??
-      (!owner || !hostEntry?.owner || ownerKey(owner) !== ownerKey(hostEntry.owner)
-        ? 'Refresh the automation list to confirm its owning host.'
-        : hostEntry.catalogState !== 'authoritative' ||
-            !['fresh', 'refreshing'].includes(hostEntry.authorityHealth)
-          ? 'The owning host is unavailable. Refresh its connection before inspecting or starting a run.'
-          : null))
+    : pinnedRun && pinnedRun.automationId !== automation.id
+      ? 'This run belongs to a different Automation. It is read-only here.'
+      : (input.historyUnavailable ??
+        (!owner || !hostEntry?.owner || ownerKey(owner) !== ownerKey(hostEntry.owner)
+          ? 'Refresh the automation list to confirm its owning host.'
+          : hostEntry.catalogState !== 'authoritative' ||
+              !['fresh', 'refreshing'].includes(hostEntry.authorityHealth)
+            ? 'The owning host is unavailable. Refresh its connection before inspecting or starting a run.'
+            : null))
   const binding = useMemo<CoordinatedRunBinding | null>(
     () => (owner ? { automation, owner } : null),
     [automation, owner]
   )
   const parentKey = binding ? coordinatedRunBindingKey(binding) : automation.id
   const [selection, setSelection] = useState<{ parent: string; runId: string } | null>(null)
-  const selectedRunId =
-    selection?.parent === parentKey ? selection.runId : (input.runs[0]?.id ?? null)
-  const selectedRun = input.runs.find((run) => run.id === selectedRunId)
+  const selectedRunId = pinnedRun
+    ? pinnedRun.id
+    : selection?.parent === parentKey
+      ? selection.runId
+      : (input.runs[0]?.id ?? null)
+  const selectedRun = pinnedRun ?? input.runs.find((run) => run.id === selectedRunId)
   const revision = selectedRun?.automationDefinitionRevision
   const [reload, setReload] = useState(0)
   const key = JSON.stringify([
@@ -154,7 +163,8 @@ export function useCoordinatedRunApi(input: {
     if (!binding || unavailable || operation.current || !currentRead?.ready) {
       return
     }
-    if (kind !== 'start' && !selectedRun) {
+    // Why: a pinned route acts on its own run only; starting would retarget it to a new run.
+    if (kind === 'start' ? Boolean(pinnedRun) : !selectedRun) {
       return
     }
     operation.current = true
@@ -163,9 +173,7 @@ export function useCoordinatedRunApi(input: {
     setRead({ key, view: null, notice: null, ready: false })
     const requestKey = kind === 'start' ? parentKey : JSON.stringify([parentKey, selectedRunId])
     const retained = requests.get(requestKey) ?? {}
-    if (kind !== 'operator') {
-      requests.set(requestKey, retained)
-    }
+    requests.set(requestKey, retained)
     try {
       const outcome =
         request.kind === 'operator'
@@ -181,6 +189,7 @@ export function useCoordinatedRunApi(input: {
         return
       }
       if (outcome) {
+        delete retained.unconfirmedOperator
         setOperator({ scope: scopeKey, outcome })
       }
       setSelection({ parent: parentKey, runId: result.inspection.automationRunId })
@@ -194,6 +203,13 @@ export function useCoordinatedRunApi(input: {
       })
       setReload((value) => value + 1)
     } catch (error) {
+      // Why: recorded before the stale check so a route change cannot forget an uncertain submission.
+      if (request.kind === 'operator' && error instanceof CoordinatedOperatorUnconfirmedError) {
+        retained.unconfirmedOperator = {
+          kind: request.action.kind,
+          label: operatorActionLabel(request.action)
+        }
+      }
       if (!mounted.current || currentKey.current !== key) {
         return
       }
@@ -225,6 +241,7 @@ export function useCoordinatedRunApi(input: {
     selectRun: (runId: string) => setSelection({ parent: parentKey, runId }),
     refresh: () => setReload((value) => value + 1),
     selectedRun,
+    unconfirmedOperator: requests.get(scopeKey)?.unconfirmedOperator ?? null,
     operatorOutcome: !unavailable && operator?.scope === scopeKey ? operator.outcome : null,
     start: () => perform({ kind: 'start' }),
     reconcile: () => perform({ kind: 'reconcile' }),

@@ -238,6 +238,15 @@ export function AutomationsPageSurface({
           relativeNow={relativeNow}
           workspaceDisplay={runPage.selectedAutomationRunPageWorkspaceDisplay}
           viewState={runPage.selectedAutomationRunPageViewState}
+          coordinatedHost={{
+            capturedOwner: capturedAutomationOwner(
+              list.capturedAutomationOwners,
+              selectedRow?.key ?? null
+            ),
+            hostEntry: destination.rowRecoveryHost(selectedRow?.key ?? null),
+            historyUnavailable: setup.selectedRunsNotice?.message,
+            requests: local.coordinatedRunRequests
+          }}
           canRerun={runPage.canRerunSelectedAutomationRunPage}
           isRerunPending={runPage.isSelectedAutomationRunPageRerunPending}
           onRerun={() =>

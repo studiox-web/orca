@@ -23,9 +23,15 @@ export function AutomationCoordinatedHostRunPanel(
 ): React.JSX.Element {
   const state = useCoordinatedRunApi(props)
   const { view, selectedRunId } = state
-  const runIds = [
-    ...new Set([...props.runs.map((run) => run.id), ...(selectedRunId ? [selectedRunId] : [])])
-  ]
+  const pinned = Boolean(props.pinnedRun)
+  const runIds = pinned
+    ? []
+    : [...new Set([...props.runs.map((run) => run.id), ...(selectedRunId ? [selectedRunId] : [])])]
+  const unconfirmed =
+    state.unconfirmedOperator &&
+    !(state.unconfirmedOperator.kind === 'stop' && view?.inspection.operatorStop)
+      ? state.unconfirmedOperator
+      : null
   const run = state.selectedRun
   const snapshot = view ? matchingFrozenSnapshot(view, run) : null
   const [pending, setPending] = useState<{ runId: string; request: HostRunControlRequest } | null>(
@@ -57,25 +63,30 @@ export function AutomationCoordinatedHostRunPanel(
     view && !view.actions.reconcile.available ? view.actions.reconcile.reason : null
   return (
     <section
-      aria-label="Coordinated test runs"
+      aria-label={pinned ? 'Host run controls' : 'Coordinated test runs'}
       className="space-y-3 rounded-lg border border-border p-4 min-w-0"
     >
-      <h3 className="text-sm font-medium">No-effect test runs</h3>
+      <h3 className="text-sm font-medium">
+        {pinned ? 'Host-observed run and controls' : 'No-effect test runs'}
+      </h3>
       <p className="text-xs text-muted-foreground">
-        Manual isolated workers only. No live agents, publishing, or schedules. Each run keeps its
-        saved definition revision.
+        {pinned
+          ? `Bound to run ${selectedRunId}. Evidence and controls come from the owning host for this exact run and its frozen definition revision.`
+          : 'Manual isolated workers only. No live agents, publishing, or schedules. Each run keeps its saved definition revision.'}
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!state.ready || state.busy || Boolean(startReason)}
-          onClick={() => void state.start()}
-        >
-          {state.pendingStart ? 'Recover original test start' : 'Start no-effect test run'}
-        </Button>
+        {pinned ? null : (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!state.ready || state.busy || Boolean(startReason)}
+            onClick={() => void state.start()}
+          >
+            {state.pendingStart ? 'Recover original test start' : 'Start no-effect test run'}
+          </Button>
+        )}
         <Button size="sm" variant="outline" disabled={state.busy} onClick={state.refresh}>
-          Refresh test runs
+          {pinned ? 'Refresh run' : 'Refresh test runs'}
         </Button>
         <Button
           size="sm"
@@ -83,12 +94,14 @@ export function AutomationCoordinatedHostRunPanel(
           disabled={!state.ready || !view || state.busy || Boolean(reconcileReason)}
           onClick={() => void state.reconcile()}
         >
-          Reconcile selected test run
+          {pinned ? 'Reconcile run' : 'Reconcile selected test run'}
         </Button>
       </div>
-      {startReason ? <p className="text-xs text-muted-foreground">{startReason}</p> : null}
+      {startReason && !pinned ? (
+        <p className="text-xs text-muted-foreground">{startReason}</p>
+      ) : null}
       {reconcileReason ? <p className="text-xs text-muted-foreground">{reconcileReason}</p> : null}
-      {state.pendingStart ? (
+      {state.pendingStart && !pinned ? (
         <p className="text-xs text-muted-foreground">
           Recovery uses submitted revision {state.pendingStart.expectedDefinitionRevision}. Later
           definition edits are not part of that request.
@@ -123,6 +136,12 @@ export function AutomationCoordinatedHostRunPanel(
       {!state.ready && !state.notice && !state.busy ? (
         <p role="status" className="text-xs text-muted-foreground">
           Checking host availability…
+        </p>
+      ) : null}
+      {unconfirmed ? (
+        <p role="alert" className="text-xs text-status-warning break-words">
+          An earlier {unconfirmed.label} for this run reached the host without a confirmed answer.
+          Check the host state shown here before submitting again.
         </p>
       ) : null}
       {state.operatorOutcome ? (

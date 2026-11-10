@@ -31,6 +31,17 @@ export type CoordinatedRunOperatorOutcome = {
   view: CoordinatedRunView
 }
 
+/** The request left the renderer and no valid host answer came back; its effect is unknown. */
+export class CoordinatedOperatorUnconfirmedError extends Error {}
+
+export function operatorActionLabel(action: CoordinatedRunOperatorAction): string {
+  return action.kind === 'stop'
+    ? 'stop request'
+    : action.kind === 'retry'
+      ? `retry of stage ${action.childDefinitionId}`
+      : `${action.decision} decision for ${action.gateId}`
+}
+
 /** Where one pending decision key binds; derived only from the frozen snapshot and host escalations. */
 export type CoordinatedPendingGate =
   | { gateId: string; scope: 'stage'; childDefinitionId: string; label: string }
@@ -193,16 +204,22 @@ export async function submitCoordinatedRunOperatorAction(
     )
   }
   const { method, params } = operatorParams(current, snapshot, action)
-  const response = await callRuntimeRpc<CoordinatedFakeRunReconcileResponse>(
-    getAutomationAuthorityTarget(binding.owner.authority),
-    method,
-    params,
-    { timeoutMs: REQUEST_TIMEOUT_MS }
-  )
-  return {
-    action,
-    state: response.state,
-    reason: response.reason,
-    view: validateCoordinatedRunView(response.view, params, params.definitionRevision)
+  try {
+    const response = await callRuntimeRpc<CoordinatedFakeRunReconcileResponse>(
+      getAutomationAuthorityTarget(binding.owner.authority),
+      method,
+      params,
+      { timeoutMs: REQUEST_TIMEOUT_MS }
+    )
+    return {
+      action,
+      state: response.state,
+      reason: response.reason,
+      view: validateCoordinatedRunView(response.view, params, params.definitionRevision)
+    }
+  } catch (error) {
+    throw new CoordinatedOperatorUnconfirmedError(
+      error instanceof Error ? error.message : String(error)
+    )
   }
 }

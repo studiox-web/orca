@@ -4,7 +4,12 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../../../shared/automations-types'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { AutomationRunDetailsPage } from './AutomationRunDetailsPage'
+import {
+  sampleActiveCoordinatedRun,
+  sampleCoordinatedArticleAutomation
+} from './coordinated-automation-run-fixture-data'
 import { getAutomationRunContent } from '../../../../shared/automation-run-content'
 import { getAutomationRunContent as getDesktopRunContent } from './automation-run-content'
 import { automationRunFailure } from '../../../../shared/automation-run-failure-copy'
@@ -21,6 +26,16 @@ const boundaryMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/components/sidebar/CommentMermaidBlock', () => ({ default: boundaryMocks.mermaid }))
+vi.mock('./AutomationCoordinatedHostRunPanel', () => ({
+  AutomationCoordinatedHostRunPanel: (props: {
+    pinnedRun?: AutomationRun | null
+    runs: AutomationRun[]
+  }) => (
+    <div data-testid="host-run-panel">
+      {props.pinnedRun?.id}|{props.runs.map((entry) => entry.id).join(',')}
+    </div>
+  )
+}))
 
 const run: AutomationRun = {
   id: 'run-1',
@@ -62,6 +77,32 @@ function renderPage(viewState: AutomationRunViewState, selectedRun: AutomationRu
 }
 
 describe('AutomationRunDetailsPage', () => {
+  it('binds host controls to the routed run and leaves the saved projection without submit paths', () => {
+    const coordinatedRun = { ...sampleActiveCoordinatedRun, id: 'routed-run' }
+    const page = (host: boolean) => (
+      <TooltipProvider>
+        <AutomationRunDetailsPage
+          automation={sampleCoordinatedArticleAutomation}
+          run={coordinatedRun}
+          relativeNow={1}
+          workspaceDisplay={null}
+          viewState={null}
+          coordinatedHost={host ? { requests: new Map() } : undefined}
+          canRerun={false}
+          isRerunPending={false}
+          onRerun={() => {}}
+          onOpenWorkspace={() => {}}
+          onBack={() => {}}
+        />
+      </TooltipProvider>
+    )
+    const view = render(page(false))
+    expect(screen.queryByTestId('host-run-panel')).toBeNull()
+    view.rerender(page(true))
+    expect(screen.getByTestId('host-run-panel')).toHaveTextContent('routed-run|routed-run')
+    expect(screen.getByTestId('automation-coordinated-run-panel')).toBeInTheDocument()
+  })
+
   afterEach(() => {
     cleanup()
     try {

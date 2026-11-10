@@ -13,6 +13,7 @@ import {
 } from './coordinated-host-run-view-fixture'
 import type * as CoordinatedRunOperatorClient from './coordinated-run-operator-client'
 import {
+  CoordinatedOperatorUnconfirmedError,
   submitCoordinatedRunOperatorAction,
   type CoordinatedRunOperatorOutcome
 } from './coordinated-run-operator-client'
@@ -314,5 +315,65 @@ describe('selected host run operator controls', () => {
     await click('Refresh test runs')
     expect(button('Open worker terminal', stageItem('researcher')).disabled).toBe(true)
     expect(stageItem('researcher').textContent).toContain('not the stage’s current attempt')
+  })
+})
+
+describe('run pinned to the run details route', () => {
+  const other = { ...sampleCompletedVerifiedRun, id: 'second-run' }
+  beforeEach(() => {
+    vi.mocked(inspectCoordinatedRun).mockImplementation(async (_binding, id) =>
+      coordinatedHostActiveViewFixture(id)
+    )
+    props = {
+      ...props,
+      runs: [other, sampleCompletedVerifiedRun],
+      pinnedRun: sampleCompletedVerifiedRun
+    }
+  })
+  it('acts on the routed run, never the latest history entry, and offers no new start', async () => {
+    vi.mocked(submitCoordinatedRunOperatorAction).mockResolvedValue(outcome({ kind: 'stop' }))
+    await render()
+    expect(vi.mocked(inspectCoordinatedRun).mock.calls[0]?.[1]).toBe(sampleCompletedVerifiedRun.id)
+    expect(container.querySelector('select')).toBeNull()
+    expect(container.textContent).not.toContain('Start no-effect test run')
+    await click('Stop run')
+    await click('Confirm Stop Run', document.body)
+    expect(vi.mocked(submitCoordinatedRunOperatorAction).mock.calls[0]?.[1].id).toBe(
+      sampleCompletedVerifiedRun.id
+    )
+  })
+  it('drops a reply after the route changes but keeps the unconfirmed request identity', async () => {
+    const reply = Promise.withResolvers<CoordinatedRunOperatorOutcome>()
+    vi.mocked(submitCoordinatedRunOperatorAction).mockReturnValue(reply.promise)
+    await render()
+    await click('Stop run')
+    await click('Confirm Stop Run', document.body)
+    props = { ...props, pinnedRun: other }
+    await render()
+    await act(async () => reply.reject(new CoordinatedOperatorUnconfirmedError('timed out')))
+    expect(container.textContent).toContain('Parent run: second-run')
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    props = { ...props, pinnedRun: sampleCompletedVerifiedRun }
+    await render()
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'An earlier stop request for this run reached the host without a confirmed answer.'
+    )
+  })
+  it('records nothing as unconfirmed when the request was refused before submission', async () => {
+    vi.mocked(submitCoordinatedRunOperatorAction).mockRejectedValue(
+      new Error('The run is already settled.')
+    )
+    await render()
+    await click('Stop run')
+    await click('Confirm Stop Run', document.body)
+    await click('Refresh run')
+    expect(container.textContent).not.toContain('reached the host without a confirmed answer')
+  })
+  it('stays read-only for a run that belongs to another Automation', async () => {
+    props = { ...props, pinnedRun: { ...other, automationId: 'another-automation' } }
+    await render()
+    expect(inspectCoordinatedRun).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('belongs to a different Automation')
+    expect(container.querySelector('[aria-label="Run controls"]')).toBeNull()
   })
 })
