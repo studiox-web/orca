@@ -1,29 +1,28 @@
-import { realpathSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { isFinalAutomationRunStatus, type AutomationRun } from '../../shared/automations-types'
-import { isCoordinatedAutomation } from '../../shared/coordinated-automation-types'
 import type { Store } from '../persistence/loading-store/store'
 import { CoordinatedAutomationAdapter } from './coordinated-automation-adapter'
 import {
   createFileCoordinatedRunProgressStore,
   type CoordinatedRunProgressStore
 } from './coordinated-automation-progress-store'
-import { FAKE_EFFECT_ADAPTER_KIND } from './coordinated-automation-recovery-context'
+import {
+  manualRequestShapeRefusal,
+  manualStartRefusal,
+  runScopeRefusal
+} from './coordinated-automation-run-host-gate'
 import { inspectCoordinatedRun } from './coordinated-automation-run-inspection'
 import {
-  COORDINATED_FAKE_RUNS_CAPABILITY,
   CoordinatedRunHostRefusedError,
-  createUnavailableCoordinatedRunHost,
   type CoordinatedAutomationRunHost,
   type CoordinatedManualRunRequest,
   type CoordinatedManualRunResult,
-  type CoordinatedRunHostEnvironment,
+  type CoordinatedRunHostAvailability,
+  type CoordinatedRunScopeRequest,
   type CoordinatedRunHostInjection,
   type CoordinatedRunInspection,
   type CoordinatedRunReconcileResult
 } from './coordinated-automation-run-host-types'
-
-export { createUnavailableCoordinatedRunHost }
 
 export const COORDINATED_PROGRESS_DIRECTORY = 'coordinated-automation-progress'
 
@@ -33,73 +32,39 @@ export type CoordinatedRunHostLane = <T>(
   operation: () => Promise<T>
 ) => Promise<T>
 
-function canonicalPath(path: string): string | null {
-  try {
-    return realpathSync(resolve(path))
-  } catch {
-    return null
-  }
-}
-
-/** Every refusal is decided from host-owned facts before any Store, DB, or file write. */
-export function coordinatedRunHostRefusal(input: {
-  injection: CoordinatedRunHostInjection | undefined
-  headless: boolean
-  environment: CoordinatedRunHostEnvironment | null
-}): string | null {
-  const { injection, environment } = input
-  if (!injection) {
-    return 'Coordinated fake runs are not configured for this host.'
-  }
-  if (input.headless) {
-    return 'Coordinated fake runs are refused on headless and remote hosts.'
-  }
-  if (injection.capability !== COORDINATED_FAKE_RUNS_CAPABILITY) {
-    return `Unknown coordinated run capability "${String(injection.capability)}".`
-  }
-  if (!environment) {
-    return 'The host environment is unavailable, so local desktop authority cannot be confirmed.'
-  }
-  if (environment.isPackaged()) {
-    return 'Coordinated fake runs are refused in packaged builds.'
-  }
-  if (injection.profile.kind !== 'isolated_test' && injection.profile.kind !== 'developer') {
-    return 'Coordinated fake runs need an isolated test or developer profile.'
-  }
-  const root = canonicalPath(injection.profile.root)
-  if (!root || root !== canonicalPath(environment.userDataPath())) {
-    return 'The injected profile root is not this host’s active profile.'
-  }
-  const provider = injection.workerProvider
-  const capabilities = [
-    ...(provider.capability ? [provider.capability] : []),
-    ...(provider.capabilities ?? [])
-  ]
-  if (capabilities.length === 0 || capabilities.some((c) => c !== 'fake_no_effects')) {
-    return 'Only the fake_no_effects worker provider is accepted.'
-  }
-  if (typeof injection.clock.setTimer !== 'function') {
-    return 'The coordinator clock must provide setTimer for persisted stage deadlines.'
-  }
-  if (
-    injection.effects.policy !== 'deny' &&
-    injection.effects.adapter.kind !== FAKE_EFFECT_ADAPTER_KIND
-  ) {
-    return 'Only the deny policy or the fake effect adapter is accepted.'
-  }
-  return null
-}
-
 type Phase = 'idle' | 'recovering' | 'ready' | 'stopped'
 
 /**
+ * Notifies only after the durable write returned; a throwing listener is logged and never
+ * undoes, retries, or replays the committed transition.
+ */
+function publishingProgressStore(
+  store: CoordinatedRunProgressStore,
+  committed: () => void
+): CoordinatedRunProgressStore {
+  return {
+    read: (automationRunId) => store.read(automationRunId),
+    write: (next, expectedSequence) => {
+      store.write(next, expectedSequence)
+      try {
+        committed()
+      } catch (error) {
+        console.warn('[automations] coordinated progress listener failed:', error)
+      }
+    }
+  }
+}
+
+/**
  * Host-owned manual fake runs for disabled coordinated definitions. Retained runs are
- * reconciled at startup before any manual admission; stop fences every further write.
+ * reconciled at startup before any manual admission; stop fences every further write; the
+ * profile/authority gate is re-evaluated live on every call.
  */
 export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationRunHost {
-  readonly availability = { available: true } as const
   readonly #store: Store
   readonly #injection: CoordinatedRunHostInjection
+  readonly #gate: () => string | null
+  readonly #lane: CoordinatedRunHostLane
   readonly #adapter: CoordinatedAutomationAdapter
   readonly #progressStore: CoordinatedRunProgressStore
   #phase: Phase = 'idle'
@@ -109,11 +74,24 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
     store: Store
     injection: CoordinatedRunHostInjection
     lane: CoordinatedRunHostLane
+    /** Live authority/profile gate; a non-null reason revokes the host until it clears. */
+    gate: () => string | null
+    /** Fires after each successful durable progress write while the host is not stopped. */
+    onProgressCommitted?: () => void
   }) {
     this.#store = input.store
     this.#injection = input.injection
-    this.#progressStore = createFileCoordinatedRunProgressStore(
-      join(input.injection.profile.root, COORDINATED_PROGRESS_DIRECTORY)
+    this.#gate = input.gate
+    this.#lane = input.lane
+    this.#progressStore = publishingProgressStore(
+      createFileCoordinatedRunProgressStore(
+        join(input.injection.profile.root, COORDINATED_PROGRESS_DIRECTORY)
+      ),
+      () => {
+        if (this.#phase !== 'stopped') {
+          input.onProgressCommitted?.()
+        }
+      }
     )
     const effects = input.injection.effects
     this.#adapter = new CoordinatedAutomationAdapter({
@@ -126,8 +104,33 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
       laneLocks: input.injection.laneLocks,
       durableBoundary: input.injection.durableBoundary,
       ...(effects.policy === 'fake' ? { effectAdapter: effects.adapter } : {}),
-      isActive: () => this.#phase !== 'stopped'
+      isActive: () => this.#phase !== 'stopped' && this.#gate() === null
     })
+  }
+
+  get availability(): CoordinatedRunHostAvailability {
+    if (this.#phase === 'stopped') {
+      return { available: false, state: 'stopped', reason: 'The automation service stopped.' }
+    }
+    const revoked = this.#gate()
+    if (revoked) {
+      return { available: false, state: 'revoked', reason: revoked }
+    }
+    if (this.#phase === 'idle') {
+      return {
+        available: false,
+        state: 'not_started',
+        reason: 'The automation service has not started.'
+      }
+    }
+    if (this.#phase === 'recovering') {
+      return {
+        available: false,
+        state: 'recovering',
+        reason: 'Retained coordinated runs are still being recovered.'
+      }
+    }
+    return { available: true, state: 'running' }
   }
 
   /** Called before the service starts its watcher, so the recovery hook lands in this phase. */
@@ -139,23 +142,30 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
 
   /** The watcher's `recoverCoordinatedRuns` hook: reconcile retained runs from durable evidence. */
   recoverRetainedRuns(runs: readonly AutomationRun[]): void {
-    if (this.#phase === 'stopped') {
+    if (this.#gateRefusal() !== null) {
       return
     }
+    // Eligibility follows each run's frozen authority, not later edits to the definition.
     const eligible = runs.filter(
       (run) =>
         !isFinalAutomationRunStatus(run.status) &&
         run.coordinatedQuarantine === undefined &&
-        this.#refuseAutomation(run.automationId) === null
+        runScopeRefusal(this.#store, {
+          automationId: run.automationId,
+          automationRunId: run.id
+        }) === null
     )
     this.#recovery = this.#recovery.then(async () => {
       for (const run of eligible) {
-        if (this.#phase === 'stopped') {
+        if (this.#gateRefusal() !== null) {
           return
         }
-        await this.#adapter.reconcileRun(run.id).catch((error: unknown) => {
-          console.error(`[automations] coordinated run ${run.id} recovery failed:`, error)
-        })
+        const scope = { automationId: run.automationId, automationRunId: run.id }
+        await this.#adapter
+          .reconcileRun(run.id, { precondition: () => this.#refuseIf(this.#runRefusal(scope)) })
+          .catch((error: unknown) => {
+            console.error(`[automations] coordinated run ${run.id} recovery failed:`, error)
+          })
       }
     })
   }
@@ -170,158 +180,109 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
     }
   }
 
+  /** Fences every write and frees deadline timers; external workers are not assumed stopped. */
   stop(): void {
     this.#phase = 'stopped'
+    this.#adapter.abandonPendingWaits()
   }
 
   async startManualRun(request: CoordinatedManualRunRequest): Promise<CoordinatedManualRunResult> {
+    this.#refuseIf(manualRequestShapeRefusal(request))
     await this.#admit()
-    if (request.expectedOwner?.selector?.kind !== 'self') {
-      throw new CoordinatedRunHostRefusedError(
-        'Manual coordinated runs need exact local desktop owner authority.'
-      )
-    }
-    if (!Number.isInteger(request.expectedDefinitionRevision)) {
-      throw new CoordinatedRunHostRefusedError('An exact expected definition revision is required.')
-    }
-    if (
-      typeof request.idempotencyKey !== 'string' ||
-      request.idempotencyKey.length === 0 ||
-      request.idempotencyKey.length > 128
-    ) {
-      throw new CoordinatedRunHostRefusedError(
-        'An idempotency key of 1-128 characters is required.'
-      )
-    }
-    const refusal = this.#refuseAutomation(request.automationId)
-    if (refusal) {
-      throw new CoordinatedRunHostRefusedError(refusal)
-    }
-    // A replay keeps the original occurrence time so the same key maps to the same occurrence.
-    const prior = this.#store
-      .listAutomationRuns(request.automationId)
-      .find((run) => run.idempotencyKey === request.idempotencyKey)
-    const creation = this.#store.createCoordinatedAutomationRun({
-      automationId: request.automationId,
-      scheduledFor: prior?.scheduledFor ?? this.#injection.clock.now(),
-      trigger: 'manual',
-      idempotencyKey: request.idempotencyKey,
-      expectedDefinitionRevision: request.expectedDefinitionRevision,
-      expectedOwner: request.expectedOwner
+    const { automationId } = request
+    // One lane entry covers the rechecks, Store creation, materialization, and reconciliation.
+    return this.#lane(automationId, async () => {
+      this.#refuseIf(this.#gateRefusal() ?? manualStartRefusal(this.#store, request))
+      const prior = this.#store
+        .listAutomationRuns(automationId)
+        .find((run) => run.idempotencyKey === request.idempotencyKey)
+      const creation = this.#store.createCoordinatedAutomationRun({
+        automationId,
+        scheduledFor: prior?.scheduledFor ?? this.#injection.clock.now(),
+        trigger: 'manual',
+        idempotencyKey: request.idempotencyKey,
+        expectedDefinitionRevision: request.expectedDefinitionRevision,
+        expectedOwner: request.expectedOwner
+      })
+      // A replay writes nothing; it must still name the occurrence's original frozen revision.
+      if (
+        !creation.created &&
+        creation.occurrence.definitionRevision !== request.expectedDefinitionRevision
+      ) {
+        this.#refuseIf(
+          `Idempotency key "${request.idempotencyKey}" was recorded for revision ${creation.occurrence.definitionRevision}.`
+        )
+      }
+      const automationRunId = creation.occurrence.automationRunId
+      const scope = { automationId, automationRunId, expectedOwner: request.expectedOwner }
+      const outcome = await this.#adapter.reconcileRunInLane(automationRunId, {
+        precondition: () => this.#refuseIf(this.#runRefusal(scope))
+      })
+      return {
+        automationRunId,
+        state: outcome.state,
+        reason: outcome.reason,
+        inspection: this.#read(scope),
+        created: creation.created
+      }
     })
-    const automationRunId = creation.run?.id ?? creation.occurrence.automationRunId
-    return { ...(await this.reconcileRun(automationRunId)), created: creation.created }
   }
 
-  async reconcileRun(automationRunId: string): Promise<CoordinatedRunReconcileResult> {
+  async reconcileRun(request: CoordinatedRunScopeRequest): Promise<CoordinatedRunReconcileResult> {
+    this.#refuseIf(this.#runRefusal(request))
     await this.#admit()
-    const run = this.#requireRun(automationRunId)
-    const refusal = this.#refuseAutomation(run.automationId)
-    if (refusal) {
-      throw new CoordinatedRunHostRefusedError(refusal)
-    }
-    const outcome = await this.#adapter.reconcileRun(automationRunId)
+    const outcome = await this.#adapter.reconcileRun(request.automationRunId, {
+      precondition: () => this.#refuseIf(this.#runRefusal(request))
+    })
     return {
-      automationRunId,
+      automationRunId: request.automationRunId,
       state: outcome.state,
       reason: outcome.reason,
-      inspection: this.inspectRun(automationRunId)
+      inspection: this.#read(request)
     }
   }
 
-  inspectRun(automationRunId: string): CoordinatedRunInspection {
+  /** Read-only: never claims a generation, repairs, or writes. */
+  inspectRun(request: CoordinatedRunScopeRequest): CoordinatedRunInspection {
+    const availability = this.availability
+    this.#refuseIf(availability.available ? null : availability.reason)
+    return this.#read(request)
+  }
+
+  #read(request: CoordinatedRunScopeRequest): CoordinatedRunInspection {
+    this.#refuseIf(this.#runRefusal(request))
+    const run = this.#store.listAutomationRuns().find((r) => r.id === request.automationRunId)
+    if (!run) {
+      throw new CoordinatedRunHostRefusedError(
+        `Coordinated run "${request.automationRunId}" was not found.`
+      )
+    }
     return inspectCoordinatedRun({
-      run: this.#requireRun(automationRunId),
+      run,
       orchestrationDb: this.#injection.orchestrationDb,
       progressStore: this.#progressStore
     })
   }
 
+  #runRefusal(scope: Parameters<typeof runScopeRefusal>[1]): string | null {
+    return this.#gateRefusal() ?? runScopeRefusal(this.#store, scope)
+  }
+
   async #admit(): Promise<void> {
-    if (this.#phase === 'idle') {
-      throw new CoordinatedRunHostRefusedError('The automation service has not started.')
-    }
+    this.#refuseIf(
+      this.#phase === 'idle' ? 'The automation service has not started.' : this.#gateRefusal()
+    )
     await this.#recovery
-    if (this.#phase === 'stopped') {
-      throw new CoordinatedRunHostRefusedError('The automation service stopped.')
+    this.#refuseIf(this.#gateRefusal())
+  }
+
+  #refuseIf(reason: string | null): void {
+    if (reason) {
+      throw new CoordinatedRunHostRefusedError(reason)
     }
   }
 
-  #requireRun(automationRunId: string): AutomationRun {
-    const run = this.#store.listAutomationRuns().find((entry) => entry.id === automationRunId)
-    if (!run || run.materializationPhase === undefined) {
-      throw new CoordinatedRunHostRefusedError(
-        `Coordinated run "${automationRunId}" was not found.`
-      )
-    }
-    return run
-  }
-
-  #refuseAutomation(automationId: string): string | null {
-    const automation = this.#store.listAutomations().find((entry) => entry.id === automationId)
-    if (!automation || !isCoordinatedAutomation(automation)) {
-      return `Coordinated automation "${automationId}" was not found.`
-    }
-    if (automation.enabled) {
-      return 'Manual fake runs are limited to disabled coordinated definitions.'
-    }
-    if (automation.executionTargetType !== 'local') {
-      return 'Manual fake runs are limited to local desktop execution targets.'
-    }
-    return null
-  }
-}
-
-type StartStopService = {
-  coordinatedRuns: CoordinatedAutomationRunHost
-  start: () => void
-  stop: () => void
-  runInAutomationLane: CoordinatedRunHostLane
-}
-
-/**
- * Wires the opt-in host into an AutomationService: the watcher's recovery hook reconciles retained
- * runs during start(), manual work waits for that recovery, and stop() fences before teardown.
- * Without a valid injection the service keeps the unavailable host and the hook stays a no-op.
- */
-export function createCoordinatedRunHostBinding(input: {
-  store: Store
-  injection: CoordinatedRunHostInjection | undefined
-  headless: boolean
-  environment: CoordinatedRunHostEnvironment | null
-}): {
-  recoverCoordinatedRuns: (runs: readonly AutomationRun[]) => void
-  attach: (service: StartStopService) => void
-} {
-  const refusal = coordinatedRunHostRefusal(input)
-  let host: LocalCoordinatedAutomationRunHost | null = null
-  return {
-    recoverCoordinatedRuns: (runs) => host?.recoverRetainedRuns(runs),
-    attach: (service) => {
-      if (refusal || !input.injection) {
-        service.coordinatedRuns = createUnavailableCoordinatedRunHost(
-          refusal ?? 'Coordinated fake runs are not configured for this host.'
-        )
-        return
-      }
-      const local = new LocalCoordinatedAutomationRunHost({
-        store: input.store,
-        injection: input.injection,
-        lane: (automationId, operation) => service.runInAutomationLane(automationId, operation)
-      })
-      host = local
-      service.coordinatedRuns = local
-      const start = service.start.bind(service)
-      const stop = service.stop.bind(service)
-      service.start = () => {
-        local.beginStartup()
-        start()
-        local.finishStartup()
-      }
-      service.stop = () => {
-        local.stop()
-        stop()
-      }
-    }
+  #gateRefusal(): string | null {
+    return this.#phase === 'stopped' ? 'The automation service stopped.' : this.#gate()
   }
 }

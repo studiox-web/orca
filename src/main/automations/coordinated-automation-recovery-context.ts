@@ -87,6 +87,18 @@ export type CoordinatedRecoveryContext = {
   inFlightTaskIds: Set<string>
   /** False once the owning host stopped; no further claim, settle, or dispatch is allowed. */
   isActive: () => boolean
+  /** Abandon callbacks for in-flight worker waits; host stop runs them to free every timer. */
+  pendingWaits: Set<() => void>
+}
+
+/** Cancels every registered deadline timer and abandons waits; the external worker is not assumed stopped. */
+export function abandonCoordinatorWaits(
+  ctx: Pick<CoordinatedRecoveryContext, 'pendingWaits'>
+): void {
+  for (const abandon of ctx.pendingWaits) {
+    abandon()
+  }
+  ctx.pendingWaits.clear()
 }
 
 export class CoordinatedHostStoppedError extends Error {

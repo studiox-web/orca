@@ -3,6 +3,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { CoordinatedAutomationLaunchRefusedError } from './coordinated-automation-materialization'
 import { validateLaunchPolicy } from './coordinated-automation-result-validation'
 import {
+  CoordinatedHostStoppedError,
   type CoordinatedRecoveryContext,
   type CoordinatedWorkerIdentity,
   type CoordinatedWorkerProvider,
@@ -187,6 +188,10 @@ export async function executeCoordinatedTaskDispatch(
     }
     rawReport = raced.value
   } catch (error) {
+    if (error instanceof CoordinatedHostStoppedError) {
+      // Host stop abandoned the wait; the attempt stays unsettled for a later generation.
+      throw error
+    }
     const message = error instanceof Error ? error.message : String(error)
     const started = !(error instanceof CoordinatedWorkerStartError)
     settle('failed', started ? message : `${COORDINATED_START_FAILURE_PREFIX} ${message}`)
@@ -227,28 +232,33 @@ export async function executeCoordinatedTaskDispatch(
   return { taskId, dispatchId: dispatch.id, outcome: validation.report.outcome }
 }
 
-/** Resolves with the worker's value, or `timedOut` once the persisted deadline passes. */
+/**
+ * Resolves with the worker's value, or `timedOut` once the persisted deadline passes. Every wait
+ * is registered so host stop cancels its timer and abandons the wait without settling anything.
+ */
 function raceWorkerDeadline(
   ctx: CoordinatedRecoveryContext,
   work: Promise<unknown>,
   deadlineAt: number | undefined
 ): Promise<{ timedOut: true } | { timedOut: false; value: unknown }> {
-  const setTimer = ctx.clock.setTimer
-  if (deadlineAt === undefined || !setTimer) {
-    return work.then((value) => ({ timedOut: false, value }))
-  }
-  const remaining = Math.max(0, deadlineAt - ctx.clock.now())
   return new Promise((resolve, reject) => {
-    const cancel = setTimer(remaining, () => resolve({ timedOut: true }))
+    let cancelTimer: () => void = () => {}
+    const finish = (settle: () => void): void => {
+      cancelTimer()
+      ctx.pendingWaits.delete(abandon)
+      settle()
+    }
+    const abandon = (): void => finish(() => reject(new CoordinatedHostStoppedError()))
+    ctx.pendingWaits.add(abandon)
+    if (deadlineAt !== undefined && ctx.clock.setTimer) {
+      const remaining = Math.max(0, deadlineAt - ctx.clock.now())
+      cancelTimer = ctx.clock.setTimer(remaining, () =>
+        ctx.isActive() ? finish(() => resolve({ timedOut: true })) : abandon()
+      )
+    }
     work.then(
-      (value) => {
-        cancel()
-        resolve({ timedOut: false, value })
-      },
-      (error: unknown) => {
-        cancel()
-        reject(error)
-      }
+      (value) => finish(() => resolve({ timedOut: false, value })),
+      (error: unknown) => finish(() => reject(error))
     )
   })
 }

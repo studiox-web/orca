@@ -21,7 +21,7 @@ import {
 } from './runtime-terminal-run-observer'
 import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
-import { createCoordinatedRunHostBinding } from './coordinated-automation-run-host'
+import { createCoordinatedRunHostBinding } from './coordinated-automation-run-host-binding'
 import type { CoordinatedRunHostInjection } from './coordinated-automation-run-host-types'
 
 const MAX_REMEMBERED_LAUNCHES = 256

@@ -1,6 +1,15 @@
 import type { AutomationRun } from '../../shared/automations-types'
-import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
+import type {
+  CoordinatedRunProgress,
+  CoordinatedStageProgress
+} from '../../shared/coordinated-automation-progress-types'
+import { validateReceiptAgainstSnapshot } from '../../shared/coordinated-automation-receipt-validation'
+import type {
+  ResolvedAutomationRunSnapshot,
+  ResolvedChildSnapshot
+} from '../../shared/coordinated-automation-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
+import { progressIdentityProblem } from './coordinated-automation-progress-ledger'
 import type { CoordinatedRunProgressStore } from './coordinated-automation-progress-store'
 import type {
   Availability,
@@ -14,18 +23,80 @@ const HUMAN_RESOLUTION_UNAVAILABLE =
 const NO_SESSION_TARGET =
   'The fake_no_effects provider runs in-process; there is no chat or terminal session to open.'
 
-function readProgress(
+type ProgressRead = Availability<{ progress: CoordinatedRunProgress }>
+
+/** Reads progress without claiming a generation and accepts it only for this exact frozen run. */
+function readTrustedProgress(
   progressStore: CoordinatedRunProgressStore,
-  automationRunId: string
-): Availability<{ progress: CoordinatedRunProgress }> {
+  run: AutomationRun,
+  snapshot: ResolvedAutomationRunSnapshot | null
+): ProgressRead {
+  let progress: CoordinatedRunProgress | null
   try {
-    const progress = progressStore.read(automationRunId)
-    return progress
-      ? { kind: 'available', progress }
-      : { kind: 'absent', reason: 'No coordinator generation has claimed this run yet.' }
+    progress = progressStore.read(run.id)
   } catch (error) {
     return { kind: 'unavailable', reason: error instanceof Error ? error.message : String(error) }
   }
+  if (!progress) {
+    return { kind: 'absent', reason: 'No coordinator generation has claimed this run yet.' }
+  }
+  const problem =
+    !snapshot || !run.orchestrationRunId
+      ? 'The run has no frozen snapshot or orchestration Run to validate progress against.'
+      : progressIdentityProblem(progress, {
+          automationRunId: run.id,
+          orchestrationRunId: run.orchestrationRunId,
+          snapshot
+        })
+  return problem
+    ? { kind: 'unavailable', reason: `Progress is not this run’s: ${problem}` }
+    : { kind: 'available', progress }
+}
+
+/** Every Dispatch the stage names must be a native attempt of exactly this run's mapped Task. */
+function stageEvidenceProblem(
+  db: OrchestrationDb,
+  orchestrationRunId: string,
+  taskId: string | null,
+  id: string,
+  stage: CoordinatedStageProgress,
+  progress: CoordinatedRunProgress
+): string | null {
+  if (!taskId) {
+    return `Stage ${id} has progress but no mapped Task.`
+  }
+  const task = db.getTask(taskId)
+  if (!task || task.run_id !== orchestrationRunId) {
+    return `Task ${taskId} is not in orchestration Run ${orchestrationRunId}.`
+  }
+  const named = [
+    stage.activeDispatchId,
+    stage.acceptedDispatchId,
+    ...stage.lineage.map((r) => r.dispatchId)
+  ]
+  for (const dispatchId of named) {
+    if (dispatchId !== null && db.getDispatchContextById(dispatchId)?.task_id !== taskId) {
+      return `Dispatch ${dispatchId} is not an attempt of Task ${taskId}.`
+    }
+  }
+  if (stage.status !== 'accepted') {
+    return null
+  }
+  if (!stage.acceptedDispatchId || !stage.acceptedReportDigest) {
+    return `Accepted stage ${id} has no accepted Dispatch or report digest.`
+  }
+  const admitted = progress.reports.find(
+    (r) => r.dispatchId === stage.acceptedDispatchId && r.disposition === 'accepted'
+  )
+  if (
+    !admitted ||
+    admitted.childDefinitionId !== id ||
+    admitted.taskId !== taskId ||
+    admitted.reportDigest !== stage.acceptedReportDigest
+  ) {
+    return `Accepted Dispatch ${stage.acceptedDispatchId} has no matching admitted report for stage ${id}.`
+  }
+  return null
 }
 
 function nativeStage(
@@ -52,45 +123,108 @@ function nativeStage(
   }
 }
 
+function semanticStage(
+  db: OrchestrationDb,
+  run: AutomationRun,
+  child: ResolvedChildSnapshot,
+  taskId: string | null,
+  progress: ProgressRead
+): CoordinatedStageInspection['semantic'] {
+  if (progress.kind !== 'available') {
+    return { kind: progress.kind, reason: progress.reason }
+  }
+  const stage = progress.progress.stages[child.childDefinitionId]
+  if (!stage) {
+    return { kind: 'absent', reason: 'This child has no stage progress (disabled).' }
+  }
+  const problem = stageEvidenceProblem(
+    db,
+    run.orchestrationRunId ?? '',
+    taskId,
+    child.childDefinitionId,
+    stage,
+    progress.progress
+  )
+  return problem
+    ? { kind: 'unavailable', reason: problem }
+    : {
+        kind: 'available',
+        status: stage.status,
+        attempts: stage.attempts,
+        acceptedDispatchId: stage.acceptedDispatchId,
+        lastError: stage.lastError,
+        lineage: stage.lineage
+      }
+}
+
+/** Revalidates the persisted receipt against the frozen snapshot, Store trust, and native rows. */
+function trustedReceipt(
+  db: OrchestrationDb,
+  run: AutomationRun,
+  snapshot: ResolvedAutomationRunSnapshot | null
+): CoordinatedRunInspection['receipt'] {
+  const receipt = run.completionReceipt
+  if (!receipt) {
+    return { kind: 'absent', reason: 'No semantic completion receipt has been persisted.' }
+  }
+  const trust = run.completionTrust
+  if (!trust || !snapshot || !run.orchestrationRunId) {
+    return { kind: 'unavailable', reason: 'The receipt has no host trust record or frozen run.' }
+  }
+  const attempt = db.getDispatchContextById(trust.activeAttempt.dispatchId)
+  const attemptTask = db.getTask(trust.activeAttempt.taskId)
+  if (
+    attempt?.task_id !== trust.activeAttempt.taskId ||
+    attemptTask?.run_id !== run.orchestrationRunId
+  ) {
+    return {
+      kind: 'unavailable',
+      reason: 'The receipt’s active attempt is not a native attempt of this run.'
+    }
+  }
+  const validation = validateReceiptAgainstSnapshot(receipt, snapshot, {
+    trustedAuthorIdentity: trust.authorIdentity,
+    trustedHostId: snapshot.executionTarget.id,
+    trustedExecutionAuthority: `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}`,
+    automationRunId: run.id,
+    orchestrationRunId: run.orchestrationRunId,
+    activeAttempt: trust.activeAttempt,
+    trustedTaskMappings: (run.childMappings ?? []).map((m) => ({ ...m })),
+    ...(trust.waiverPolicy ? { waiverPolicy: trust.waiverPolicy } : {}),
+    ...(trust.productionDecision ? { productionDecision: trust.productionDecision } : {})
+  })
+  return validation.valid
+    ? { kind: 'available', receipt, trust }
+    : { kind: 'unavailable', reason: `Receipt is not trusted: ${validation.errors.join('; ')}` }
+}
+
 /**
  * Joins the exact Store run, frozen snapshot, native Task/Dispatch rows, and validated progress
- * for one run. Missing or unreadable evidence is reported as such, never filled in.
+ * and receipt for one run. Missing, foreign, or inconsistent evidence is reported as such.
  */
 export function inspectCoordinatedRun(input: {
   run: AutomationRun
   orchestrationDb: OrchestrationDb
   progressStore: CoordinatedRunProgressStore
 }): CoordinatedRunInspection {
-  const { run } = input
-  const snapshot = run.resolvedSnapshot
+  const { run, orchestrationDb: db } = input
+  const snapshot = run.resolvedSnapshot ?? null
   const orchestrationRunId = run.orchestrationRunId ?? null
-  const progress = readProgress(input.progressStore, run.id)
+  const progress = readTrustedProgress(input.progressStore, run, snapshot)
   const stages: CoordinatedStageInspection[] = (snapshot?.resolvedChildren ?? []).map((child) => {
     const mapping = (run.childMappings ?? []).find(
       (m) => m.childDefinitionId === child.childDefinitionId
     )
-    const stage =
-      progress.kind === 'available' ? progress.progress.stages[child.childDefinitionId] : undefined
+    const taskId = mapping?.taskId ?? null
     return {
       childDefinitionId: child.childDefinitionId,
       name: child.name,
       role: child.role,
       enabled: child.enabled,
-      taskId: mapping?.taskId ?? null,
+      taskId,
       mappedDispatchId: mapping?.dispatchId ?? null,
-      native: nativeStage(input.orchestrationDb, orchestrationRunId, mapping?.taskId ?? null),
-      semantic: stage
-        ? {
-            kind: 'available',
-            status: stage.status,
-            attempts: stage.attempts,
-            acceptedDispatchId: stage.acceptedDispatchId,
-            lastError: stage.lastError,
-            lineage: stage.lineage
-          }
-        : progress.kind === 'available'
-          ? { kind: 'absent', reason: 'This child has no stage progress (disabled).' }
-          : { kind: progress.kind, reason: progress.reason },
+      native: nativeStage(db, orchestrationRunId, taskId),
+      semantic: semanticStage(db, run, child, taskId, progress),
       sessionTarget: { kind: 'unavailable', reason: NO_SESSION_TARGET }
     }
   })
@@ -117,13 +251,7 @@ export function inspectCoordinatedRun(input: {
             reportCount: progress.progress.reports.length
           }
         : progress,
-    receipt: run.completionReceipt
-      ? {
-          kind: 'available',
-          receipt: run.completionReceipt,
-          trust: run.completionTrust ?? null
-        }
-      : { kind: 'absent', reason: 'No semantic completion receipt has been persisted.' },
+    receipt: trustedReceipt(db, run, snapshot),
     humanResolution: { available: false, reason: HUMAN_RESOLUTION_UNAVAILABLE }
   }
 }

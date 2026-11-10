@@ -128,12 +128,39 @@ export type CoordinatedManualRunResult = CoordinatedRunReconcileResult & {
   created: boolean
 }
 
-/** Internal service surface the runtime/API owner binds later; not an RPC contract yet. */
+// ---- Host request / precondition / lifecycle types (host-owned; DTOs above are API-owned) ----
+
+/** Exact scope every reconcile/inspect call must name; all three are revalidated in the host. */
+export type CoordinatedRunScopeRequest = {
+  automationId: string
+  automationRunId: string
+  expectedOwner: AutomationOwnerPrecondition
+}
+
+export type CoordinatedRunHostState =
+  | 'unconfigured'
+  | 'refused'
+  | 'not_started'
+  | 'recovering'
+  | 'running'
+  | 'stopped'
+  | 'revoked'
+
+/** Live host gate; recomputed on every read. Only `running` admits inspection. */
+export type CoordinatedRunHostAvailability =
+  | { available: true; state: 'running' }
+  | { available: false; state: Exclude<CoordinatedRunHostState, 'running'>; reason: string }
+
+/**
+ * Internal service surface the runtime/API owner binds; not an RPC contract. `startManualRun`
+ * waits for startup recovery, then revalidates the gate and every precondition inside the
+ * per-parent lane immediately before its first write.
+ */
 export type CoordinatedAutomationRunHost = {
-  readonly availability: { available: true } | { available: false; reason: string }
+  readonly availability: CoordinatedRunHostAvailability
   startManualRun: (request: CoordinatedManualRunRequest) => Promise<CoordinatedManualRunResult>
-  reconcileRun: (automationRunId: string) => Promise<CoordinatedRunReconcileResult>
-  inspectRun: (automationRunId: string) => CoordinatedRunInspection
+  reconcileRun: (request: CoordinatedRunScopeRequest) => Promise<CoordinatedRunReconcileResult>
+  inspectRun: (request: CoordinatedRunScopeRequest) => CoordinatedRunInspection
 }
 
 export class CoordinatedRunHostRefusedError extends Error {
@@ -143,12 +170,15 @@ export class CoordinatedRunHostRefusedError extends Error {
   }
 }
 
-export function createUnavailableCoordinatedRunHost(reason: string): CoordinatedAutomationRunHost {
+export function createUnavailableCoordinatedRunHost(
+  reason: string,
+  state: 'unconfigured' | 'refused' = 'unconfigured'
+): CoordinatedAutomationRunHost {
   const refuse = (): never => {
     throw new CoordinatedRunHostRefusedError(reason)
   }
   return {
-    availability: { available: false, reason },
+    availability: { available: false, state, reason },
     startManualRun: async () => refuse(),
     reconcileRun: async () => refuse(),
     inspectRun: () => refuse()

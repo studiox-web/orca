@@ -36,6 +36,34 @@ function executionAuthority(snapshot: CoordinatedLedgerSnapshot): string {
   return `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}`
 }
 
+/** Pure check that stored progress belongs to exactly this frozen run; null when it does. */
+export function progressIdentityProblem(
+  progress: CoordinatedRunProgress,
+  expected: {
+    automationRunId: string
+    orchestrationRunId: string
+    snapshot: CoordinatedLedgerSnapshot
+  }
+): string | null {
+  const checks: [string, unknown, unknown][] = [
+    ['automationRunId', progress.automationRunId, expected.automationRunId],
+    ['automationId', progress.automationId, expected.snapshot.automationId],
+    ['definitionRevision', progress.definitionRevision, expected.snapshot.definitionRevision],
+    ['executionAuthority', progress.executionAuthority, executionAuthority(expected.snapshot)],
+    ['orchestrationRunId', progress.orchestrationRunId, expected.orchestrationRunId],
+    ['canonicalDigest', progress.canonicalDigest, expected.snapshot.canonicalDigest]
+  ]
+  const mismatch = checks.find(([, actual, wanted]) => actual !== wanted)
+  if (mismatch) {
+    return `${mismatch[0]} ${String(mismatch[1])} does not match ${String(mismatch[2])}.`
+  }
+  const enabled = new Set(
+    expected.snapshot.resolvedChildren.filter((c) => c.enabled).map((c) => c.childDefinitionId)
+  )
+  const foreign = Object.keys(progress.stages).find((id) => !enabled.has(id))
+  return foreign ? `stage ${foreign} is not an enabled child of this snapshot.` : null
+}
+
 export class CoordinatedGenerationFencedError extends Error {
   constructor(automationRunId: string, mine: number, stored: number) {
     super(
@@ -112,16 +140,16 @@ export class CoordinatedProgressLedger {
     boundary: CoordinatedBoundaryHook
   }): CoordinatedProgressLedger {
     const stored = input.store.read(input.automationRunId)
-    if (
-      stored &&
-      (stored.canonicalDigest !== input.snapshot.canonicalDigest ||
-        stored.orchestrationRunId !== input.orchestrationRunId ||
-        stored.automationId !== input.snapshot.automationId ||
-        stored.definitionRevision !== input.snapshot.definitionRevision ||
-        stored.executionAuthority !== executionAuthority(input.snapshot))
-    ) {
+    const problem = stored
+      ? progressIdentityProblem(stored, {
+          automationRunId: input.automationRunId,
+          orchestrationRunId: input.orchestrationRunId,
+          snapshot: input.snapshot
+        })
+      : null
+    if (problem) {
       throw new Error(
-        `Coordinated progress for run "${input.automationRunId}" belongs to another snapshot, revision, authority, or orchestration Run.`
+        `Coordinated progress for run "${input.automationRunId}" belongs to another snapshot, revision, authority, or orchestration Run: ${problem}`
       )
     }
     const base: CoordinatedRunProgress = stored ?? {

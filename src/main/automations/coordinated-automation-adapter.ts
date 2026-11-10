@@ -37,6 +37,7 @@ import {
 } from './coordinated-automation-progress-ledger'
 import { acceptedStageIds } from './coordinated-automation-native-readiness'
 import {
+  abandonCoordinatorWaits,
   assertCoordinatorActive,
   type CoordinatedClock,
   type CoordinatedFakeEffectAdapter,
@@ -115,6 +116,7 @@ export class CoordinatedAutomationAdapter {
       workspacePath: ctx.workspacePath,
       trustedAuthorIdentity: ctx.trustedAuthorIdentity,
       inFlightTaskIds: new Set(),
+      pendingWaits: new Set(),
       isActive: ctx.isActive ?? (() => true)
     }
     this.#runInParentLane =
@@ -208,15 +210,33 @@ export class CoordinatedAutomationAdapter {
   }
 
   /** Materializes if needed, then reconciles persisted evidence until the run cannot advance. */
-  async reconcileRun(automationRunId: string): Promise<CoordinatedRunOutcome> {
+  /** `precondition` runs inside the parent lane immediately before the first write. */
+  async reconcileRun(
+    automationRunId: string,
+    options: { precondition?: () => void } = {}
+  ): Promise<CoordinatedRunOutcome> {
     const run = this.#getRunOrThrow(automationRunId)
-    return this.runInParentLane(run.automationId, async () => {
-      assertCoordinatorActive(this.#ctx)
-      await this.materializeRun(automationRunId)
-      return reconcileCoordinatedRun(this.#ctx, automationRunId, (ledger) =>
-        this.#ledgers.set(automationRunId, ledger)
-      )
-    })
+    return this.runInParentLane(run.automationId, () =>
+      this.reconcileRunInLane(automationRunId, options)
+    )
+  }
+
+  /** For callers already holding this parent's lane; re-entering it would deadlock. */
+  async reconcileRunInLane(
+    automationRunId: string,
+    options: { precondition?: () => void } = {}
+  ): Promise<CoordinatedRunOutcome> {
+    assertCoordinatorActive(this.#ctx)
+    options.precondition?.()
+    await this.materializeRun(automationRunId)
+    return reconcileCoordinatedRun(this.#ctx, automationRunId, (ledger) =>
+      this.#ledgers.set(automationRunId, ledger)
+    )
+  }
+
+  /** Cancels deadline timers and abandons in-flight waits; pair with an `isActive` gate that is now false. */
+  abandonPendingWaits(): void {
+    abandonCoordinatorWaits(this.#ctx)
   }
 
   async runUntilSettled(automationRunId: string): Promise<AutomationRun> {
@@ -291,11 +311,10 @@ export class CoordinatedAutomationAdapter {
   }
 }
 
-function defaultProgressStore(): CoordinatedRunProgressStore {
-  return createFileCoordinatedRunProgressStore(
+const defaultProgressStore = (): CoordinatedRunProgressStore =>
+  createFileCoordinatedRunProgressStore(
     join(getAppEnvironment().getPath('userData'), 'coordinated-automation-progress')
   )
-}
 
 export function createCoordinatedAutomationDispatcher(
   adapter: CoordinatedAutomationAdapter,
