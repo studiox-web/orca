@@ -259,7 +259,10 @@ describe('startup wiring', () => {
     join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
     'utf8'
   )
-  const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+  const entrySource = readFileSync(
+    join(process.cwd(), 'src/main/main-process-bootstrap.ts'),
+    'utf8'
+  )
 
   it('runs before app.whenReady(), which is the last point AppKit could still see it', () => {
     const callIndex = source.indexOf(

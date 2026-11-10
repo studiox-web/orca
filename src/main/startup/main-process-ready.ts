@@ -1,3 +1,4 @@
+import type { MainProcessRuntimeCompositionFactory } from './main-process-runtime-composition'
 import { initializeMainProcessI18nAndMenu } from './main-process-i18n-menu'
 import { mainProcessState as state } from './main-process-state'
 import { initializeReadyFoundation } from './main-process-ready-foundation'
@@ -9,7 +10,8 @@ import {
 } from './main-process-runtime-launch'
 
 export async function initializeMainProcessReady(
-  launchOptions: MainProcessRuntimeLaunchOptions
+  launchOptions: MainProcessRuntimeLaunchOptions,
+  composition?: MainProcessRuntimeCompositionFactory
 ): Promise<void> {
   const options: MainProcessRuntimeLaunchOptions = {
     ...launchOptions,
@@ -21,7 +23,7 @@ export async function initializeMainProcessReady(
   try {
     await initializeReadyFoundation()
     await state.wslMoveStartupRewriteReady
-    await initializeReadyRuntimeServices()
+    await initializeReadyRuntimeServices(composition)
     // Window creation can proceed while translations and the native menu initialize.
     const i18nAndMenuReady = initializeMainProcessI18nAndMenu()
     state.mainProcessI18nReady = i18nAndMenuReady.catch(() => {})

@@ -106,9 +106,10 @@ function createRestartLaunchIsolation(
 // Keep launch policy aligned with the ordinary app fixture to avoid false persistence differences.
 export function createRestartSession(
   testInfo: TestInfo,
-  extraEnv: Record<string, string> = {}
+  extraEnv: Record<string, string> = {},
+  entry: { mainPath?: string } = {}
 ): RestartSession {
-  const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+  const mainPath = entry.mainPath ?? path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
   const headful = shouldLaunchHeadful(testInfo)
   const homeIsolation = createRestartLaunchIsolation(userDataDir, headful, extraEnv)

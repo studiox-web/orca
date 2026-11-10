@@ -189,7 +189,9 @@ function createMainBootstrapPostBanner(chunk: Rollup.RenderedChunk): string {
   if (chunk.fileName !== 'index.js') {
     return ''
   }
-  if (!chunk.moduleIds.some((id) => resolve(id) === MAIN_BUILD_ENTRY_POINTS.index)) {
+  if (
+    !chunk.moduleIds.some((id) => resolve(id) === resolve('src/main/main-process-bootstrap.ts'))
+  ) {
     throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
   }
   // Source guards run after Rollup’s require prelude, too late to handle missing bootstrap dependencies.

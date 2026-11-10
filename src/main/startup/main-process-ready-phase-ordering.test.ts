@@ -35,6 +35,7 @@ vi.mock('./main-process-runtime-launch', () => ({
 
 const { initializeMainProcessReady } = await import('./main-process-ready')
 const { mainProcessState } = await import('./main-process-state')
+const { initializeReadyRuntimeServices } = await import('./main-process-ready-runtime')
 
 describe('ready-phase concurrency', () => {
   beforeEach(() => {
@@ -65,6 +66,21 @@ describe('ready-phase concurrency', () => {
     releaseI18n?.()
     await ready
     expect(phaseEvents.at(-1)).toBe('i18n-done')
+  })
+
+  it('threads trusted composition only after the foundation admits the active Store', async () => {
+    const composition = vi.fn(() => ({}))
+    const ready = initializeMainProcessReady(
+      {
+        openMainWindow: vi.fn(),
+        handleMacAppActivation: vi.fn()
+      },
+      composition
+    )
+    await vi.waitFor(() => expect(initializeReadyRuntimeServices).toHaveBeenCalledWith(composition))
+    expect(phaseEvents.indexOf('foundation')).toBeLessThan(phaseEvents.indexOf('runtime-services'))
+    releaseI18n?.()
+    await ready
   })
 
   it('still resolves only once i18n and the menu have settled', async () => {

@@ -1,8 +1,11 @@
+import type { CoordinatedRunHostInjection } from '../automations/coordinated-automation-run-host-types'
 import type { AutomationService } from '../automations/service'
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import { mainProcessState as state } from './main-process-state'
 
-export function initializeMainProcessAutomations(): AutomationService {
+export function initializeMainProcessAutomations(
+  coordinatedRuns?: CoordinatedRunHostInjection
+): AutomationService {
   const store = state.store
   const runtime = state.runtime
   const claudeUsage = state.claudeUsage
@@ -13,6 +16,7 @@ export function initializeMainProcessAutomations(): AutomationService {
   const service = createRuntimeAutomationService({
     store,
     runtime,
+    coordinatedRuns,
     activeProfileDirectory: () => state.activeOrcaProfile?.profileDirectory ?? null,
     claudeUsage,
     codexUsage,

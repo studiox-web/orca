@@ -1,3 +1,4 @@
+import type { CoordinatedDefinitionWriteHost } from '../runtime/coordinated-definition-write-gate'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -59,7 +60,9 @@ export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
   return value === 'ready' ? 'openable' : value
 }
 
-export function initializeMainProcessRuntime(): OrcaRuntimeService {
+export function initializeMainProcessRuntime(
+  coordinatedDefinitionWrites?: CoordinatedDefinitionWriteHost
+): OrcaRuntimeService {
   const store = state.store
   const stats = state.stats
   if (!store || !stats) {
@@ -90,6 +93,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Process-scope subscription covers desktop, headless serve and fleet status.
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
+    coordinatedDefinitionWrites,
     getSetupTerminalTitle: () => translateMain('worktree.setupTerminalTitle', 'Setup'),
     ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
       state.store?.getSettings()

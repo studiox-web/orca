@@ -21,6 +21,7 @@ dist/
 !examples/plugins/hello-components/dist/
 dist-electron/
 out/
+out-coordinated/
 /build/
 release/
 native/**/.build/

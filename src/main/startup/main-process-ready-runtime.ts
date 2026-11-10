@@ -1,3 +1,4 @@
+import type { MainProcessRuntimeCompositionFactory } from './main-process-runtime-composition'
 import { app, nativeTheme } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
@@ -41,7 +42,9 @@ import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
 // Headless serve has no first window; timer fallback must still sweep trash.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
 
-export async function initializeReadyRuntimeServices(): Promise<void> {
+export async function initializeReadyRuntimeServices(
+  compose?: MainProcessRuntimeCompositionFactory
+): Promise<void> {
   const store = state.store
   if (!store) {
     throw new Error('Store must be initialized before ready services')
@@ -50,8 +53,9 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   await loadWorktreeRemovalRecordsForStore(store)
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
-  const runtime = initializeMainProcessRuntime()
-  initializeMainProcessAutomations()
+  const composition = compose?.({ store, headless: state.isServeMode })
+  const runtime = initializeMainProcessRuntime(composition?.coordinatedDefinitionWrites)
+  initializeMainProcessAutomations(composition?.coordinatedRuns?.({ store, runtime }))
   configureRuntimeServices(runtime)
   installFirstWorkRenameHookSubscription()
   await initializeMainProcessPlugins(runtime)
