@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AutomationRun } from '../../../src/shared/automations-types'
 import { testState } from '../../../src/main/persistence/persistence-test-harness'
-import { coordinatedCreateInput } from '../../../src/main/persistence/scheduling-automations/coordinated-automation-persistence.test-support'
+import {
+  child,
+  coordinatedCreateInput
+} from '../../../src/main/persistence/scheduling-automations/coordinated-automation-persistence.test-support'
 import {
   CoordinatedHostStoppedError,
   FAKE_EFFECT_ADAPTER_KIND,
@@ -305,5 +308,146 @@ describe('inspection validates the whole child mapping', () => {
     expect(inspection.receipt.kind).toBe('unavailable')
     expect(progressBytes(run.id)).toBe(bytes)
     expect(nativeRows()).toBe(rows)
+  })
+})
+
+describe('every exposed Dispatch carries a trusted retry ancestry', () => {
+  /** Test-only forgery: copies a real Dispatch row with field overrides (rowid makes it latest). */
+  function forgeDispatch(sourceId: string, id: string, overrides: Record<string, string | null>) {
+    const columns = env.db.db
+      .prepare('PRAGMA table_info(dispatch_contexts)')
+      .all()
+      .flatMap((row) =>
+        typeof row === 'object' && row !== null && 'name' in row && typeof row.name === 'string'
+          ? [row.name]
+          : []
+      )
+    const values = { ...overrides, id }
+    const selected = columns.map((column) => (column in values ? '?' : column))
+    const params = columns.filter((column) => column in values).map((column) => values[column])
+    env.db.db.exec('PRAGMA foreign_keys = OFF')
+    env.db.db
+      .prepare(
+        `INSERT INTO dispatch_contexts (${columns.join(', ')}) SELECT ${selected.join(', ')} FROM dispatch_contexts WHERE id = ?`
+      )
+      .run(...params, sourceId)
+  }
+
+  const setRetryOf = (dispatchId: string, retryOf: string) => {
+    env.db.db.exec('PRAGMA foreign_keys = OFF')
+    env.db.db
+      .prepare('UPDATE dispatch_contexts SET retry_of_dispatch_id = ? WHERE id = ?')
+      .run(retryOf, dispatchId)
+  }
+
+  async function completedRun() {
+    const service = startService({ injection: injection() })
+    const { automationId } = env.createDefinitionOnly(coordinatedCreateInput())
+    const done = await service.coordinatedRuns.startManualRun(request(automationId))
+    expect(done.state).toBe('completed')
+    return env.run(done.automationRunId)
+  }
+
+  const read = (run: AutomationRun) =>
+    inspectCoordinatedRun({
+      run,
+      orchestrationDb: env.db,
+      progressStore: createFileCoordinatedRunProgressStore(progressRoot())
+    })
+
+  it.each<[string, Record<string, string | null>]>([
+    ['foreign creator', { creator_handle: 'term_foreign' }],
+    ['foreign Run', { run_id: 'run_legacy_local' }],
+    ['follow-up of another attempt', { follow_up_of_dispatch_id: 'FROM_SOURCE' }]
+  ])('a rogue latest Dispatch with a %s is never exposed', async (_name, overrides) => {
+    const run = await completedRun()
+    const source = dispatchOf(run, 0)
+    forgeDispatch(source, 'ctx_rogue_latest', {
+      ...overrides,
+      ...(overrides.follow_up_of_dispatch_id ? { follow_up_of_dispatch_id: source } : {})
+    })
+    expect(env.db.getDispatchContext(taskOf(run, 0))?.id).toBe('ctx_rogue_latest')
+    const rows = nativeRows()
+    const inspection = read(run)
+    const research = inspection.stages[0]
+    expect(research.native).toMatchObject({
+      kind: 'unavailable',
+      reason: expect.stringContaining('ctx_rogue_latest')
+    })
+    expect(JSON.stringify(inspection)).not.toContain('"latestDispatchId":"ctx_rogue_latest"')
+    expect(inspection.stages[1].native.kind).toBe('available')
+    expect(nativeRows()).toBe(rows)
+  })
+
+  it.each<[string, (run: AutomationRun) => void]>([
+    [
+      'foreign-creator predecessor',
+      (run) => {
+        forgeDispatch(dispatchOf(run, 0), 'ctx_foreign_prior', { creator_handle: 'term_foreign' })
+        setRetryOf(dispatchOf(run, 0), 'ctx_foreign_prior')
+      }
+    ],
+    [
+      'foreign-Run predecessor',
+      (run) => {
+        forgeDispatch(dispatchOf(run, 0), 'ctx_foreign_run_prior', { run_id: 'run_legacy_local' })
+        setRetryOf(dispatchOf(run, 0), 'ctx_foreign_run_prior')
+      }
+    ],
+    ['missing predecessor', (run) => setRetryOf(dispatchOf(run, 0), 'ctx_missing_prior')],
+    ['self cycle', (run) => setRetryOf(dispatchOf(run, 0), dispatchOf(run, 0))],
+    [
+      'multi-node cycle',
+      (run) => {
+        forgeDispatch(dispatchOf(run, 0), 'ctx_cycle_peer', {
+          retry_of_dispatch_id: dispatchOf(run, 0)
+        })
+        setRetryOf(dispatchOf(run, 0), 'ctx_cycle_peer')
+      }
+    ]
+  ])('a mapped Dispatch with a %s makes the run untrusted', async (_name, corrupt) => {
+    const run = await completedRun()
+    corrupt(run)
+    const bytes = progressBytes(run.id)
+    const rows = nativeRows()
+    const inspection = read(run)
+    for (const stage of inspection.stages) {
+      expect(stage.native.kind).toBe('unavailable')
+      expect(stage.semantic.kind).toBe('unavailable')
+      expect([stage.taskId, stage.mappedDispatchId]).toEqual([null, null])
+    }
+    expect(inspection.receipt.kind).toBe('unavailable')
+    expect(progressBytes(run.id)).toBe(bytes)
+    expect(nativeRows()).toBe(rows)
+  })
+
+  it('trusts legitimate coordinator retries with exact native lineage', async () => {
+    env.scripts.set('research', (identity, attempt) => [
+      {
+        type: 'report',
+        result: env.report(identity, attempt === 1 ? { outcome: 'failed', checks: [] } : {})
+      }
+    ])
+    const service = startService({ injection: injection() })
+    const { automationId } = env.createDefinitionOnly(
+      coordinatedCreateInput({
+        children: [
+          child('research', { launchConfig: { maxRetries: 2 } }),
+          child('writer', { dependencies: [{ childId: 'research', condition: 'accepted' }] })
+        ]
+      })
+    )
+    const done = await service.coordinatedRuns.startManualRun(request(automationId))
+    expect(done.state).toBe('completed')
+    const run = env.run(done.automationRunId)
+    const [first, retry] = env.dispatchIds(run.id, 'research')
+    expect(env.db.getDispatchContextById(retry)?.retry_of_dispatch_id).toBe(first)
+    const inspection = read(run)
+    expect(inspection.stages.map((s) => [s.native.kind, s.semantic.kind])).toEqual([
+      ['available', 'available'],
+      ['available', 'available']
+    ])
+    expect(inspection.stages[0].native).toMatchObject({ latestDispatchId: retry })
+    expect(inspection.receipt.kind).toBe('available')
   })
 })

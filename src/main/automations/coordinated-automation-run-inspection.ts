@@ -127,6 +127,16 @@ function nativeStage(
     }
   }
   const latest = db.getDispatchContext(taskId)
+  const latestProblem = latest
+    ? nativeDispatchLineageProblem(db, latest, {
+        dispatchId: latest.id,
+        taskId,
+        orchestrationRunId
+      })
+    : null
+  if (latestProblem) {
+    return { kind: 'unavailable', reason: `Latest native attempt is not trusted: ${latestProblem}` }
+  }
   return {
     kind: 'available',
     taskStatus: task.status,
@@ -183,11 +193,14 @@ function trustedReceipt(
   if (!trust || !snapshot || !run.orchestrationRunId) {
     return { kind: 'unavailable', reason: 'The receipt has no host trust record or frozen run.' }
   }
-  const attempt = db.getDispatchContextById(trust.activeAttempt.dispatchId)
   const attemptTask = db.getTask(trust.activeAttempt.taskId)
   if (
-    attempt?.task_id !== trust.activeAttempt.taskId ||
-    attemptTask?.run_id !== run.orchestrationRunId
+    attemptTask?.run_id !== run.orchestrationRunId ||
+    nativeDispatchLineageProblem(db, db.getDispatchContextById(trust.activeAttempt.dispatchId), {
+      dispatchId: trust.activeAttempt.dispatchId,
+      taskId: trust.activeAttempt.taskId,
+      orchestrationRunId: run.orchestrationRunId
+    }) !== null
   ) {
     return {
       kind: 'unavailable',

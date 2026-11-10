@@ -90,15 +90,17 @@ export function nativeTaskDefinitionProblem(
     : null
 }
 
-/** A coordinator-created attempt of exactly this Task, with retry lineage inside the same Task. */
-export function nativeDispatchLineageProblem(
-  db: OrchestrationDb,
+/** Retry chains longer than this are refused rather than walked further. */
+export const MAX_DISPATCH_RETRY_ANCESTRY = 64
+
+function coordinatorAttemptProblem(
   dispatch: DispatchContextRow | undefined,
   input: { dispatchId: string; taskId: string; orchestrationRunId: string }
 ): string | null {
-  if (
-    !dispatch ||
-    dispatch.id !== input.dispatchId ||
+  if (!dispatch) {
+    return `Dispatch ${input.dispatchId} is missing.`
+  }
+  return dispatch.id !== input.dispatchId ||
     dispatch.task_id !== input.taskId ||
     dispatch.run_id !== input.orchestrationRunId ||
     dispatch.creator_dispatch_id !== null ||
@@ -106,14 +108,42 @@ export function nativeDispatchLineageProblem(
     dispatch.creator_pane_key !== null ||
     dispatch.creator_orca_session_id !== null ||
     dispatch.follow_up_of_dispatch_id !== null
-  ) {
-    return `Dispatch ${input.dispatchId} is not a coordinator attempt of Task ${input.taskId}.`
+    ? `Dispatch ${input.dispatchId} is not a coordinator attempt of Task ${input.taskId} in Run ${input.orchestrationRunId}.`
+    : null
+}
+
+/**
+ * The single validator for every Dispatch inspection may expose: the Dispatch and each retry
+ * ancestor must be a coordinator-created attempt of exactly this Task in this Run. Missing
+ * predecessors, cycles, and chains longer than the bound are refused.
+ */
+export function nativeDispatchLineageProblem(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow | undefined,
+  input: { dispatchId: string; taskId: string; orchestrationRunId: string }
+): string | null {
+  const seen = new Set<string>()
+  let current = dispatch
+  let currentId = input.dispatchId
+  for (let depth = 0; depth <= MAX_DISPATCH_RETRY_ANCESTRY; depth += 1) {
+    if (seen.has(currentId)) {
+      return `Dispatch ${input.dispatchId} has a retry cycle through ${currentId}.`
+    }
+    seen.add(currentId)
+    const problem = coordinatorAttemptProblem(current, { ...input, dispatchId: currentId })
+    if (problem) {
+      return currentId === input.dispatchId
+        ? problem
+        : `Dispatch ${input.dispatchId} has an untrusted retry ancestor: ${problem}`
+    }
+    const prior = current!.retry_of_dispatch_id
+    if (prior === null) {
+      return null
+    }
+    currentId = prior
+    current = db.getDispatchContextById(prior)
   }
-  const prior = dispatch.retry_of_dispatch_id
-  if (prior !== null && db.getDispatchContextById(prior)?.task_id !== input.taskId) {
-    return `Dispatch ${input.dispatchId} retries ${prior}, which is not an attempt of Task ${input.taskId}.`
-  }
-  return null
+  return `Dispatch ${input.dispatchId} has a retry chain longer than ${MAX_DISPATCH_RETRY_ANCESTRY}.`
 }
 
 /**
