@@ -15,7 +15,11 @@ import {
   parseDraftTime
 } from './automation-draft-model'
 import { saveOrcaAutomation } from './automation-orca-save'
-import { coordinatedDraftDefinition } from './automation-coordinated-save'
+import {
+  coordinatedDraftDefinition,
+  reconcileCoordinatedCreate
+} from './automation-coordinated-save'
+import { completeAutomationSave } from './automation-save-completion'
 import type { AutomationSaveContext } from './automation-save-context'
 
 /** Validates editor input then runs the Orca save transaction. */
@@ -24,6 +28,26 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
     const { store, local, destinationForm, destination } = context
     const { settings } = store
     const { draft, editingAutomationId, setIsSaving, setEditorNotice } = local
+    const createIntent = local.coordinatedCreateIntentRef.current
+    if (editingAutomationId === null && createIntent?.submission) {
+      setEditorNotice(null)
+      setIsSaving(true)
+      try {
+        const reconciled = await reconcileCoordinatedCreate(context, createIntent)
+        if (reconciled.ok) {
+          await completeAutomationSave(context, reconciled.value, null, true)
+        } else {
+          setEditorNotice(reconciled.notice)
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : 'Failed to reconcile automation creation.'
+        )
+      } finally {
+        setIsSaving(false)
+      }
+      return
+    }
     const { draftAtOpen } = local
     const targetEdited = editingAutomationId === null || local.targetEdited
     const scheduleEdited =

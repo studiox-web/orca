@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { buildAutomationEditDraft } from './automation-edit-draft'
@@ -46,6 +47,10 @@ export function useAutomationEditorActions({
 
   const openCreateDialog = (template?: AutomationTemplate): void => {
     editRequestRef.current += 1
+    local.coordinatedCreateIntentRef.current = {
+      creationKey: createBrowserUuid(),
+      submission: null
+    }
     const target = getDefaultTarget()
     setEditingAutomationId(null)
     setEditingDestination(null)
@@ -91,6 +96,7 @@ export function useAutomationEditorActions({
 
   const openEditDialog = async (row: AutomationListRow): Promise<void> => {
     const requestId = (editRequestRef.current += 1)
+    local.coordinatedCreateIntentRef.current = null
     const automationId = row.automation.id
     const reread = await dispatchAutomationReread(
       automationDispatchContext,

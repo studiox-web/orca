@@ -28,6 +28,8 @@ function installDefinitionHost(initial: Automation[] = []) {
   let records = initial
   let refusal: string | null = null
   let capable = true
+  let loseNextResponse = false
+  let nextId = 0
   const previous = mocks.callRuntimeRpc.getMockImplementation()
   const publish = (): void => {
     scopedList(records)
@@ -48,30 +50,49 @@ function installDefinitionHost(initial: Automation[] = []) {
       if (refusal) {
         throw new Error(refusal)
       }
+      const isCreate = method === 'automation.createCoordinated'
+      const replay = isCreate && records.find((record) => record.creationKey === params.creationKey)
+      if (replay) {
+        return { automation: structuredClone(replay) }
+      }
       const current = records.find((record) => record.id === params.id)
       const fields = params.updates ?? params
-      const automation = makeAutomation({
-        ...current,
-        ...fields,
-        id: params.id ?? 'created-coordinated',
-        projectId: REPO_ID,
-        workspaceId: WORKSPACE_ID,
-        kind: 'coordinated',
-        enabled: false,
-        definitionRevision: (current?.definitionRevision ?? 0) + 1
-      })
+      const automation = structuredClone(
+        makeAutomation({
+          ...current,
+          ...fields,
+          id:
+            params.id ?? (++nextId === 1 ? 'created-coordinated' : `created-coordinated-${nextId}`),
+          projectId: REPO_ID,
+          workspaceId: WORKSPACE_ID,
+          kind: 'coordinated',
+          enabled: false,
+          definitionRevision: (current?.definitionRevision ?? 0) + 1
+        })
+      )
       records = [...records.filter((record) => record.id !== automation.id), automation]
       publish()
+      if (isCreate && loseNextResponse) {
+        loseNextResponse = false
+        throw new Error('Connection lost after committed create')
+      }
       return { automation }
     }
     return await previous?.(target, method, params, options)
   })
   return {
+    records: () => structuredClone(records),
+    loseNextCreateResponse() {
+      loseNextResponse = true
+    },
     refuse(message: string | null) {
       refusal = message
     },
     revokeCapability() {
       capable = false
+    },
+    restoreCapability() {
+      capable = true
     },
     replace(automation: Automation) {
       records = [automation]
@@ -195,9 +216,9 @@ describe('coordinated definition save transaction', () => {
     expectNoSingleWrite()
   })
 
-  it('preserves the complete draft and creation key after an uncertain create response', async () => {
+  it('replays the exact committed request after a lost response and creates only one record', async () => {
     const host = installDefinitionHost()
-    host.refuse('Connection lost after request')
+    host.loseNextCreateResponse()
     await renderPage()
     await settleHostQueries()
     await configureDraft()
@@ -206,11 +227,76 @@ describe('coordinated definition save transaction', () => {
     expect(mocks.editorDialog?.open).toBe(true)
     expect(mocks.editorDialog?.draft).toEqual(draft)
     expect(mocks.editorDialog?.notice?.message).toContain('Connection lost')
-    host.refuse(null)
+    expect(host.records()).toHaveLength(1)
     await save()
     expect(writes()).toHaveLength(2)
     expect(writes()[0]?.[2].creationKey).toBeTruthy()
     expect(writes()[1]?.[2].creationKey).toBe(writes()[0]?.[2].creationKey)
+    expect(writes()[1]?.[2]).toEqual(writes()[0]?.[2])
+    expect(host.records()).toHaveLength(1)
+    expect(mocks.editorDialog?.open).toBe(false)
+    expectNoSingleWrite()
+  })
+
+  it.each(['coordinated', 'single'] as const)(
+    'reconciles the original create after %s edits without claiming those edits were saved',
+    async (kind) => {
+      const host = installDefinitionHost()
+      host.loseNextCreateResponse()
+      await renderPage()
+      await settleHostQueries()
+      await configureDraft()
+      await save()
+      const committed = host.records()[0]
+      await act(async () => {
+        mocks.editorDialog?.onDraftChange((current) => ({
+          ...draftRecord(current),
+          kind,
+          name: 'Later definition',
+          outcomeContract: {
+            ...sampleCoordinatedArticleAutomation.outcomeContract,
+            humanStatement: 'Later outcome'
+          }
+        }))
+      })
+      const edited = mocks.editorDialog?.draft
+      await save()
+      expect(host.records()).toEqual([committed])
+      expect(writes()[1]?.[2]).toEqual(writes()[0]?.[2])
+      expect(mocks.editorDialog?.open).toBe(true)
+      expect(mocks.editorDialog?.draft).toEqual(edited)
+      expect(mocks.editorDialog?.notice?.message).toContain('created-coordinated')
+      expect(mocks.editorDialog?.notice?.message).toContain('not saved')
+      expect(mocks.toastSuccess).not.toHaveBeenCalled()
+      await save()
+      expect(host.records()).toEqual([committed])
+      expect(writes()).toHaveLength(2)
+      expect(mocks.editorDialog?.draft).toEqual(edited)
+      expectNoSingleWrite()
+    }
+  )
+
+  it('uses a new create intent after cancel without inheriting an uncertain operation key', async () => {
+    const host = installDefinitionHost()
+    host.loseNextCreateResponse()
+    await renderPage()
+    await settleHostQueries()
+    await configureDraft()
+    await save()
+    await act(async () => {
+      mocks.editorDialog?.onOpenChange(false)
+    })
+    await configureDraft()
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...draftRecord(current),
+        name: 'Separate automation'
+      }))
+    })
+    await save()
+    expect(writes()[1]?.[2].creationKey).not.toBe(writes()[0]?.[2].creationKey)
+    expect(host.records().map((record) => record.name)).toEqual(['Sweep', 'Separate automation'])
+    expect(mocks.editorDialog?.open).toBe(false)
     expectNoSingleWrite()
   })
 
@@ -226,6 +312,17 @@ describe('coordinated definition save transaction', () => {
     expect(mocks.editorDialog?.open).toBe(true)
     expect(mocks.editorDialog?.draft).toEqual(draft)
     expect(mocks.editorDialog?.notice?.message).toContain('not accepting coordinated')
+    host.restoreCapability()
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...draftRecord(current),
+        name: 'Corrected before submission'
+      }))
+    })
+    await save()
+    expect(host.records()).toHaveLength(1)
+    expect(host.records()[0]?.name).toBe('Corrected before submission')
+    expect(mocks.editorDialog?.open).toBe(false)
     expectNoSingleWrite()
   })
 

@@ -179,6 +179,7 @@ export function AutomationsPageSurface({
         onOpenChange={(open) => {
           setCreateOpen(open)
           if (!open) {
+            local.coordinatedCreateIntentRef.current = null
             setEditorNotice(null)
             setEditorNoticeHost(null)
           }

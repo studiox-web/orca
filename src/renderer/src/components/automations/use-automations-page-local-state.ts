@@ -11,6 +11,7 @@ import { AUTOMATION_DEFAULT_TIME } from './automation-draft-model'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationCreateDestination } from './automation-create-destination'
+import type { CoordinatedCreateIntent } from './automation-coordinated-save'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {
   EMPTY_AUTOMATION_LIST_FILTER,
@@ -71,6 +72,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   } | null>(null)
   const [editingHostStableKey, setEditingHostStableKey] = useState<string | null>(null)
   const moveCreationKeysRef = useRef(new Map<string, string>())
+  const coordinatedCreateIntentRef = useRef<CoordinatedCreateIntent | null>(null)
   const [relativeNow, setRelativeNow] = useState(() => Date.now())
   const [pageView, setPageView] = useState<AutomationsPageView>('automations')
   const [runPageOrigin, setRunPageOrigin] = useState<AutomationRunPageOrigin>('runs')
@@ -196,6 +198,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     editingHostStableKey,
     setEditingHostStableKey,
     moveCreationKeysRef,
+    coordinatedCreateIntentRef,
     relativeNow,
     setRelativeNow,
     pageView,

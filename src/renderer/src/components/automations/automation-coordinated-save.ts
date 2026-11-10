@@ -4,12 +4,13 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { StableAutomationCatalogRef } from '../../../../shared/automation-owner-ref'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import type { AutomationCreateDestination } from './automation-create-destination'
 import {
   createCoordinatedAutomationAtDestination,
   dispatchCoordinatedAutomationUpdate,
+  type CoordinatedDefinitionCreateSubmission,
   type CoordinatedDefinitionDraftFields
 } from './automation-coordinated-definition-client'
 import type {
@@ -18,7 +19,15 @@ import type {
 } from './automation-row-action-dispatch'
 import type { AutomationSaveContext } from './automation-save-context'
 
-const COORDINATED_CREATE_KEY = 'coordinated-definition:create'
+export type CoordinatedCreateIntent = {
+  creationKey: string
+  submission: {
+    draftSignature: string
+    request: CoordinatedDefinitionCreateSubmission
+    host: StableAutomationCatalogRef
+    confirmed: Automation | null
+  } | null
+}
 
 function ownerNotice(message: string): AutomationActionNotice {
   return { message, recovery: 'retry', severity: 'owner' }
@@ -57,6 +66,68 @@ export type CoordinatedSaveInput = {
   moveTarget: AutomationCreateDestination | null
 }
 
+async function saveCoordinatedCreate(
+  context: AutomationSaveContext,
+  input: CoordinatedSaveInput
+): Promise<AutomationDispatchResult<Automation>> {
+  const { local } = context
+  const intent = local.coordinatedCreateIntentRef.current
+  if (!intent || !input.createDestination) {
+    return {
+      ok: false,
+      notice: ownerNotice('Reopen the create dialog and choose an available project before saving.')
+    }
+  }
+  intent.submission ??= {
+    draftSignature: JSON.stringify(local.draft),
+    request: structuredClone({
+      authority: input.createDestination.authority,
+      input: { ...input.createInput, creationKey: intent.creationKey },
+      definition: input.definition,
+      destination: input.createDestination.destination
+    }),
+    host: input.createDestination.entry.stableRef,
+    confirmed: null
+  }
+  return await reconcileCoordinatedCreate(context, intent)
+}
+
+export async function reconcileCoordinatedCreate(
+  context: AutomationSaveContext,
+  intent: CoordinatedCreateIntent
+): Promise<AutomationDispatchResult<Automation>> {
+  const { local, destination } = context
+  const submission = intent.submission
+  if (!submission) {
+    return { ok: false, notice: ownerNotice('No submitted creation is available to reconcile.') }
+  }
+  const created: AutomationDispatchResult<Automation> = submission.confirmed
+    ? { ok: true, value: submission.confirmed }
+    : await createCoordinatedAutomationAtDestination(submission.request)
+  if (!created.ok) {
+    if (!submission.request.wireInput) {
+      intent.submission = null
+    }
+    return created
+  }
+  submission.confirmed = created.value
+  destination.invalidateWrittenHost(submission.host, 'definition')
+  if (
+    local.coordinatedCreateIntentRef.current !== intent ||
+    JSON.stringify(local.draftRef.current) !== submission.draftSignature
+  ) {
+    return {
+      ok: false,
+      notice: {
+        message: `The original creation is confirmed as "${created.value.name}" (${created.value.id}). Your current edits are not saved and remain in this dialog. Copy them, close this dialog, then reopen that automation to apply them. A new create dialog starts a separate automation.`,
+        recovery: null,
+        severity: 'owner'
+      }
+    }
+  }
+  return created
+}
+
 /** Writes a coordinated definition through the dedicated RPCs. The draft stays
  * open on every refusal, so a revision or owner conflict never discards edits. */
 export async function saveCoordinatedDefinition(
@@ -71,28 +142,7 @@ export async function saveCoordinatedDefinition(
     }
   }
   if (local.editingAutomationId === null) {
-    if (!input.createDestination) {
-      return {
-        ok: false,
-        notice: ownerNotice('Choose an available project on this host before saving.')
-      }
-    }
-    // Why: reuse one idempotency key until the create is confirmed, so an
-    // uncertain transport failure replays instead of creating a duplicate.
-    const keys = local.moveCreationKeysRef.current
-    const creationKey = keys.get(COORDINATED_CREATE_KEY) ?? createBrowserUuid()
-    keys.set(COORDINATED_CREATE_KEY, creationKey)
-    const created = await createCoordinatedAutomationAtDestination(
-      input.createDestination.authority,
-      { ...input.createInput, creationKey },
-      input.definition,
-      input.createDestination.destination
-    )
-    if (created.ok) {
-      keys.delete(COORDINATED_CREATE_KEY)
-      destination.invalidateWrittenHost(input.createDestination.entry.stableRef, 'definition')
-    }
-    return created
+    return await saveCoordinatedCreate(context, input)
   }
   const current = input.currentAutomation
   const openedRevision = local.draft.definitionRevision

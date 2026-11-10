@@ -73,27 +73,36 @@ export async function assertCoordinatedDefinitionWritesSupported(
   }
 }
 
-export async function createCoordinatedAutomationAtDestination(
-  authority: AutomationAuthorityRef,
-  input: AutomationCreateInput,
-  definition: CoordinatedDefinitionDraftFields,
+export type CoordinatedDefinitionCreateSubmission = {
+  authority: AutomationAuthorityRef
+  input: AutomationCreateInput
+  definition: CoordinatedDefinitionDraftFields
   destination: AutomationDestination
+  wireInput?: Record<string, unknown>
+}
+
+export async function createCoordinatedAutomationAtDestination(
+  submission: CoordinatedDefinitionCreateSubmission
 ): Promise<AutomationDispatchResult<Automation>> {
+  const { authority, input, definition, destination } = submission
   try {
     await assertCoordinatedDefinitionWritesSupported(authority, destination.selector)
-    const prepared = await prepareAutomationLaunchSetup(authority, input)
-    // Why: definitions stay disabled until a separate activation gate exists.
-    const { enabled: _enabled, ...wire } = toRuntimeAutomationCreateInput(prepared)
-    const result = await callRuntimeRpc<{ automation: Automation }>(
-      { kind: 'local' },
-      'automation.createCoordinated',
-      {
+    if (!submission.wireInput) {
+      const prepared = await prepareAutomationLaunchSetup(authority, input)
+      const { enabled: _enabled, ...wire } = toRuntimeAutomationCreateInput(prepared)
+      // Keep the exact submitted payload, including launch setup and dtstart, for uncertain replay.
+      submission.wireInput = structuredClone({
         ...definedOnly(wire),
         ...definedOnly(definition),
         kind: 'coordinated',
         enabled: false,
         destination
-      },
+      })
+    }
+    const result = await callRuntimeRpc<{ automation: Automation }>(
+      { kind: 'local' },
+      'automation.createCoordinated',
+      submission.wireInput,
       { timeoutMs: REQUEST_TIMEOUT_MS }
     )
     return { ok: true, value: result.automation }

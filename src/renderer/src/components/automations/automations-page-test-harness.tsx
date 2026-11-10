@@ -75,6 +75,7 @@ export type EditorDialogProps = {
   draft?: { projectId: string; workspaceId: string }
   canSave?: boolean
   onSave: () => void
+  onOpenChange: (open: boolean) => void
   onProjectChange: (projectId: string) => void
   onDraftChange: (updater: (current: unknown) => unknown) => void
 }
