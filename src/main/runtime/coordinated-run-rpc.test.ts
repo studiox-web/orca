@@ -454,7 +454,7 @@ describe('selected coordinated runs through native RPC transport', () => {
     expect(await rpc(INSPECT, { ...request, runtimeId: 'foreign-runtime' })).toMatchObject({
       ok: false
     })
-    installFakeAppEnvironment({ getPath: () => join(testState.dir, 'foreign-profile') })
+    fixture!.selectActiveProfile(join(testState.dir, 'foreign-profile'))
     expect(await rpc(INSPECT, request)).toMatchObject({ ok: false })
     expect(await rpc(RECONCILE, request)).toMatchObject({ ok: false })
   })

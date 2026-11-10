@@ -65,9 +65,11 @@ export class RecoveryEnv {
 
   private constructor(readonly harness: CoordinatedAutomationTestHarness) {}
 
-  static async create(): Promise<RecoveryEnv> {
+  static async create(options: { nestedProfile?: boolean } = {}): Promise<RecoveryEnv> {
     const env = new RecoveryEnv(await CoordinatedAutomationTestHarness.create())
-    testState.dir = join(env.harness.root, 'profile')
+    testState.dir = options.nestedProfile
+      ? join(env.harness.root, 'profiles', 'local')
+      : join(env.harness.root, 'profile')
     mkdirSync(testState.dir, { recursive: true })
     mkdirSync(env.workspacePath, { recursive: true })
     writeDataFile(coordinatedTestState())

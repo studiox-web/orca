@@ -35,6 +35,8 @@ export function createRuntimeAutomationService(input: {
   headless: boolean
   /** Opt-in fake coordinated runs for an unpackaged test/developer profile; absent by default. */
   coordinatedRuns?: CoordinatedRunHostInjection
+  /** Live startup-selected profile authority, independent of the Store and caller injection. */
+  activeProfileDirectory?: () => string | null
 }): AutomationService {
   const { store, runtime, claudeUsage, codexUsage } = input
   const coordinated = createCoordinatedRunHostBinding({
@@ -44,7 +46,7 @@ export function createRuntimeAutomationService(input: {
     environment: hasAppEnvironment()
       ? {
           isPackaged: () => getAppEnvironment().isPackaged(),
-          userDataPath: () => getAppEnvironment().getPath('userData')
+          activeProfileDirectory: () => input.activeProfileDirectory?.() ?? null
         }
       : null
   })

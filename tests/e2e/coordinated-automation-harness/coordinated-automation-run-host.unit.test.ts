@@ -21,6 +21,7 @@ import {
   env,
   holdLane,
   hostEnvironment,
+  selectActiveProfileDirectory,
   hostProgress,
   injection,
   request,
@@ -268,7 +269,7 @@ describe('coordinated run host lifecycle gate and exact scope', () => {
     const sequence =
       done.inspection.progress.kind === 'available' ? done.inspection.progress.sequence : -1
 
-    hostEnvironment({ userData: mkdtempSync(join(tmpdir(), 'orca-revoked-profile-')) })
+    selectActiveProfileDirectory(mkdtempSync(join(tmpdir(), 'orca-revoked-profile-')))
     expect(service.coordinatedRuns.availability).toMatchObject({
       available: false,
       state: 'revoked'
@@ -283,7 +284,7 @@ describe('coordinated run host lifecycle gate and exact scope', () => {
     expect(env.store.listAutomationRuns(automationId)).toHaveLength(1)
     expect(hostProgress(done.automationRunId)?.sequence).toBe(sequence)
 
-    hostEnvironment()
+    selectActiveProfileDirectory(testState.dir)
     expect(service.coordinatedRuns.availability.state).toBe('running')
     const healthy = service.coordinatedRuns.inspectRun(scope)
     expect(healthy.receipt.kind).toBe('available')

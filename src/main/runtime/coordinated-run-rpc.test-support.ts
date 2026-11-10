@@ -1,3 +1,4 @@
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { vi } from 'vitest'
 import { RecoveryEnv } from '../../../tests/e2e/coordinated-automation-harness/coordinated-automation-recovery-env'
 import { testState } from '../persistence/persistence-test-harness'
@@ -19,6 +20,8 @@ import { _resetTerminalViewAttributesForTest } from './terminal-view-attribute-s
 
 export async function createCoordinatedRunRpcFixture(
   options: {
+    nestedProfile?: boolean
+    activeProfileDirectory?: (() => string | null) | null
     definitionGate?: boolean
     host?: boolean
     start?: boolean
@@ -26,7 +29,11 @@ export async function createCoordinatedRunRpcFixture(
     fakeEffects?: boolean
   } = {}
 ) {
-  const env = await RecoveryEnv.create()
+  const env = await RecoveryEnv.create({ nestedProfile: options.nestedProfile })
+  let selectedProfileDirectory: string | null = testState.dir
+  if (options.nestedProfile) {
+    installFakeAppEnvironment({ getPath: () => env.harness.root })
+  }
   env.store.updateSettings({ experimentalCoordinatedAutomations: true })
   for (const id of ['research', 'writer']) {
     env.scripts.set(id, (identity) => [{ type: 'report', result: env.report(identity) }])
@@ -62,6 +69,10 @@ export async function createCoordinatedRunRpcFixture(
     store: env.store,
     runtime,
     headless: false,
+    activeProfileDirectory:
+      options.activeProfileDirectory === null
+        ? undefined
+        : (options.activeProfileDirectory ?? (() => selectedProfileDirectory)),
     coordinatedRuns: options.host === false ? undefined : injection
   })
   if (options.start !== false) {
@@ -74,6 +85,9 @@ export async function createCoordinatedRunRpcFixture(
   })
   return {
     env,
+    selectActiveProfile(directory: string | null) {
+      selectedProfileDirectory = directory
+    },
     runtime,
     service,
     published,

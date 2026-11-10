@@ -44,8 +44,12 @@ export function coordinatedRunHostRefusal(input: {
   if (injection.profile.kind !== 'isolated_test' && injection.profile.kind !== 'developer') {
     return 'Coordinated fake runs need an isolated test or developer profile.'
   }
+  const selectedProfile = environment.activeProfileDirectory()
+  if (!selectedProfile) {
+    return 'The host has no selected active profile authority.'
+  }
   const root = canonicalPath(injection.profile.root)
-  if (!root || root !== canonicalPath(environment.userDataPath())) {
+  if (!root || root !== canonicalPath(selectedProfile)) {
     return 'The injected profile root is not this host’s active profile.'
   }
   const provider = injection.workerProvider

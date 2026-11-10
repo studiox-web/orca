@@ -29,6 +29,10 @@ import type { FakeEffectState } from './isolated-adapters'
  */
 export let env: RecoveryEnv
 export const services: AutomationService[] = []
+let activeProfileDirectory: string | null = null
+export function selectActiveProfileDirectory(directory: string | null): void {
+  activeProfileDirectory = directory
+}
 
 export function hostEnvironment(overrides: { isPackaged?: boolean; userData?: string } = {}) {
   setAppEnvironment({
@@ -80,6 +84,7 @@ export function startService(
     store: env.store,
     runtime: runtimeFixture(),
     headless: options.headless ?? false,
+    activeProfileDirectory: () => activeProfileDirectory,
     coordinatedRuns: options.injection
   })
   services.push(service)
@@ -163,6 +168,7 @@ export function enableSetting(enabled = true) {
 export async function setupRunHostFixture(): Promise<void> {
   env = await RecoveryEnv.create()
   hostEnvironment()
+  selectActiveProfileDirectory(testState.dir)
   enableSetting()
   for (const id of ['draft', 'review', 'stage', 'research', 'writer']) {
     env.scripts.set(id, (identity) => [{ type: 'report', result: env.report(identity) }])

@@ -13,6 +13,7 @@ export function initializeMainProcessAutomations(): AutomationService {
   const service = createRuntimeAutomationService({
     store,
     runtime,
+    activeProfileDirectory: () => state.activeOrcaProfile?.profileDirectory ?? null,
     claudeUsage,
     codexUsage,
     // Remote clients mirror schedules; only server processes execute remote_host_service ownership.

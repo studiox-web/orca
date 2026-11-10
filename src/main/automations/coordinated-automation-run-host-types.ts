@@ -29,7 +29,7 @@ export const COORDINATED_FAKE_RUNS_CAPABILITY = 'coordinated_fake_runs_v1'
  */
 export type CoordinatedRunHostInjection = {
   capability: typeof COORDINATED_FAKE_RUNS_CAPABILITY
-  /** Must equal the active profile's userData root; the host refuses a foreign profile. */
+  /** Must equal the selected active profile storage directory; the host refuses a foreign profile. */
   profile: { kind: 'isolated_test' | 'developer'; root: string }
   orchestrationDb: OrchestrationDb
   /** Must declare only the `fake_no_effects` capability; real providers are refused. */
@@ -44,7 +44,7 @@ export type CoordinatedRunHostInjection = {
 /** Facts the host reads from its own environment, never from the caller. */
 export type CoordinatedRunHostEnvironment = {
   isPackaged: () => boolean
-  userDataPath: () => string
+  activeProfileDirectory: () => string | null
 }
 
 export type CoordinatedManualRunRequest = {
