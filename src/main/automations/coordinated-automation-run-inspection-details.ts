@@ -1,5 +1,6 @@
 import type { AutomationRun } from '../../shared/automations-types'
 import type {
+  Availability,
   CoordinatedApprovalObservation,
   CoordinatedGateResolutionEligibility,
   CoordinatedRetryEligibility,
@@ -15,7 +16,6 @@ import type {
   ResolvedChildSnapshot
 } from '../../shared/coordinated-automation-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
-import type { Availability } from '../../shared/coordinated-automation-run-inspection'
 import {
   isCoordinatedNativeAttempt,
   nativeAttemptBindingProblem

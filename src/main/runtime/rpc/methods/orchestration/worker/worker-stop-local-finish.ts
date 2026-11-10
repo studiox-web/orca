@@ -53,7 +53,7 @@ export async function finishLocalWorkerStop(
     return {
       kind: 'stopped',
       processAction: 'none',
-      worker: db.getWorkerDispatch(dispatchId) as WorkerDispatchRow
+      worker: requireWorkerDispatch(db, dispatchId)
     }
   }
   // Still attempt stop on unverifiable contact. Structured exited is also addressable: close/hide its current /clear session to prevent restart on mail.
@@ -119,7 +119,7 @@ export async function finishLocalWorkerStop(
     return {
       kind: 'stopped',
       processAction: 'closed_agent_terminal',
-      worker: db.getWorkerDispatch(dispatchId) as WorkerDispatchRow
+      worker: requireWorkerDispatch(db, dispatchId)
     }
   }
   // A concurrent process exit already proves and settles stop; do not re-settle or report uncertainty.
@@ -135,7 +135,7 @@ export async function finishLocalWorkerStop(
   return {
     kind: 'stopped',
     processAction: 'closed_agent_terminal',
-    worker: db.getWorkerDispatch(dispatchId) as WorkerDispatchRow,
+    worker: requireWorkerDispatch(db, dispatchId),
     close: closed.close
   }
 }
@@ -145,4 +145,12 @@ function unknownFinish(
   processAction: 'none' | 'unknown' | 'closed_agent_terminal'
 ): LocalWorkerStopFinish {
   return { kind: 'unknown', processAction, worker }
+}
+
+function requireWorkerDispatch(db: OrchestrationDb, dispatchId: string): WorkerDispatchRow {
+  const worker = db.getWorkerDispatch(dispatchId)
+  if (!worker) {
+    throw new Error(`Worker Dispatch ${dispatchId} disappeared while stopping.`)
+  }
+  return worker
 }

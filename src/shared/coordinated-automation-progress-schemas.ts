@@ -102,5 +102,47 @@ export const CoordinatedRunProgressSchema: z.ZodType<CoordinatedRunProgress> = z
       reason: z.string(),
       at: z.number()
     })
+    .nullable(),
+  approvals: z
+    .array(
+      z.object({
+        scope: z.enum(['stage', 'parent']),
+        approvalId: Identifier,
+        role: z.string().min(1),
+        approverIdentity: z.string().min(1),
+        authorIdentity: z.string().optional(),
+        approvedAt: z.number(),
+        evidence: z.string().optional(),
+        automationId: Identifier,
+        definitionRevision: z.number().int().positive(),
+        automationRunId: Identifier,
+        orchestrationRunId: Identifier,
+        childDefinitionId: z.string().optional(),
+        taskId: z.string().optional(),
+        dispatchId: z.string().optional(),
+        targetChildId: z.string().optional()
+      })
+    )
+    .optional(),
+  operatorDecisions: z
+    .array(
+      z.object({
+        kind: z.enum(['stop', 'retry', 'gate_resolution']),
+        at: z.number(),
+        actor: z.string().min(1),
+        childDefinitionId: z.string().nullable(),
+        dispatchId: z.string().nullable(),
+        gateId: z.string().nullable(),
+        decision: z.enum(['approve', 'reject', 'escalate']).nullable(),
+        detail: z.string()
+      })
+    )
+    .optional(),
+  operatorStop: z
+    .object({
+      at: z.number(),
+      reason: z.string().nullable()
+    })
     .nullable()
+    .optional()
 })

@@ -140,14 +140,46 @@ export async function operatorStopOutcome(
   if (effects.uncertain.length > 0) {
     return hold(`${detail}; effect(s) ${effects.uncertain.join(', ')} remain uncertain.`)
   }
-  const holds = nativeSettlementHolds(ctx, run)
+  const holds = unsettledNativeAttemptsAfterStop(ctx, run)
   if (holds.length > 0) {
     return hold(`${detail}; native settlement is still unsettled: ${holds.join(' ')}`)
   }
-  const settled = ctx.store.recordCoordinatedRunSettlement({
-    automationRunId: run.id,
-    status: 'dispatch_failed',
-    error: detail
-  })
+  const settled =
+    run.status === 'dispatch_failed'
+      ? run
+      : ctx.store.recordCoordinatedRunSettlement({
+          automationRunId: run.id,
+          status: 'dispatch_failed',
+          error: detail
+        })
   return { state: 'failed', reason: detail, run: settled, progress: ctx.ledger.progress }
+}
+
+/**
+ * A worker with proven exit evidence (stopped/abandoned) is expected to have no worker_done;
+ * only attempts that may still be running or reporting hold the stop outcome uncertain.
+ */
+function unsettledNativeAttemptsAfterStop(
+  ctx: CoordinatedPassContext,
+  run: AutomationRun
+): string[] {
+  return (run.childMappings ?? []).flatMap((mapping) => {
+    if (
+      !mapping.dispatchId ||
+      !isCoordinatedNativeAttempt(ctx.orchestrationDb, mapping.dispatchId)
+    ) {
+      return []
+    }
+    const worker = ctx.orchestrationDb.getWorkerDispatch(mapping.dispatchId)
+    if (worker && ['stopped', 'abandoned'].includes(worker.state)) {
+      return []
+    }
+    const problem = nativeAttemptSemanticAdmissionProblem(
+      ctx.store,
+      ctx.orchestrationDb,
+      run,
+      mapping.dispatchId
+    )
+    return problem ? [`Attempt ${mapping.dispatchId}: ${problem}`] : []
+  })
 }

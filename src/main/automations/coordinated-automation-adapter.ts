@@ -32,12 +32,14 @@ import {
 } from './coordinated-automation-operator-actions'
 import { requestCoordinatedNativeStops } from './coordinated-automation-native-stub-stop'
 import type { CoordinatedRunProgressStore } from './coordinated-automation-progress-store'
-import { defaultCoordinatedProgressStore } from './coordinated-automation-dispatcher'
 import {
   type CoordinatedBoundaryHook,
   CoordinatedProgressLedger
 } from './coordinated-automation-progress-ledger'
-import { dispatchReadyCoordinatedTasks } from './coordinated-automation-dispatcher'
+import {
+  defaultCoordinatedProgressStore,
+  dispatchReadyCoordinatedTasks
+} from './coordinated-automation-dispatcher'
 import {
   abandonCoordinatorWaits,
   assertCoordinatorActive,

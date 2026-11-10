@@ -1,7 +1,7 @@
 import { isFinalAutomationRunStatus, type AutomationRun } from '../../shared/automations-types'
-import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
 import {
   stageRetryEligibility,
+  gatePending,
   LOCAL_OPERATOR_IDENTITY
 } from './coordinated-automation-operator-eligibility'
 import {
@@ -51,24 +51,25 @@ function requireOperatorLedger(
   })
 }
 
-function assertOperatorScope(
-  progress: CoordinatedRunProgress,
-  run: AutomationRun,
-  input: CoordinatedOperatorScopeInput
-): void {
+function assertOperatorScope(run: AutomationRun, input: CoordinatedOperatorScopeInput): void {
+  const snapshot = run.resolvedSnapshot
   if (input.orchestrationRunId !== run.orchestrationRunId) {
     throw new Error(
       `The named orchestration Run ${String(input.orchestrationRunId)} is not this run's (${String(run.orchestrationRunId)}).`
     )
   }
-  if (input.definitionRevision !== progress.definitionRevision) {
+  if (!snapshot) {
+    throw new Error(`Run "${run.id}" has no frozen snapshot to validate operator scope against.`)
+  }
+  if (input.definitionRevision !== snapshot.definitionRevision) {
     throw new Error(
-      `Definition revision ${input.definitionRevision} does not name this run's frozen revision ${progress.definitionRevision}.`
+      `Definition revision ${input.definitionRevision} does not name this run's frozen revision ${snapshot.definitionRevision}.`
     )
   }
-  if (input.targetExecutionAuthority !== progress.executionAuthority) {
+  const authority = `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}`
+  if (input.targetExecutionAuthority !== authority) {
     throw new Error(
-      `Target execution authority ${input.targetExecutionAuthority} does not match this run's frozen authority ${progress.executionAuthority}.`
+      `Target execution authority ${input.targetExecutionAuthority} does not match this run's frozen authority ${authority}.`
     )
   }
 }
@@ -88,8 +89,8 @@ export function operatorStopRun(
   run: AutomationRun,
   input: CoordinatedOperatorScopeInput & { note?: string }
 ): 'requested' | 'already_recorded' {
+  assertOperatorScope(run, input)
   const ledger = requireOperatorLedger(ctx, run)
-  assertOperatorScope(ledger.progress, run, input)
   if (ledger.progress.operatorStop) {
     return 'already_recorded'
   }
@@ -123,8 +124,8 @@ export function operatorRetryStage(
     retryOfDispatchId: string
   }
 ): void {
+  assertOperatorScope(run, input)
   const ledger = requireOperatorLedger(ctx, run)
-  assertOperatorScope(ledger.progress, run, input)
   const snapshot = run.resolvedSnapshot!
   const child = snapshot.resolvedChildren.find(
     (entry) => entry.childDefinitionId === input.childDefinitionId
@@ -194,8 +195,8 @@ export function operatorResolveGate(
     dispatchId?: string
   }
 ): void {
+  assertOperatorScope(run, input)
   const ledger = requireOperatorLedger(ctx, run)
-  assertOperatorScope(ledger.progress, run, input)
   const snapshot = run.resolvedSnapshot!
   const progress = ledger.progress
   const stageReq = snapshot.resolvedChildren
@@ -216,6 +217,9 @@ export function operatorResolveGate(
     throw new Error(
       `Gate "${input.gateId}" is not a pending approval requirement or human-decision escalation of this run.`
     )
+  }
+  if ((stageReq || parentReq) && !gatePending(progress, input.gateId)) {
+    throw new Error(`Gate "${input.gateId}" has already been resolved.`)
   }
   const mapping = stageReq
     ? run.childMappings?.find(

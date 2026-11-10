@@ -107,7 +107,7 @@ export function stageGateResolutionEligibility(input: {
   }
 }
 
-function gatePending(progress: CoordinatedRunProgress, gateId: string): boolean {
+export function gatePending(progress: CoordinatedRunProgress, gateId: string): boolean {
   const approved = (progress.approvals ?? []).some(
     (approval) => approval.scope === 'stage' && approval.approvalId === gateId
   )
