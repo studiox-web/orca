@@ -35,7 +35,7 @@ let answered: CoordinatedRunView
 function actionCalls(): [string, unknown][] {
   return vi
     .mocked(callRuntimeRpc)
-    .mock.calls.map(([, method, params]) => [method, params] as [string, unknown])
+    .mock.calls.map(([, method, params]): [string, unknown] => [method, params])
     .filter(([method]) => method !== 'status.get' && method !== 'automation.inspectCoordinatedRun')
 }
 

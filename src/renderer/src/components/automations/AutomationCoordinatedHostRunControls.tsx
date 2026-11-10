@@ -7,6 +7,7 @@ import type {
 import type { CoordinatedRunView } from '../../../../shared/coordinated-automation-run-view'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { getIntlLocale } from '@/i18n/i18n'
 import type { RunControlActionRequest } from './AutomationRunControlImpactDialog'
 import type {
   CoordinatedPendingGate,
@@ -124,7 +125,7 @@ export function CoordinatedHostRunControls({
       </p>
       {inspection.operatorStop ? (
         <p className="text-status-warning break-words">
-          Stop requested {new Date(inspection.operatorStop.at).toLocaleString()}
+          Stop requested {new Date(inspection.operatorStop.at).toLocaleString(getIntlLocale())}
           {inspection.operatorStop.reason ? ` (${inspection.operatorStop.reason})` : ''}. Worker
           exit is not proven until the run settles.
         </p>
