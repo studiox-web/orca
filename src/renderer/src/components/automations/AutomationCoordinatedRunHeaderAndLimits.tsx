@@ -26,6 +26,7 @@ import type {
 
 export type AutomationCoordinatedRunHeaderAndLimitsProps = {
   projection: ProjectedCoordinatedRun
+  isStopPending?: boolean
   onRequestStopRun?: () => void
   onInspectReceipt?: () => void
 }
@@ -121,6 +122,7 @@ const SEMANTIC_STATE_META: Record<
 
 export function AutomationCoordinatedRunHeaderAndLimits({
   projection,
+  isStopPending = false,
   onRequestStopRun,
   onInspectReceipt
 }: AutomationCoordinatedRunHeaderAndLimitsProps): React.JSX.Element {
@@ -193,14 +195,18 @@ export function AutomationCoordinatedRunHeaderAndLimits({
               variant="outline"
               size="xs"
               data-testid="stop-coordinated-run-btn"
+              disabled={isStopPending}
+              aria-busy={isStopPending}
               title={
-                projection.stopEligibility.reason ??
-                `Stop coordinated run ${projection.automationRunId}`
+                isStopPending
+                  ? 'A stop request for this run is already being submitted.'
+                  : (projection.stopEligibility.reason ??
+                    `Stop coordinated run ${projection.automationRunId}`)
               }
               onClick={onRequestStopRun}
             >
               <Square className="size-3" />
-              Stop run
+              {isStopPending ? 'Submitting stop…' : 'Stop run'}
             </Button>
           </div>
         </div>

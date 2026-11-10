@@ -27,6 +27,7 @@ export type RunControlActionRequest =
 type AutomationRunControlImpactDialogProps = {
   request: RunControlActionRequest | null
   projectedRun: ProjectedCoordinatedRun
+  isPending?: boolean
   onClose: () => void
   onConfirmStop: () => void
   onConfirmRetry: (stage: ProjectedCoordinatedStage) => void
@@ -41,6 +42,7 @@ type AutomationRunControlImpactDialogProps = {
 export function AutomationRunControlImpactDialog({
   request,
   projectedRun,
+  isPending = false,
   onClose,
   onConfirmStop,
   onConfirmRetry,
@@ -68,7 +70,7 @@ export function AutomationRunControlImpactDialog({
           : null
 
   const handleConfirm = (): void => {
-    if (!request || !canExecute) {
+    if (!request || !canExecute || isPending) {
       return
     }
     if (request.kind === 'stop') {
@@ -280,15 +282,18 @@ export function AutomationRunControlImpactDialog({
             type="button"
             variant={request?.kind === 'stop' ? 'destructive' : 'default'}
             size="sm"
-            disabled={!canExecute}
+            disabled={!canExecute || isPending}
+            aria-busy={isPending}
             data-testid="confirm-run-control-action"
             onClick={handleConfirm}
           >
-            {request?.kind === 'stop'
-              ? 'Confirm Stop Run'
-              : request?.kind === 'retry'
-                ? 'Confirm Retry Stage'
-                : 'Confirm Gate Decision'}
+            {isPending
+              ? 'Submitting…'
+              : request?.kind === 'stop'
+                ? 'Confirm Stop Run'
+                : request?.kind === 'retry'
+                  ? 'Confirm Retry Stage'
+                  : 'Confirm Gate Decision'}
           </Button>
         </DialogFooter>
       </DialogContent>

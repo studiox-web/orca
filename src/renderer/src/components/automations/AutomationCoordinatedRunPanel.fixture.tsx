@@ -4,6 +4,7 @@ import type { AutomationRun, SemanticCompletionReceipt } from '../../../../share
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { makeRun } from './automations-page-fixtures'
 import { AutomationCoordinatedRunPanel } from './AutomationCoordinatedRunPanel'
+import type { CoordinatedRunOperatorActions } from './coordinated-automation-run-projection'
 import {
   sampleActiveCoordinatedRun,
   sampleCoordinatedArticleAutomation,
@@ -125,6 +126,14 @@ const storeState = {
   settings: createGlobalSettingsFixture({
     experimentalCoordinatedAutomations: true
   })
+}
+
+const noop = (): void => {}
+
+const boundOperatorActions: CoordinatedRunOperatorActions = {
+  stopRun: { availability: { supported: true, reason: null }, onStopRun: noop },
+  retryStage: { availability: { supported: true, reason: null }, onRetryStage: noop },
+  resolveGate: { availability: { supported: true, reason: null }, onResolveGate: noop }
 }
 
 export const active_run = defineFixture({
@@ -307,6 +316,46 @@ export const remote_folder_snapshot_mobile = defineFixture({
           hostLabel="SSH: prod-editorial"
           workspaceLabel="/srv/editorial/weekly-digest"
           isFolderWorkspace
+        />
+      </div>
+    </TooltipProvider>
+  )
+})
+
+export const controls_bound = defineFixture({
+  width: 920,
+  store: storeState,
+  render: () => (
+    <TooltipProvider>
+      <div className="bg-background p-6">
+        <AutomationCoordinatedRunPanel
+          automation={sampleCoordinatedArticleAutomation}
+          run={sampleActiveCoordinatedRun}
+          observation={sampleActiveRunObservation}
+          operatorActions={boundOperatorActions}
+          isFeatureFlagEnabled
+          hostLabel="Local Orca Host"
+          workspaceLabel="djvibe/article-pilot"
+        />
+      </div>
+    </TooltipProvider>
+  )
+})
+
+export const controls_bound_mobile = defineFixture({
+  width: 375,
+  store: storeState,
+  render: () => (
+    <TooltipProvider>
+      <div className="bg-background p-3">
+        <AutomationCoordinatedRunPanel
+          automation={sampleCoordinatedArticleAutomation}
+          run={sampleActiveCoordinatedRun}
+          observation={sampleActiveRunObservation}
+          operatorActions={boundOperatorActions}
+          isFeatureFlagEnabled
+          hostLabel="Local Orca Host"
+          workspaceLabel="djvibe/article-pilot"
         />
       </div>
     </TooltipProvider>

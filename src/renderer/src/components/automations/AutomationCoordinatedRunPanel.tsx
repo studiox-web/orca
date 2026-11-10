@@ -14,18 +14,15 @@ import { AutomationCoordinatedRunHeaderAndLimits } from './AutomationCoordinated
 import { AutomationCoordinatedRunStageCard } from './AutomationCoordinatedRunStageCard'
 import { AutomationCoordinatedRunStagesGraph } from './AutomationCoordinatedRunStagesGraph'
 import { AutomationHistoricalSnapshotViewer } from './AutomationHistoricalSnapshotViewer'
-import {
-  AutomationRunControlImpactDialog,
-  type RunControlActionRequest
-} from './AutomationRunControlImpactDialog'
+import { AutomationRunControlImpactDialog } from './AutomationRunControlImpactDialog'
 import { withWorkerOpenUnbound } from './coordinated-automation-attempt-projection'
 import {
   projectCoordinatedAutomationRun,
   type CoordinatedRunLiveObservation,
   type CoordinatedRunOperatorActions,
-  type ProjectedCoordinatedAttempt,
-  type ProjectedCoordinatedStage
+  type ProjectedCoordinatedAttempt
 } from './coordinated-automation-run-projection'
+import { useCoordinatedRunControlLifecycle } from './use-coordinated-run-control-lifecycle'
 
 export type CoordinatedRunPanelViewMode = 'list' | 'graph' | 'receipt' | 'snapshot'
 
@@ -91,7 +88,6 @@ export function AutomationCoordinatedRunPanel({
   const [internalRunId, setInternalRunId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<CoordinatedRunPanelViewMode>(defaultViewMode)
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null)
-  const [controlRequest, setControlRequest] = useState<RunControlActionRequest | null>(null)
 
   const activeRunId = selectedRunId ?? internalRunId ?? candidateRuns[0]?.id ?? null
   const activeRun = useMemo(
@@ -145,6 +141,17 @@ export function AutomationCoordinatedRunPanel({
     [canBindWorkerOpen, rawProjection]
   )
 
+  const {
+    controlsBusy,
+    controlNotice,
+    controlRequest,
+    requestControl,
+    closeControlRequest,
+    handleConfirmStop,
+    handleConfirmRetry,
+    handleConfirmResolveGate
+  } = useCoordinatedRunControlLifecycle({ activeRunId, projection, operatorActions })
+
   if (!activeRun || !projection) {
     return null
   }
@@ -166,68 +173,6 @@ export function AutomationCoordinatedRunPanel({
     if (attempt.crewRow && attempt.canOpenWorker && runtimeTarget) {
       void openOrchestrationCrewAgent(attempt.crewRow, runtimeTarget)
     }
-  }
-
-  const handleConfirmStop = (): void => {
-    if (!projection.stopEligibility.canStop || !operatorActions?.stopRun?.onStopRun) {
-      return
-    }
-    void operatorActions.stopRun.onStopRun({
-      automationId: projection.automationId,
-      automationRunId: projection.automationRunId,
-      orchestrationRunId: projection.orchestrationRunId,
-      definitionRevision: projection.definitionRevision,
-      targetExecutionAuthority: projection.targetExecutionAuthority
-    })
-  }
-
-  const handleConfirmRetry = (stage: ProjectedCoordinatedStage): void => {
-    if (
-      !stage.retryEligibility.canRetry ||
-      !stage.taskId ||
-      !stage.retryEligibility.retryOfDispatchId ||
-      !projection.orchestrationRunId ||
-      !operatorActions?.retryStage?.onRetryStage
-    ) {
-      return
-    }
-    void operatorActions.retryStage.onRetryStage({
-      automationId: projection.automationId,
-      automationRunId: projection.automationRunId,
-      orchestrationRunId: projection.orchestrationRunId,
-      childDefinitionId: stage.childDefinitionId,
-      taskId: stage.taskId,
-      retryOfDispatchId: stage.retryEligibility.retryOfDispatchId,
-      definitionRevision: projection.definitionRevision,
-      targetExecutionAuthority: projection.targetExecutionAuthority
-    })
-  }
-
-  const handleConfirmResolveGate = (
-    stage: ProjectedCoordinatedStage,
-    gateId: string,
-    decision: 'approve' | 'reject' | 'escalate',
-    note: string
-  ): void => {
-    if (
-      !stage.gateResolutionEligibility.canResolve ||
-      !projection.orchestrationRunId ||
-      !operatorActions?.resolveGate?.onResolveGate
-    ) {
-      return
-    }
-    void operatorActions.resolveGate.onResolveGate({
-      automationId: projection.automationId,
-      automationRunId: projection.automationRunId,
-      orchestrationRunId: projection.orchestrationRunId,
-      childDefinitionId: stage.childDefinitionId,
-      taskId: stage.taskId ?? undefined,
-      dispatchId: stage.activeDispatchId ?? undefined,
-      gateId,
-      decision,
-      note: note || undefined,
-      targetExecutionAuthority: projection.targetExecutionAuthority
-    })
   }
 
   return (
@@ -330,9 +275,35 @@ export function AutomationCoordinatedRunPanel({
       {/* Parent Run Header, State Separation, Hazards, and Limits */}
       <AutomationCoordinatedRunHeaderAndLimits
         projection={projection}
-        onRequestStopRun={() => setControlRequest({ kind: 'stop' })}
+        isStopPending={controlsBusy}
+        onRequestStopRun={() => requestControl({ kind: 'stop' })}
         onInspectReceipt={() => setViewMode('receipt')}
       />
+
+      {/* Operator Action Lifecycle: honest pending/result/failure, fenced to the selected run */}
+      {controlNotice && controlNotice.runId === activeRun.id ? (
+        controlNotice.state === 'failed' ? (
+          <p
+            role="alert"
+            data-testid="run-control-error"
+            className="text-xs text-status-warning break-words"
+          >
+            {controlNotice.message}
+          </p>
+        ) : (
+          <p
+            role="status"
+            data-testid={
+              controlNotice.state === 'pending' ? 'run-control-pending' : 'run-control-result'
+            }
+            className="text-xs text-muted-foreground break-words"
+          >
+            {controlNotice.state === 'pending'
+              ? `Submitting ${controlNotice.label.toLowerCase()} request…`
+              : controlNotice.message}
+          </p>
+        )
+      ) : null}
 
       {/* Active View Body */}
       {viewMode === 'list' ? (
@@ -343,11 +314,12 @@ export function AutomationCoordinatedRunPanel({
               stage={stage}
               occupiedMutationLanes={projection.budgetsAndCeilings.occupiedMutationLanes}
               isSelected={stage.childDefinitionId === effectiveSelectedStageId}
+              controlsDisabled={controlsBusy}
               onSelectStage={setSelectedStageId}
               onInspectChildDefinition={onInspectChildDefinition}
               onInspectFrozenSnapshot={() => setViewMode('snapshot')}
               onOpenAttempt={handleOpenAttempt}
-              onRequestControl={setControlRequest}
+              onRequestControl={requestControl}
             />
           ))}
         </div>
@@ -370,11 +342,12 @@ export function AutomationCoordinatedRunPanel({
                 stage={selectedStage}
                 occupiedMutationLanes={projection.budgetsAndCeilings.occupiedMutationLanes}
                 isSelected
+                controlsDisabled={controlsBusy}
                 onSelectStage={setSelectedStageId}
                 onInspectChildDefinition={onInspectChildDefinition}
                 onInspectFrozenSnapshot={() => setViewMode('snapshot')}
                 onOpenAttempt={handleOpenAttempt}
-                onRequestControl={setControlRequest}
+                onRequestControl={requestControl}
               />
             </div>
           ) : null}
@@ -402,7 +375,8 @@ export function AutomationCoordinatedRunPanel({
       <AutomationRunControlImpactDialog
         request={controlRequest}
         projectedRun={projection}
-        onClose={() => setControlRequest(null)}
+        isPending={controlsBusy}
+        onClose={closeControlRequest}
         onConfirmStop={handleConfirmStop}
         onConfirmRetry={handleConfirmRetry}
         onConfirmResolveGate={handleConfirmResolveGate}

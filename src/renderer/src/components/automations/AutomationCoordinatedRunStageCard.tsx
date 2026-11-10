@@ -33,6 +33,7 @@ export type AutomationCoordinatedRunStageCardProps = {
   stage: ProjectedCoordinatedStage
   occupiedMutationLanes?: readonly OccupiedMutationLaneObservation[]
   isSelected?: boolean
+  controlsDisabled?: boolean
   onSelectStage?: (childDefinitionId: string) => void
   onInspectChildDefinition?: (childDefinitionId: string) => void
   onInspectFrozenSnapshot?: (childDefinitionId: string) => void
@@ -107,6 +108,7 @@ export function AutomationCoordinatedRunStageCard({
   stage,
   occupiedMutationLanes = EMPTY_OCCUPIED_LANES,
   isSelected = false,
+  controlsDisabled = false,
   onSelectStage,
   onInspectChildDefinition,
   onInspectFrozenSnapshot,
@@ -329,9 +331,13 @@ export function AutomationCoordinatedRunStageCard({
             variant="outline"
             size="xs"
             data-testid={`retry-stage-btn-${stage.childDefinitionId}`}
+            disabled={controlsDisabled}
+            aria-busy={controlsDisabled}
             title={
-              stage.retryEligibility.reason ??
-              `Retry stage ${stage.name} by reusing task ${stage.taskId}`
+              controlsDisabled
+                ? 'Another run control request is already being submitted.'
+                : (stage.retryEligibility.reason ??
+                  `Retry stage ${stage.name} by reusing task ${stage.taskId}`)
             }
             onClick={() => onRequestControl?.({ kind: 'retry', stage })}
           >
@@ -345,9 +351,13 @@ export function AutomationCoordinatedRunStageCard({
               variant="outline"
               size="xs"
               data-testid={`resolve-gate-btn-${stage.childDefinitionId}`}
+              disabled={controlsDisabled}
+              aria-busy={controlsDisabled}
               title={
-                stage.gateResolutionEligibility.reason ??
-                `Resolve approval gate ${pendingGateId} for ${stage.name}`
+                controlsDisabled
+                  ? 'Another run control request is already being submitted.'
+                  : (stage.gateResolutionEligibility.reason ??
+                    `Resolve approval gate ${pendingGateId} for ${stage.name}`)
               }
               onClick={() =>
                 onRequestControl?.({
