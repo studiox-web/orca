@@ -20,7 +20,10 @@ import {
 import { unresolvedEffects } from './coordinated-automation-effect-gate'
 import { selectEligibleTasksForDispatch } from './coordinated-automation-lane-scheduler'
 import { withEscalation, withHalt } from './coordinated-automation-progress-ledger'
-import type { CoordinatedPassContext } from './coordinated-automation-recovery-context'
+import {
+  assertCoordinatorActive,
+  type CoordinatedPassContext
+} from './coordinated-automation-recovery-context'
 import { executeCoordinatedTaskDispatch } from './coordinated-automation-task-execution'
 
 export type StageDispatchResult = { progressed: boolean; waiting: string[] }
@@ -120,7 +123,12 @@ export async function dispatchRunnableStages(
   const effectsInFlight = Object.values(ctx.ledger.progress.effects).some(
     (entry) => entry.status !== 'verified'
   )
-  if (ctx.ledger.progress.halt || effects.uncertain.length > 0 || effectsInFlight) {
+  if (
+    !ctx.isActive() ||
+    ctx.ledger.progress.halt ||
+    effects.uncertain.length > 0 ||
+    effectsInFlight
+  ) {
     return { progressed: false, waiting }
   }
   const candidates = runnableStages(ctx, snapshot).filter(
@@ -221,7 +229,10 @@ export async function dispatchRunnableStages(
         taskId: task.id,
         retryOfDispatchId: nativeRetryOf,
         deadlineAt: record.deadlineAt,
-        assertCurrent: () => void ctx.ledger.refresh(),
+        assertCurrent: () => {
+          assertCoordinatorActive(ctx)
+          ctx.ledger.refresh()
+        },
         onDispatchCreated: (dispatchId) =>
           void ctx.ledger.update(
             `attempt-bound:${record.attemptNumber}`,

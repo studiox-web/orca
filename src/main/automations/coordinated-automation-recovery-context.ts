@@ -85,6 +85,21 @@ export type CoordinatedRecoveryContext = {
   trustedAuthorIdentity?: string
   /** Task IDs whose worker is running in this coordinator generation. */
   inFlightTaskIds: Set<string>
+  /** False once the owning host stopped; no further claim, settle, or dispatch is allowed. */
+  isActive: () => boolean
+}
+
+export class CoordinatedHostStoppedError extends Error {
+  constructor() {
+    super('The coordinated run host stopped; no further coordinator writes are allowed.')
+    this.name = 'CoordinatedHostStoppedError'
+  }
+}
+
+export function assertCoordinatorActive(ctx: Pick<CoordinatedRecoveryContext, 'isActive'>): void {
+  if (!ctx.isActive()) {
+    throw new CoordinatedHostStoppedError()
+  }
 }
 
 export type CoordinatedPassContext = CoordinatedRecoveryContext & {

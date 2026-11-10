@@ -37,6 +37,10 @@ import {
   recordRefusedAutomationRun,
   recordUnevaluableAutomation
 } from './dispatch-refusal'
+import {
+  createUnavailableCoordinatedRunHost,
+  type CoordinatedAutomationRunHost
+} from './coordinated-automation-run-host-types'
 import type {
   AutomationsChangedPayload,
   PublishAutomationsChanged
@@ -66,6 +70,10 @@ export class AutomationService {
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
   /** Desktop automation traffic holds this lease to defer queued external probes. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
+  /** Host-owned coordinated fake runs; unavailable unless the host injects the capability. */
+  coordinatedRuns: CoordinatedAutomationRunHost = createUnavailableCoordinatedRunHost(
+    'Coordinated fake runs are not configured for this host.'
+  )
 
   constructor(
     store: Store,
@@ -78,6 +86,8 @@ export class AutomationService {
       chatDispatcher?: HeadlessAutomationDispatcher
       terminalObserver?: AutomationRunTerminalObserver
       onAutomationsChanged?: PublishAutomationsChanged
+      /** Startup reconciliation for retained coordinated runs (they have no single terminal). */
+      recoverCoordinatedRuns?: (runs: readonly AutomationRun[]) => void
     } = {}
   ) {
     this.store = store
@@ -94,7 +104,8 @@ export class AutomationService {
           observer: opts.terminalObserver,
           readRun: (automationId, runId) =>
             this.store.listAutomationRuns(automationId).find((entry) => entry.id === runId) ?? null,
-          markDispatchResult: (result) => this.markDispatchResult(result)
+          markDispatchResult: (result) => this.markDispatchResult(result),
+          recoverCoordinatedRuns: opts.recoverCoordinatedRuns
         })
       : null
   }

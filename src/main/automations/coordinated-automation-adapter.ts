@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { isCoordinatedAutomation } from '../../shared/coordinated-automation-types'
 import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
@@ -36,13 +36,14 @@ import {
   CoordinatedProgressLedger
 } from './coordinated-automation-progress-ledger'
 import { acceptedStageIds } from './coordinated-automation-native-readiness'
-import type {
-  CoordinatedClock,
-  CoordinatedFakeEffectAdapter,
-  CoordinatedLaneLockProvider,
-  CoordinatedRecoveryContext,
-  CoordinatedWorkerIdentity,
-  CoordinatedWorkerProvider
+import {
+  assertCoordinatorActive,
+  type CoordinatedClock,
+  type CoordinatedFakeEffectAdapter,
+  type CoordinatedLaneLockProvider,
+  type CoordinatedRecoveryContext,
+  type CoordinatedWorkerIdentity,
+  type CoordinatedWorkerProvider
 } from './coordinated-automation-recovery-context'
 import {
   type CoordinatedRunOutcome,
@@ -80,6 +81,8 @@ export type CoordinatedAutomationAdapterContext = {
   durableBoundary?: CoordinatedBoundaryHook
   effectAdapter?: CoordinatedFakeEffectAdapter
   laneLocks?: CoordinatedLaneLockProvider
+  /** Host lifetime gate; once false, the adapter refuses new claims, writes, and dispatches. */
+  isActive?: () => boolean
 }
 
 export class CoordinatedAutomationAdapter {
@@ -111,7 +114,8 @@ export class CoordinatedAutomationAdapter {
       laneLocks: ctx.laneLocks,
       workspacePath: ctx.workspacePath,
       trustedAuthorIdentity: ctx.trustedAuthorIdentity,
-      inFlightTaskIds: new Set()
+      inFlightTaskIds: new Set(),
+      isActive: ctx.isActive ?? (() => true)
     }
     this.#runInParentLane =
       ctx.runInParentLane ??
@@ -207,6 +211,7 @@ export class CoordinatedAutomationAdapter {
   async reconcileRun(automationRunId: string): Promise<CoordinatedRunOutcome> {
     const run = this.#getRunOrThrow(automationRunId)
     return this.runInParentLane(run.automationId, async () => {
+      assertCoordinatorActive(this.#ctx)
       await this.materializeRun(automationRunId)
       return reconcileCoordinatedRun(this.#ctx, automationRunId, (ledger) =>
         this.#ledgers.set(automationRunId, ledger)
@@ -288,7 +293,7 @@ export class CoordinatedAutomationAdapter {
 
 function defaultProgressStore(): CoordinatedRunProgressStore {
   return createFileCoordinatedRunProgressStore(
-    join(app.getPath('userData'), 'coordinated-automation-progress')
+    join(getAppEnvironment().getPath('userData'), 'coordinated-automation-progress')
   )
 }
 

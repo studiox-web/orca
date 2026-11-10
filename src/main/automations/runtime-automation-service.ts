@@ -20,6 +20,9 @@ import {
   createRuntimeAutomationRunTerminalObserver
 } from './runtime-terminal-run-observer'
 import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-terminals'
+import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
+import { createCoordinatedRunHostBinding } from './coordinated-automation-run-host'
+import type { CoordinatedRunHostInjection } from './coordinated-automation-run-host-types'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -30,8 +33,21 @@ export function createRuntimeAutomationService(input: {
   codexUsage?: CodexUsageStore
   /** Execute remote_host_service schedules through the headless dispatcher. */
   headless: boolean
+  /** Opt-in fake coordinated runs for an unpackaged test/developer profile; absent by default. */
+  coordinatedRuns?: CoordinatedRunHostInjection
 }): AutomationService {
   const { store, runtime, claudeUsage, codexUsage } = input
+  const coordinated = createCoordinatedRunHostBinding({
+    store,
+    injection: input.coordinatedRuns,
+    headless: input.headless,
+    environment: hasAppEnvironment()
+      ? {
+          isPackaged: () => getAppEnvironment().isPackaged(),
+          userDataPath: () => getAppEnvironment().getPath('userData')
+        }
+      : null
+  })
   // Launch handles remain usable before pane-key lookup resolves.
   const launchedHandles = new Map<string, string>()
   const observer = createRuntimeAutomationRunTerminalObserver(runtime, {
@@ -147,6 +163,7 @@ export function createRuntimeAutomationService(input: {
       }
     },
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
+    recoverCoordinatedRuns: coordinated.recoverCoordinatedRuns,
     allowRemoteHostScheduling: input.headless,
     chatDispatcher: async (request) => {
       const { terminalHandle, ...launch } = await launchAutomationChatAgent(runtime, {
@@ -178,6 +195,7 @@ export function createRuntimeAutomationService(input: {
         }
       : undefined
   })
+  coordinated.attach(service)
   runtime.setAutomationService(service)
   if (input.headless) {
     bindHeadlessRunTerminalRetention(service, store, runtime)

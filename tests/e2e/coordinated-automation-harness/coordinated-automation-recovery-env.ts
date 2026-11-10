@@ -18,10 +18,14 @@ import {
   CoordinatedAutomationAdapter,
   type CoordinatedAutomationAdapterContext,
   type CoordinatedHostApproval,
-  type CoordinatedWorkerIdentity
+  type CoordinatedWorkerIdentity,
+  type CoordinatedWorkerProvider
 } from '../../../src/main/automations/coordinated-automation-adapter'
 import { deterministicCoordinatedEffectId } from '../../../src/main/automations/coordinated-automation-effect-gate'
-import type { CoordinatedDurableBoundary } from '../../../src/main/automations/coordinated-automation-progress-ledger'
+import type {
+  CoordinatedBoundaryHook,
+  CoordinatedDurableBoundary
+} from '../../../src/main/automations/coordinated-automation-progress-ledger'
 import { createFileCoordinatedRunProgressStore } from '../../../src/main/automations/coordinated-automation-progress-store'
 import type { CoordinatedLaneLockProvider } from '../../../src/main/automations/coordinated-automation-recovery-context'
 
@@ -87,53 +91,68 @@ export class RecoveryEnv {
       orchestrationDb: this.db,
       workspacePath: this.workspacePath,
       progressStore: createFileCoordinatedRunProgressStore(join(this.harness.root, 'progress')),
-      clock: {
-        now: () => this.harness.clock.now(),
-        setTimer: (delayMs, callback) => {
-          const id = this.harness.clock.scheduleIn('stage-deadline', delayMs, callback)
-          return () => void this.harness.clock.cancel(id)
-        }
-      },
+      clock: this.clock(),
       effectAdapter: this.harness.effects,
       laneLocks: this.laneLocks,
       hostApprovals: () => this.approvals(),
-      durableBoundary: (boundary, detail) => {
-        const index = this.boundaries.length
-        this.boundaries.push({ boundary, label: detail.label ?? '' })
-        this.harness.trace.record(this.harness.clock.now(), 'coordinator.boundary', detail, {
-          boundary
-        })
-        if (this.crashAtBoundaryIndex === index) {
-          this.crashAtBoundaryIndex = null
+      durableBoundary: this.boundaryHook(),
+      workerProvider: this.workerProvider()
+    }
+  }
+
+  /** Records every coordinator durable boundary and throws at an armed one. */
+  boundaryHook(): CoordinatedBoundaryHook {
+    return (boundary, detail) => {
+      const index = this.boundaries.length
+      this.boundaries.push({ boundary, label: detail.label ?? '' })
+      this.harness.trace.record(this.harness.clock.now(), 'coordinator.boundary', detail, {
+        boundary
+      })
+      if (this.crashAtBoundaryIndex === index) {
+        this.crashAtBoundaryIndex = null
+        throw new InjectedCoordinatorCrash(boundary, index)
+      }
+      if (this.crashOn?.boundary === boundary) {
+        this.crashOn.seen += 1
+        if (this.crashOn.seen === this.crashOn.occurrence) {
+          this.crashOn = null
           throw new InjectedCoordinatorCrash(boundary, index)
         }
-        if (this.crashOn?.boundary === boundary) {
-          this.crashOn.seen += 1
-          if (this.crashOn.seen === this.crashOn.occurrence) {
-            this.crashOn = null
-            throw new InjectedCoordinatorCrash(boundary, index)
-          }
+      }
+    }
+  }
+
+  /** Harness clock with deadline timers; shared by every coordinator generation. */
+  clock(): { now: () => number; setTimer: (delayMs: number, callback: () => void) => () => void } {
+    return {
+      now: () => this.harness.clock.now(),
+      setTimer: (delayMs, callback) => {
+        const id = this.harness.clock.scheduleIn('stage-deadline', delayMs, callback)
+        return () => void this.harness.clock.cancel(id)
+      }
+    }
+  }
+
+  /** Scripted fake_no_effects provider; never a real agent. */
+  workerProvider(): CoordinatedWorkerProvider {
+    return {
+      capability: 'fake_no_effects',
+      estimateCostUsd: () => this.costPerAttemptUsd,
+      run: async (identity) => {
+        const attempt = (this.attempts.get(identity.childDefinitionId) ?? 0) + 1
+        this.attempts.set(identity.childDefinitionId, attempt)
+        const script = this.scripts.get(identity.childDefinitionId)
+        if (!script) {
+          throw new Error(`No script for ${identity.childDefinitionId}`)
         }
-      },
-      workerProvider: {
-        capability: 'fake_no_effects',
-        estimateCostUsd: () => this.costPerAttemptUsd,
-        run: async (identity) => {
-          const attempt = (this.attempts.get(identity.childDefinitionId) ?? 0) + 1
-          this.attempts.set(identity.childDefinitionId, attempt)
-          const script = this.scripts.get(identity.childDefinitionId)
-          if (!script) {
-            throw new Error(`No script for ${identity.childDefinitionId}`)
-          }
-          this.running += 1
-          this.maxRunning = Math.max(this.maxRunning, this.running)
-          try {
-            const actions = await script(identity, attempt, this)
-            this.harness.workers.script({ identity, actions })
-            return await this.harness.workers.run(identity)
-          } finally {
-            this.running -= 1
-          }
+        this.running += 1
+        this.maxRunning = Math.max(this.maxRunning, this.running)
+        try {
+          const actions = await script(identity, attempt, this)
+          this.harness.workers.script({ identity, actions })
+          return await this.harness.workers.run(identity)
+        } finally {
+          this.running -= 1
         }
       }
     }
@@ -168,6 +187,10 @@ export class RecoveryEnv {
       scheduledFor: 1000
     })
     return { automationId: automation.id, runId: run!.id }
+  }
+
+  createDefinitionOnly(input: CoordinatedAutomationCreateInput): { automationId: string } {
+    return { automationId: this.store.createCoordinatedAutomation(input).id }
   }
 
   run(runId: string) {

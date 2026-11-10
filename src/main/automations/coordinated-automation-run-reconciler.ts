@@ -18,6 +18,7 @@ import {
   withStage
 } from './coordinated-automation-progress-ledger'
 import {
+  assertCoordinatorActive,
   type CoordinatedPassContext,
   type CoordinatedRecoveryContext,
   coordinatedWorkerAuthorIdentity
@@ -226,6 +227,7 @@ export async function reconcileCoordinatedRun(
   if (!snapshot || !run.orchestrationRunId || run.materializationPhase !== 'ready_for_dispatch') {
     throw new Error(`Run "${automationRunId}" is not ready for dispatch.`)
   }
+  assertCoordinatorActive(base)
   const ledger = CoordinatedProgressLedger.claim({
     store: base.progressStore,
     automationRunId,
@@ -238,6 +240,7 @@ export async function reconcileCoordinatedRun(
   const ctx: CoordinatedPassContext = { ...base, ledger }
   let waiting: string[] = []
   for (let pass = 0; pass < MAX_PASSES; pass += 1) {
+    assertCoordinatorActive(ctx)
     run = requireRun(ctx, automationRunId)
     let progressed = reconcileStartingAttempts(ctx, run)
     progressed = admitSettledAttempts(ctx, run, snapshot) || progressed
