@@ -1,13 +1,20 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
-import { isAbsolute, join } from 'node:path'
 import Ajv, { type ValidateFunction } from 'ajv'
 import { StructuredWorkerResultSchema } from '../../shared/coordinated-automation-receipt-schemas'
-import type { StructuredWorkerResult } from '../../shared/coordinated-automation-receipt-types'
+import type {
+  SemanticReceiptApproval,
+  SemanticReceiptEffect,
+  StructuredWorkerResult
+} from '../../shared/coordinated-automation-receipt-types'
 import type {
   ResolvedAutomationRunSnapshot,
   ResolvedChildSnapshot
 } from '../../shared/coordinated-automation-types'
+import {
+  matchesPathPattern,
+  validateWorkerArtifacts
+} from './coordinated-automation-artifact-validation'
+
+export { matchesPathPattern }
 
 export type WorkerResultValidationContext = Readonly<{
   automationRunId: string
@@ -21,26 +28,13 @@ export type WorkerResultValidationContext = Readonly<{
   snapshot: ResolvedAutomationRunSnapshot
   workspacePath?: string
   checkArtifactExistence?: (uri: string) => boolean
+  hostApprovals?: readonly SemanticReceiptApproval[]
+  hostEffectReceipts?: readonly SemanticReceiptEffect[]
 }>
 
 export type WorkerResultValidationOutcome =
   | { valid: true; report: StructuredWorkerResult }
   | { valid: false; error: string }
-
-export function matchesPathPattern(uri: string, pattern: string): boolean {
-  const cleanUri = uri.replace(/^artifact:\/\//, '').replace(/^\/+/, '')
-  const cleanPattern = pattern.replace(/^artifact:\/\//, '').replace(/^\/+/, '')
-  if (cleanUri === cleanPattern) {
-    return true
-  }
-  const regexStr = cleanPattern
-    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*\*/g, '@@DOUBLE_STAR@@')
-    .replace(/\*/g, '[^/]*')
-    .replace(/@@DOUBLE_STAR@@/g, '.*')
-    .replace(/\?/g, '[^/]')
-  return new RegExp(`^${regexStr}$`).test(cleanUri)
-}
 
 export function validateLaunchPolicy(
   child: ResolvedChildSnapshot,
@@ -65,6 +59,19 @@ export function validateStructuredWorkerResult(
   report: unknown,
   context: WorkerResultValidationContext
 ): WorkerResultValidationOutcome {
+  const rawReport = report as Record<string, unknown>
+  if (
+    rawReport.approvals !== undefined ||
+    rawReport.effectReceipts !== undefined ||
+    rawReport.approverIdentity !== undefined ||
+    rawReport.authorizedEffects !== undefined
+  ) {
+    return {
+      valid: false,
+      error: 'Worker report cannot smuggle approval or effect trust authority.'
+    }
+  }
+
   const parsed = StructuredWorkerResultSchema.safeParse(report)
   if (!parsed.success) {
     return {
@@ -144,71 +151,18 @@ export function validateStructuredWorkerResult(
     }
   }
 
-  for (const artifact of data.artifacts) {
-    if (
-      artifact.producerAttempt &&
-      (artifact.producerAttempt.taskId !== context.taskId ||
-        artifact.producerAttempt.dispatchId !== context.dispatchId)
-    ) {
-      return {
-        valid: false,
-        error: `Artifact producerAttempt mismatch: expected task ${context.taskId} dispatch ${context.dispatchId}.`
-      }
+  const artifactValidation = validateWorkerArtifacts(
+    data.artifacts,
+    context.child.stageAcceptance,
+    {
+      taskId: context.taskId,
+      dispatchId: context.dispatchId,
+      workspacePath: context.workspacePath,
+      checkArtifactExistence: context.checkArtifactExistence
     }
-    if (artifact.sha256 && !/^sha256:[0-9a-f]{64}$/.test(artifact.sha256)) {
-      return {
-        valid: false,
-        error: `Artifact "${artifact.uri}" sha256 "${artifact.sha256}" is not a valid lowercase hex digest.`
-      }
-    }
-    if (context.checkArtifactExistence && !context.checkArtifactExistence(artifact.uri)) {
-      return {
-        valid: false,
-        error: `Artifact "${artifact.uri}" does not exist according to host artifact existence probe.`
-      }
-    }
-    const cleanUri = artifact.uri.replace(/^file:\/\//, '').replace(/^artifact:\/\//, '')
-    const fullPath = isAbsolute(cleanUri)
-      ? cleanUri
-      : context.workspacePath
-        ? join(context.workspacePath, cleanUri)
-        : null
-
-    if (fullPath) {
-      if (!existsSync(fullPath)) {
-        return {
-          valid: false,
-          error: `Artifact file "${artifact.uri}" does not exist on disk at "${fullPath}".`
-        }
-      }
-      if (artifact.sha256) {
-        const computed = `sha256:${createHash('sha256').update(readFileSync(fullPath)).digest('hex')}`
-        if (computed !== artifact.sha256) {
-          return {
-            valid: false,
-            error: `Artifact "${artifact.uri}" digest mismatch: expected ${artifact.sha256}, computed ${computed}.`
-          }
-        }
-      }
-    }
-  }
-
-  for (const req of context.child.stageAcceptance?.requiredArtifacts ?? []) {
-    if (req.required !== false) {
-      const match = data.artifacts.find((a) => a.kind === req.kind)
-      if (!match) {
-        return {
-          valid: false,
-          error: `Required stage artifact kind "${req.kind}" missing from worker result.`
-        }
-      }
-      if (req.pathPattern && !matchesPathPattern(match.uri, req.pathPattern)) {
-        return {
-          valid: false,
-          error: `Artifact "${match.uri}" does not match required pathPattern "${req.pathPattern}".`
-        }
-      }
-    }
+  )
+  if (!artifactValidation.valid) {
+    return { valid: false, error: artifactValidation.error }
   }
 
   for (const criterion of context.child.stageAcceptance?.criteria ?? []) {
@@ -245,17 +199,13 @@ export function validateStructuredWorkerResult(
 
   for (const req of context.child.stageAcceptance?.requiredApprovals ?? []) {
     if (req.required !== false) {
-      const approvals = ((report as Record<string, unknown>).approvals ??
-        (data as Record<string, unknown>).approvals) as
-        | { approvalId?: string; role?: string; approverIdentity?: string }[]
-        | undefined
-      const match = approvals?.find(
+      const match = context.hostApprovals?.find(
         (a) => a.role === req.role && Boolean(a.approverIdentity?.trim())
       )
       if (!match) {
         return {
           valid: false,
-          error: `Required stage approval role "${req.role}" is missing from worker result.`
+          error: `Required stage approval role "${req.role}" missing from host approvals.`
         }
       }
     }

@@ -1,6 +1,10 @@
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import type { Store } from '../persistence/loading-store/store'
 import type { CoordinatedOrchestrationRecordProbe } from '../persistence/scheduling-automations/coordinated-automation-run-records'
+import type {
+  SemanticReceiptApproval,
+  SemanticReceiptEffect
+} from '../../shared/coordinated-automation-receipt-types'
 import { CoordinatedAutomationLaunchRefusedError } from './coordinated-automation-materialization'
 import {
   validateLaunchPolicy,
@@ -19,6 +23,9 @@ export async function executeCoordinatedTaskDispatch(input: {
   orchestrationDb: OrchestrationDb
   probe: CoordinatedOrchestrationRecordProbe
   workerProvider: CoordinatedWorkerProvider
+  hostApprovals?: readonly SemanticReceiptApproval[]
+  hostEffectReceipts?: readonly SemanticReceiptEffect[]
+  workspacePath?: string
 }): Promise<{ taskId: string; dispatchId: string; outcome: string }> {
   const {
     automationRunId,
@@ -155,7 +162,9 @@ export async function executeCoordinatedTaskDispatch(input: {
     canonicalDigest: snapshot.canonicalDigest,
     child,
     snapshot,
-    workspacePath
+    workspacePath: input.workspacePath ?? workspacePath,
+    hostApprovals: input.hostApprovals,
+    hostEffectReceipts: input.hostEffectReceipts
   })
 
   if (!validation.valid) {

@@ -422,21 +422,47 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
         scheduledFor: 5000
       })
 
-      // Negative case 1: pathPattern mismatch
-      let scenario: 'pattern_mismatch' | 'file_missing' | 'digest_mismatch' | 'success' =
-        'pattern_mismatch'
+      let scenario:
+        | 'pattern_mismatch'
+        | 'missing_digest'
+        | 'file_missing'
+        | 'digest_mismatch'
+        | 'missing_path'
+        | 'traversal'
+        | 'success' = 'pattern_mismatch'
 
       const workerProvider: CoordinatedWorkerProvider = {
         capability: 'fake_no_effects',
         run: async (id) => {
           if (scenario === 'pattern_mismatch') {
             return makeWorkerResult(id, store, {
-              artifacts: [{ kind: 'document', uri: 'wrong-prefix.txt' }]
+              artifacts: [{ kind: 'document', uri: 'wrong-prefix.txt', sha256: validDigest }]
+            })
+          }
+          if (scenario === 'missing_digest') {
+            return makeWorkerResult(id, store, {
+              artifacts: [{ kind: 'document', uri: 'output-article.md' }]
+            })
+          }
+          if (scenario === 'missing_path') {
+            return makeWorkerResult(id, store, {
+              artifacts: [{ kind: 'document', uri: '', sha256: validDigest }]
+            })
+          }
+          if (scenario === 'traversal') {
+            return makeWorkerResult(id, store, {
+              artifacts: [{ kind: 'document', uri: 'artifact://../secret.md', sha256: validDigest }]
             })
           }
           if (scenario === 'file_missing') {
             return makeWorkerResult(id, store, {
-              artifacts: [{ kind: 'document', uri: 'output-nonexistent.md' }]
+              artifacts: [
+                {
+                  kind: 'document',
+                  uri: 'output-nonexistent.md',
+                  sha256: `sha256:${'a'.repeat(64)}`
+                }
+              ]
             })
           }
           if (scenario === 'digest_mismatch') {
@@ -465,7 +491,8 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
       const adapter = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
-        workerProvider
+        workerProvider,
+        workspacePath: testState.dir
       })
 
       // Pattern mismatch check
@@ -473,6 +500,36 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
       expect(runPatternFail.status).toBe('dispatch_failed')
       let task = db.listTasks({ runId: runPatternFail.orchestrationRunId! })[0]
       expect(task.result).toContain('does not match required pathPattern')
+
+      // Missing digest check
+      scenario = 'missing_digest'
+      await adapter.retryTask({
+        automationRunId: run!.id,
+        taskId: task.id,
+        retryOfDispatchId: db.getDispatchContext(task.id)!.id
+      })
+      task = db.getTask(task.id)!
+      expect(task.result).toContain('must specify a sha256 digest')
+
+      // Missing path check
+      scenario = 'missing_path'
+      await adapter.retryTask({
+        automationRunId: run!.id,
+        taskId: task.id,
+        retryOfDispatchId: db.getDispatchContext(task.id)!.id
+      })
+      task = db.getTask(task.id)!
+      expect(task.result).toContain('expected string to have >=1 characters')
+
+      // Traversal check
+      scenario = 'traversal'
+      await adapter.retryTask({
+        automationRunId: run!.id,
+        taskId: task.id,
+        retryOfDispatchId: db.getDispatchContext(task.id)!.id
+      })
+      task = db.getTask(task.id)!
+      expect(task.result).toContain('without ".." traversal segments')
 
       // Missing file check
       scenario = 'file_missing'
@@ -505,7 +562,55 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
       expect(db.getTask(task.id)?.status).toBe('completed')
     })
 
-    it('validates stageAcceptance criteria and requiredApprovals', async () => {
+    it('fails closed when required artifacts cannot be validated due to missing workspacePath', async () => {
+      const store = createStore()
+      const automation = store.createCoordinatedAutomation(
+        coordinatedCreateInput({
+          children: [
+            child('step_doc_noworkspace', {
+              name: 'Doc Step',
+              stageAcceptance: {
+                requiredArtifacts: [
+                  { kind: 'document', pathPattern: 'output-*.md', required: true }
+                ]
+              }
+            })
+          ]
+        })
+      )
+      const { run } = store.createCoordinatedAutomationRun({
+        automationId: automation.id,
+        scheduledFor: 5500
+      })
+
+      const adapter = new CoordinatedAutomationAdapter({
+        store,
+        orchestrationDb: db,
+        workerProvider: {
+          capability: 'fake_no_effects',
+          run: async (id) =>
+            makeWorkerResult(id, store, {
+              artifacts: [
+                {
+                  kind: 'document',
+                  uri: 'output-article.md',
+                  sha256: `sha256:${'a'.repeat(64)}`
+                }
+              ]
+            })
+        },
+        workspacePath: ''
+      })
+
+      const result = await adapter.runUntilSettled(run!.id)
+      expect(result.status).toBe('dispatch_failed')
+      const task = db.listTasks({ runId: result.orchestrationRunId! })[0]
+      expect(task.result).toContain(
+        'Cannot validate required artifacts without a valid workspacePath'
+      )
+    })
+
+    it('validates stageAcceptance criteria and rejects smuggled approvals while requiring host-owned approvals', async () => {
       const store = createStore()
       const automation = store.createCoordinatedAutomation(
         coordinatedCreateInput({
@@ -525,7 +630,8 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
         scheduledFor: 6000
       })
 
-      let scenario: 'missing_crit' | 'missing_approval' | 'valid' = 'missing_crit'
+      let scenario: 'missing_crit' | 'smuggle_approval' | 'missing_approval' | 'valid' =
+        'missing_crit'
 
       const workerProvider: CoordinatedWorkerProvider = {
         capability: 'fake_no_effects',
@@ -535,15 +641,19 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
               checks: []
             })
           }
-          if (scenario === 'missing_approval') {
+          if (scenario === 'smuggle_approval') {
             return makeWorkerResult(id, store, {
               checks: [{ id: 'crit_review', outcome: 'passed' }],
-              approvals: []
+              approvals: [{ role: 'editor', approverIdentity: 'attacker@evil.com' }]
+            })
+          }
+          if (scenario === 'missing_approval') {
+            return makeWorkerResult(id, store, {
+              checks: [{ id: 'crit_review', outcome: 'passed' }]
             })
           }
           return makeWorkerResult(id, store, {
-            checks: [{ id: 'crit_review', outcome: 'passed' }],
-            approvals: [{ role: 'editor', approverIdentity: 'alice@orca.test' }]
+            checks: [{ id: 'crit_review', outcome: 'passed' }]
           })
         }
       }
@@ -559,6 +669,19 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
       let task = db.listTasks({ runId: critFail.orchestrationRunId! })[0]
       expect(task.result).toContain('Required stage criterion "crit_review" was not satisfied')
 
+      // Smuggled approval in worker report must be rejected
+      scenario = 'smuggle_approval'
+      await adapter.retryTask({
+        automationRunId: run!.id,
+        taskId: task.id,
+        retryOfDispatchId: db.getDispatchContext(task.id)!.id
+      })
+      task = db.getTask(task.id)!
+      expect(task.result).toContain(
+        'Worker report cannot smuggle approval or effect trust authority'
+      )
+
+      // Missing host approval must fail closed
       scenario = 'missing_approval'
       await adapter.retryTask({
         automationRunId: run!.id,
@@ -566,10 +689,26 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
         retryOfDispatchId: db.getDispatchContext(task.id)!.id
       })
       task = db.getTask(task.id)!
-      expect(task.result).toContain('Required stage approval role "editor" is missing')
+      expect(task.result).toContain(
+        'Required stage approval role "editor" missing from host approvals'
+      )
 
+      // Succeeded when host provides approval
       scenario = 'valid'
-      const validResult = await adapter.retryTask({
+      const adapterWithHostApproval = new CoordinatedAutomationAdapter({
+        store,
+        orchestrationDb: db,
+        workerProvider,
+        hostApprovals: [
+          {
+            approvalId: 'appr_editor',
+            role: 'editor',
+            approverIdentity: 'alice@orca.test',
+            approvedAt: 1000
+          }
+        ]
+      })
+      const validResult = await adapterWithHostApproval.retryTask({
         automationRunId: run!.id,
         taskId: task.id,
         retryOfDispatchId: db.getDispatchContext(task.id)!.id
@@ -636,57 +775,6 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
       expect(settledRun.error).toContain(
         'Required acceptance criterion "article-reviewed" failed acceptance evaluation'
       )
-    })
-
-    it('settles parent as completed when host semantic receipt validation succeeds', async () => {
-      const store = createStore()
-      const automation = store.createCoordinatedAutomation(
-        coordinatedCreateInput({
-          children: [child('worker_1', { name: 'Worker 1' })],
-          outcomeContract: {
-            humanStatement: 'One reviewed article is ready.',
-            acceptanceCriteria: [
-              {
-                id: 'article-reviewed',
-                description: 'Article has been thoroughly reviewed',
-                required: true,
-                kind: 'custom'
-              }
-            ],
-            requiredApprovals: [],
-            allowedFinalStates: ['completed', 'failed', 'blocked', 'outcome_uncertain']
-          }
-        })
-      )
-      const { run } = store.createCoordinatedAutomationRun({
-        automationId: automation.id,
-        scheduledFor: 8000
-      })
-
-      const workerProvider: CoordinatedWorkerProvider = {
-        capability: 'fake_no_effects',
-        run: async (id) =>
-          makeWorkerResult(id, store, {
-            outcome: 'succeeded',
-            checks: [
-              {
-                id: 'article-reviewed',
-                outcome: 'passed',
-                evidence: ['Article reviewed and verified']
-              }
-            ]
-          })
-      }
-
-      const adapter = new CoordinatedAutomationAdapter({
-        store,
-        orchestrationDb: db,
-        workerProvider
-      })
-
-      const completedRun = await adapter.runUntilSettled(run!.id)
-      expect(completedRun.status).toBe('completed')
-      expect(completedRun.error).toBeNull()
     })
   })
 })

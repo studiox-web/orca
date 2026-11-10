@@ -103,9 +103,16 @@ export function materializeCoordinatedRun(
 
     if (existingRun) {
       if (
+        existingRun.id !== exactRunId ||
+        (run.orchestrationRunId && existingRun.id !== run.orchestrationRunId) ||
         existingRun.objective !== objective ||
         existingRun.coordinator_handle !== null ||
         existingRun.coordinator_pane_key !== null ||
+        existingRun.coordinator_orca_session_id !== null ||
+        (existingRun.coordinator_orca_session_id_generation !== null &&
+          existingRun.coordinator_orca_session_id_generation !== 1) ||
+        existingRun.consumer_generation !== 1 ||
+        existingRun.legacy !== 0 ||
         existingRun.home_database !== 'this_database'
       ) {
         throw new CoordinatedAutomationLaunchRefusedError(
@@ -159,12 +166,30 @@ export function materializeCoordinatedRun(
           Array.isArray(existingDeps) &&
           existingDeps.length === deps.length &&
           existingDeps.every((d, i) => d === deps[i])
+        const validTitle =
+          existingTask.task_title === null ||
+          existingTask.task_title === child.name ||
+          existingTask.task_title === `${child.name} (${child.role})`
+        const validGeneration =
+          existingTask.created_by_run_generation === null ||
+          existingTask.created_by_run_generation === 1
+        const validStatus = ['pending', 'ready', 'dispatched', 'completed'].includes(
+          existingTask.status
+        )
 
         if (
+          existingTask.id !== exactTaskId ||
           existingTask.run_id !== run.orchestrationRunId ||
-          existingTask.spec !== child.prompt.text ||
+          existingTask.parent_id !== null ||
+          !validTitle ||
           existingTask.display_name !== child.name ||
-          !depsMatch
+          existingTask.spec !== child.prompt.text ||
+          !depsMatch ||
+          existingTask.created_by_terminal_handle !== null ||
+          existingTask.created_by_pane_key !== null ||
+          existingTask.created_by_process_incarnation !== null ||
+          !validGeneration ||
+          !validStatus
         ) {
           throw new CoordinatedAutomationLaunchRefusedError(
             `Existing native Task "${exactTaskId}" does not match coordinated child definition "${child.childDefinitionId}".`
@@ -176,7 +201,7 @@ export function materializeCoordinatedRun(
           runId: run.orchestrationRunId!,
           spec: child.prompt.text,
           displayName: child.name,
-          taskTitle: `${child.name} (${child.role})`,
+          taskTitle: child.name,
           deps
         })
       }

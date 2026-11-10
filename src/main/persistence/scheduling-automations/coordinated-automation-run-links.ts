@@ -1,6 +1,9 @@
 import type { AutomationRun } from '../../../shared/automations-types'
 import { detachCoordinatedRun } from '../../../shared/coordinated-automation-run-seal'
 import type { CoordinatedRunChildMapping } from '../../../shared/coordinated-automation-saga-types'
+import type { SemanticCompletionReceipt } from '../../../shared/coordinated-automation-receipt-types'
+import type { CoordinatedCompletionTrust } from '../../../shared/coordinated-automation-types'
+import { coordinatedRunProblem } from '../../../shared/coordinated-automation-run-validation'
 import {
   assertPhase,
   CoordinatedRunConflictError,
@@ -218,13 +221,37 @@ export function recordCoordinatedRunSettlement(
     automationRunId: string
     status: 'completed' | 'dispatch_failed'
     error?: string | null
+    completionReceipt?: SemanticCompletionReceipt | null
+    completionTrust?: CoordinatedCompletionTrust | null
   }
 ): AutomationRun {
   const run = requireCoordinatedRun(operations, input.automationRunId)
   assertPhase(run, ['ready_for_dispatch'])
-  return replaceRun(operations, {
+
+  if (input.status === 'completed') {
+    if (!input.completionReceipt || !input.completionTrust) {
+      throw new Error(
+        `Cannot settle run "${input.automationRunId}" as completed without trusted completionReceipt and completionTrust.`
+      )
+    }
+  }
+
+  const updatedRun: AutomationRun = {
     ...run,
     status: input.status,
-    error: input.error ?? null
-  })
+    error: input.error ?? null,
+    ...(input.completionReceipt !== undefined
+      ? { completionReceipt: input.completionReceipt }
+      : {}),
+    ...(input.completionTrust !== undefined ? { completionTrust: input.completionTrust } : {})
+  }
+
+  if (input.status === 'completed') {
+    const problem = coordinatedRunProblem(updatedRun)
+    if (problem) {
+      throw new Error(`Cannot settle coordinated run "${input.automationRunId}": ${problem}`)
+    }
+  }
+
+  return replaceRun(operations, updatedRun)
 }

@@ -6,6 +6,8 @@ import type {
   CoordinatedAutomationUpdateInput
 } from '../../../shared/automations-types'
 import type { CoordinatedRunChildMapping } from '../../../shared/coordinated-automation-saga-types'
+import type { SemanticCompletionReceipt } from '../../../shared/coordinated-automation-receipt-types'
+import type { CoordinatedCompletionTrust } from '../../../shared/coordinated-automation-types'
 import type {
   AutomationDestination,
   AutomationOwnerPrecondition,
@@ -160,6 +162,8 @@ export class CoordinatedAutomationPersistence {
     automationRunId: string
     status: 'completed' | 'dispatch_failed'
     error?: string | null
+    completionReceipt?: SemanticCompletionReceipt | null
+    completionTrust?: CoordinatedCompletionTrust | null
   }): AutomationRun {
     return recordCoordinatedRunSettlementOperation(
       getCoordinatedAutomationRunOperations(this[coordinatedAutomationPersistenceContext]),

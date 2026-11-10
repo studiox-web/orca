@@ -1,6 +1,10 @@
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { isCoordinatedAutomation } from '../../shared/coordinated-automation-types'
-import type { StructuredWorkerResult } from '../../shared/coordinated-automation-receipt-types'
+import type {
+  SemanticReceiptApproval,
+  SemanticReceiptEffect,
+  StructuredWorkerResult
+} from '../../shared/coordinated-automation-receipt-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import type { Store } from '../persistence/loading-store/store'
 import type { CoordinatedOrchestrationRecordProbe } from '../persistence/scheduling-automations/coordinated-automation-run-records'
@@ -39,6 +43,10 @@ export type CoordinatedAutomationAdapterContext = {
   orchestrationDb: OrchestrationDb
   workerProvider?: CoordinatedWorkerProvider
   runInParentLane?: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
+  hostApprovals?: readonly SemanticReceiptApproval[]
+  hostEffectReceipts?: readonly SemanticReceiptEffect[]
+  workspacePath?: string
+  trustedAuthorIdentity?: string
 }
 
 export class CoordinatedAutomationAdapter {
@@ -47,6 +55,10 @@ export class CoordinatedAutomationAdapter {
   readonly #workerProvider: CoordinatedWorkerProvider
   readonly #probe: CoordinatedOrchestrationRecordProbe
   readonly #runInParentLane: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
+  readonly #hostApprovals?: readonly SemanticReceiptApproval[]
+  readonly #hostEffectReceipts?: readonly SemanticReceiptEffect[]
+  readonly #workspacePath?: string
+  readonly #trustedAuthorIdentity?: string
   readonly #parentLanes = new Map<string, Promise<void>>()
   readonly #activeTasks = new Set<string>()
 
@@ -54,28 +66,32 @@ export class CoordinatedAutomationAdapter {
     this.#store = ctx.store
     this.#orchestrationDb = ctx.orchestrationDb
     this.#probe = orchestrationRecordProbe(ctx.orchestrationDb)
+    this.#hostApprovals = ctx.hostApprovals
+    this.#hostEffectReceipts = ctx.hostEffectReceipts
+    this.#workspacePath = ctx.workspacePath
+    this.#trustedAuthorIdentity = ctx.trustedAuthorIdentity
     this.#workerProvider = ctx.workerProvider ?? {
       capability: 'fake_no_effects',
-      run: async (identity) => {
-        const run = this.#store.listAutomationRuns().find((r) => r.id === identity.automationRunId)
-        const revision = run?.resolvedSnapshot?.definitionRevision ?? 1
-        const digest = run?.resolvedSnapshot?.canonicalDigest ?? `sha256:${'0'.repeat(64)}`
-        const criteria = run?.resolvedSnapshot?.outcomeContract.acceptanceCriteria ?? []
-        const defaultChecks = criteria.map((c) => ({
-          id: c.id,
-          outcome: 'passed' as const,
-          evidence: [`Criterion ${c.id} verified passed by fake worker`]
-        }))
+      run: async (id) => {
+        const run = this.#store.listAutomationRuns().find((r) => r.id === id.automationRunId)
+        const checks = (run?.resolvedSnapshot?.outcomeContract.acceptanceCriteria ?? []).map(
+          (c) => ({
+            id: c.id,
+            outcome: 'passed' as const,
+            evidence: [`Criterion ${c.id} verified passed by fake worker`]
+          })
+        )
         return {
           schemaVersion: 1,
-          ...identity,
-          definitionRevision: revision,
-          resolvedConfigDigest: digest,
+          ...id,
+          definitionRevision: run?.resolvedSnapshot?.definitionRevision ?? 1,
+          resolvedConfigDigest:
+            run?.resolvedSnapshot?.canonicalDigest ?? `sha256:${'0'.repeat(64)}`,
           outcome: 'succeeded',
-          summary: `Fake worker ${identity.childDefinitionId} completed`,
-          reportMarkdown: `Fake worker ${identity.childDefinitionId} report`,
+          summary: `Fake worker ${id.childDefinitionId} completed`,
+          reportMarkdown: `Fake worker ${id.childDefinitionId} report`,
           artifacts: [],
-          checks: defaultChecks,
+          checks,
           effects: [],
           blockers: []
         }
@@ -117,18 +133,17 @@ export class CoordinatedAutomationAdapter {
         store: this.#store,
         orchestrationDb: this.#orchestrationDb,
         probe: this.#probe,
-        workerProvider: this.#workerProvider
+        workerProvider: this.#workerProvider,
+        hostApprovals: this.#hostApprovals,
+        hostEffectReceipts: this.#hostEffectReceipts,
+        workspacePath: this.#workspacePath
       })
     } finally {
       this.#activeTasks.delete(taskId)
     }
   }
 
-  async retryTask(input: {
-    automationRunId: string
-    taskId: string
-    retryOfDispatchId: string
-  }): Promise<{ taskId: string; dispatchId: string; outcome: string }> {
+  async retryTask(input: { automationRunId: string; taskId: string; retryOfDispatchId: string }) {
     return this.dispatchTask(input.automationRunId, input.taskId, input.retryOfDispatchId)
   }
 
@@ -168,10 +183,7 @@ export class CoordinatedAutomationAdapter {
       return []
     }
 
-    const results = await Promise.all(
-      candidateTasks.map((task) => this.dispatchTask(automationRunId, task.id))
-    )
-    return results
+    return Promise.all(candidateTasks.map((task) => this.dispatchTask(automationRunId, task.id)))
   }
 
   async runUntilSettled(automationRunId: string): Promise<AutomationRun> {
@@ -182,6 +194,7 @@ export class CoordinatedAutomationAdapter {
       const tasks = this.#orchestrationDb.listTasks({ runId: run.orchestrationRunId! })
       const allSettled = tasks.every((t) => t.status === 'completed' || t.status === 'failed')
       if (allSettled) {
+        run = this.#getRunOrThrow(automationRunId)
         const anyFailed = tasks.some((t) => t.status === 'failed')
         if (anyFailed) {
           run = this.#store.recordCoordinatedRunSettlement({
@@ -196,7 +209,10 @@ export class CoordinatedAutomationAdapter {
           run,
           snapshot: run.resolvedSnapshot!,
           orchestrationDb: this.#orchestrationDb,
-          probe: this.#probe
+          probe: this.#probe,
+          trustedAuthorIdentity: this.#trustedAuthorIdentity,
+          hostApprovals: this.#hostApprovals,
+          hostEffectReceipts: this.#hostEffectReceipts
         })
 
         if (!acceptance.accepted) {
@@ -211,7 +227,9 @@ export class CoordinatedAutomationAdapter {
         run = this.#store.recordCoordinatedRunSettlement({
           automationRunId: run.id,
           status: 'completed',
-          error: null
+          error: null,
+          completionReceipt: acceptance.receipt,
+          completionTrust: acceptance.trust
         })
         break
       }
@@ -237,13 +255,11 @@ export class CoordinatedAutomationAdapter {
     automation: Automation
     run: AutomationRun
   }): Promise<HeadlessAutomationDispatchLaunch> {
-    const runId = request.run.id
-    const completionPromise = this.runUntilSettled(runId)
     return {
       sessionKind: 'terminal',
       workspaceId: request.automation.workspaceId ?? '',
       terminalSessionId: null,
-      completion: completionPromise.then(
+      completion: this.runUntilSettled(request.run.id).then(
         (finalRun) => ({
           status: finalRun.status === 'completed' ? 'completed' : 'dispatch_failed',
           error: finalRun.error ?? null

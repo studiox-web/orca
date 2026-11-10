@@ -3,15 +3,23 @@ import type {
   ReceiptValidationContext,
   SemanticCompletionReceipt,
   SemanticReceiptAcceptanceResult,
-  SemanticReceiptApproval
+  SemanticReceiptApproval,
+  SemanticReceiptEffect
 } from '../../shared/coordinated-automation-receipt-types'
 import { validateReceiptAgainstSnapshot } from '../../shared/coordinated-automation-receipt-validation'
-import type { ResolvedAutomationRunSnapshot } from '../../shared/coordinated-automation-types'
+import type {
+  CoordinatedCompletionTrust,
+  ResolvedAutomationRunSnapshot
+} from '../../shared/coordinated-automation-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import type { CoordinatedOrchestrationRecordProbe } from '../persistence/scheduling-automations/coordinated-automation-run-records'
 
 export type ParentOutcomeAcceptanceResult =
-  | { accepted: true; receipt: SemanticCompletionReceipt }
+  | {
+      accepted: true
+      receipt: SemanticCompletionReceipt
+      trust: CoordinatedCompletionTrust
+    }
   | { accepted: false; errors: string[] }
 
 export function evaluateParentOutcomeAcceptance(input: {
@@ -20,6 +28,13 @@ export function evaluateParentOutcomeAcceptance(input: {
   orchestrationDb: OrchestrationDb
   probe: CoordinatedOrchestrationRecordProbe
   trustedAuthorIdentity?: string
+  hostApprovals?: readonly SemanticReceiptApproval[]
+  hostEffectReceipts?: readonly SemanticReceiptEffect[]
+  waiverPolicy?: {
+    allowedRoles: string[]
+    authorities: { identity: string; role: string }[]
+  }
+  productionDecision?: { approverIdentity: string; role: string; decidedAt: number }
 }): ParentOutcomeAcceptanceResult {
   const { run, snapshot, orchestrationDb, probe } = input
   const orchestrationRunId = run.orchestrationRunId
@@ -40,7 +55,6 @@ export function evaluateParentOutcomeAcceptance(input: {
   }
 
   const allChecks: { id: string; outcome: string; evidence?: string[] }[] = []
-  const allApprovals: SemanticReceiptApproval[] = []
 
   for (const task of tasks) {
     if (task.result) {
@@ -48,9 +62,6 @@ export function evaluateParentOutcomeAcceptance(input: {
         const parsed = JSON.parse(task.result) as Record<string, unknown>
         if (Array.isArray(parsed.checks)) {
           allChecks.push(...parsed.checks)
-        }
-        if (Array.isArray(parsed.approvals)) {
-          allApprovals.push(...parsed.approvals)
         }
       } catch {
         // Raw string summary or non-JSON result; ignored
@@ -91,20 +102,31 @@ export function evaluateParentOutcomeAcceptance(input: {
   }
 
   const lastTask = tasks.at(-1)!
+  const lastMapping = (run.childMappings ?? []).find((m) => m.taskId === lastTask.id)
   const lastDispatchCtx = orchestrationDb.getDispatchContext(lastTask.id)
   const activeAttempt = {
     taskId: lastTask.id,
-    dispatchId: lastDispatchCtx?.id ?? 'ctx_final'
+    dispatchId: lastDispatchCtx?.id ?? lastMapping?.dispatchId ?? 'ctx_final'
+  }
+
+  const authorIdentity = input.trustedAuthorIdentity ?? 'host_service'
+  const trust: CoordinatedCompletionTrust = {
+    authorIdentity,
+    activeAttempt,
+    ...(input.waiverPolicy ? { waiverPolicy: input.waiverPolicy } : {}),
+    ...(input.productionDecision ? { productionDecision: input.productionDecision } : {})
   }
 
   const trustedContext: ReceiptValidationContext = {
-    trustedAuthorIdentity: input.trustedAuthorIdentity ?? 'host_service',
+    trustedAuthorIdentity: authorIdentity,
     trustedHostId: snapshot.executionTarget.id,
     trustedExecutionAuthority: `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}`,
     automationRunId: run.id,
     orchestrationRunId,
     activeAttempt,
-    trustedTaskMappings: run.childMappings ?? []
+    trustedTaskMappings: (run.childMappings ?? []).map((m) => ({ ...m })),
+    ...(input.waiverPolicy ? { waiverPolicy: input.waiverPolicy } : {}),
+    ...(input.productionDecision ? { productionDecision: input.productionDecision } : {})
   }
 
   const receipt: SemanticCompletionReceipt = {
@@ -123,8 +145,8 @@ export function evaluateParentOutcomeAcceptance(input: {
     finalState: 'completed',
     completedAt: Date.now(),
     acceptanceResults,
-    approvals: allApprovals,
-    effectReceipts: [],
+    approvals: input.hostApprovals ? input.hostApprovals.map((a) => ({ ...a })) : [],
+    effectReceipts: input.hostEffectReceipts ? input.hostEffectReceipts.map((e) => ({ ...e })) : [],
     unresolvedWarnings: []
   }
 
@@ -133,5 +155,5 @@ export function evaluateParentOutcomeAcceptance(input: {
     return { accepted: false, errors: validation.errors }
   }
 
-  return { accepted: true, receipt }
+  return { accepted: true, receipt, trust }
 }
