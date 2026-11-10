@@ -3,7 +3,6 @@ import type {
   ReceiptValidationContext,
   SemanticCompletionReceipt,
   SemanticReceiptAcceptanceResult,
-  SemanticReceiptApproval,
   SemanticReceiptEffect
 } from '../../shared/coordinated-automation-receipt-types'
 import { validateReceiptAgainstSnapshot } from '../../shared/coordinated-automation-receipt-validation'
@@ -12,7 +11,47 @@ import type {
   ResolvedAutomationRunSnapshot
 } from '../../shared/coordinated-automation-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
+import type { Store } from '../persistence/loading-store/store'
 import type { CoordinatedOrchestrationRecordProbe } from '../persistence/scheduling-automations/coordinated-automation-run-records'
+import {
+  type CoordinatedHostApproval,
+  resolveParentReceiptApprovals
+} from './coordinated-automation-approval-validation'
+import { CoordinatedAutomationLaunchRefusedError } from './coordinated-automation-materialization'
+
+export function reconcilePersistedCompletionReceipt(input: {
+  run: AutomationRun
+  store: Store
+  trustedAuthorIdentity?: string
+}): AutomationRun | null {
+  const { run, store, trustedAuthorIdentity } = input
+  if (run.status !== 'completed' && run.completionReceipt === null && run.completionTrust == null) {
+    return null
+  }
+  if (!run.completionReceipt || !run.completionTrust) {
+    throw new CoordinatedAutomationLaunchRefusedError(
+      `Completed coordinated run "${run.id}" is missing a valid completionReceipt or completionTrust.`
+    )
+  }
+  if (
+    trustedAuthorIdentity !== undefined &&
+    run.completionTrust.authorIdentity !== trustedAuthorIdentity
+  ) {
+    throw new CoordinatedAutomationLaunchRefusedError(
+      `Completed coordinated run "${run.id}" completionTrust authorIdentity "${run.completionTrust.authorIdentity}" does not match trustedAuthorIdentity "${trustedAuthorIdentity}".`
+    )
+  }
+  if (run.status === 'completed') {
+    return run
+  }
+  return store.recordCoordinatedRunSettlement({
+    automationRunId: run.id,
+    status: 'completed',
+    error: null,
+    completionReceipt: run.completionReceipt,
+    completionTrust: run.completionTrust
+  })
+}
 
 export type ParentOutcomeAcceptanceResult =
   | {
@@ -28,7 +67,7 @@ export function evaluateParentOutcomeAcceptance(input: {
   orchestrationDb: OrchestrationDb
   probe: CoordinatedOrchestrationRecordProbe
   trustedAuthorIdentity?: string
-  hostApprovals?: readonly SemanticReceiptApproval[]
+  hostApprovals?: readonly CoordinatedHostApproval[]
   hostEffectReceipts?: readonly SemanticReceiptEffect[]
   waiverPolicy?: {
     allowedRoles: string[]
@@ -110,6 +149,19 @@ export function evaluateParentOutcomeAcceptance(input: {
   }
 
   const authorIdentity = input.trustedAuthorIdentity ?? 'host_service'
+  const approvalResolution = resolveParentReceiptApprovals(
+    snapshot.outcomeContract.requiredApprovals,
+    input.hostApprovals,
+    {
+      automationRunId: run.id,
+      orchestrationRunId,
+      trustedAuthorIdentity: authorIdentity
+    }
+  )
+  if (!approvalResolution.valid) {
+    return { accepted: false, errors: approvalResolution.errors }
+  }
+
   const trust: CoordinatedCompletionTrust = {
     authorIdentity,
     activeAttempt,
@@ -145,7 +197,7 @@ export function evaluateParentOutcomeAcceptance(input: {
     finalState: 'completed',
     completedAt: Date.now(),
     acceptanceResults,
-    approvals: input.hostApprovals ? input.hostApprovals.map((a) => ({ ...a })) : [],
+    approvals: approvalResolution.approvals,
     effectReceipts: input.hostEffectReceipts ? input.hostEffectReceipts.map((e) => ({ ...e })) : [],
     unresolvedWarnings: []
   }

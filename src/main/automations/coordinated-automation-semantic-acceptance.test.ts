@@ -690,7 +690,7 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
       })
       task = db.getTask(task.id)!
       expect(task.result).toContain(
-        'Required stage approval role "editor" missing from host approvals'
+        'Required stage approval "appr_editor" (role "editor") missing from host approvals'
       )
 
       // Succeeded when host provides approval
@@ -704,7 +704,11 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
             approvalId: 'appr_editor',
             role: 'editor',
             approverIdentity: 'alice@orca.test',
-            approvedAt: 1000
+            approvedAt: 1000,
+            automationRunId: run!.id,
+            orchestrationRunId: critFail.orchestrationRunId!,
+            scope: 'stage',
+            childDefinitionId: 'step_approval'
           }
         ]
       })

@@ -1,7 +1,6 @@
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { isCoordinatedAutomation } from '../../shared/coordinated-automation-types'
 import type {
-  SemanticReceiptApproval,
   SemanticReceiptEffect,
   StructuredWorkerResult
 } from '../../shared/coordinated-automation-receipt-types'
@@ -13,16 +12,27 @@ import type {
   HeadlessAutomationDispatchLaunch
 } from './headless-dispatch'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
+import type { CoordinatedHostApproval } from './coordinated-automation-approval-validation'
 import {
   CoordinatedAutomationLaunchRefusedError,
   materializeCoordinatedRun,
   orchestrationRecordProbe
 } from './coordinated-automation-materialization'
 import { selectEligibleTasksForDispatch } from './coordinated-automation-lane-scheduler'
-import { executeCoordinatedTaskDispatch } from './coordinated-automation-task-execution'
-import { evaluateParentOutcomeAcceptance } from './coordinated-automation-parent-acceptance'
+import {
+  createDefaultFakeNoEffectsWorkerProvider,
+  executeCoordinatedTaskDispatch
+} from './coordinated-automation-task-execution'
+import {
+  evaluateParentOutcomeAcceptance,
+  reconcilePersistedCompletionReceipt
+} from './coordinated-automation-parent-acceptance'
 
-export { CoordinatedAutomationLaunchRefusedError, orchestrationRecordProbe }
+export {
+  type CoordinatedHostApproval,
+  CoordinatedAutomationLaunchRefusedError,
+  orchestrationRecordProbe
+}
 
 export type CoordinatedWorkerIdentity = Readonly<{
   automationRunId: string
@@ -43,7 +53,7 @@ export type CoordinatedAutomationAdapterContext = {
   orchestrationDb: OrchestrationDb
   workerProvider?: CoordinatedWorkerProvider
   runInParentLane?: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
-  hostApprovals?: readonly SemanticReceiptApproval[]
+  hostApprovals?: readonly CoordinatedHostApproval[]
   hostEffectReceipts?: readonly SemanticReceiptEffect[]
   workspacePath?: string
   trustedAuthorIdentity?: string
@@ -55,7 +65,7 @@ export class CoordinatedAutomationAdapter {
   readonly #workerProvider: CoordinatedWorkerProvider
   readonly #probe: CoordinatedOrchestrationRecordProbe
   readonly #runInParentLane: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
-  readonly #hostApprovals?: readonly SemanticReceiptApproval[]
+  readonly #hostApprovals?: readonly CoordinatedHostApproval[]
   readonly #hostEffectReceipts?: readonly SemanticReceiptEffect[]
   readonly #workspacePath?: string
   readonly #trustedAuthorIdentity?: string
@@ -70,33 +80,7 @@ export class CoordinatedAutomationAdapter {
     this.#hostEffectReceipts = ctx.hostEffectReceipts
     this.#workspacePath = ctx.workspacePath
     this.#trustedAuthorIdentity = ctx.trustedAuthorIdentity
-    this.#workerProvider = ctx.workerProvider ?? {
-      capability: 'fake_no_effects',
-      run: async (id) => {
-        const run = this.#store.listAutomationRuns().find((r) => r.id === id.automationRunId)
-        const checks = (run?.resolvedSnapshot?.outcomeContract.acceptanceCriteria ?? []).map(
-          (c) => ({
-            id: c.id,
-            outcome: 'passed' as const,
-            evidence: [`Criterion ${c.id} verified passed by fake worker`]
-          })
-        )
-        return {
-          schemaVersion: 1,
-          ...id,
-          definitionRevision: run?.resolvedSnapshot?.definitionRevision ?? 1,
-          resolvedConfigDigest:
-            run?.resolvedSnapshot?.canonicalDigest ?? `sha256:${'0'.repeat(64)}`,
-          outcome: 'succeeded',
-          summary: `Fake worker ${id.childDefinitionId} completed`,
-          reportMarkdown: `Fake worker ${id.childDefinitionId} report`,
-          artifacts: [],
-          checks,
-          effects: [],
-          blockers: []
-        }
-      }
-    }
+    this.#workerProvider = ctx.workerProvider ?? createDefaultFakeNoEffectsWorkerProvider(ctx.store)
     this.#runInParentLane =
       ctx.runInParentLane ??
       ((automationId, op) => runKeyedSerializedOperation(this.#parentLanes, automationId, op))
@@ -136,7 +120,8 @@ export class CoordinatedAutomationAdapter {
         workerProvider: this.#workerProvider,
         hostApprovals: this.#hostApprovals,
         hostEffectReceipts: this.#hostEffectReceipts,
-        workspacePath: this.#workspacePath
+        workspacePath: this.#workspacePath,
+        trustedAuthorIdentity: this.#trustedAuthorIdentity
       })
     } finally {
       this.#activeTasks.delete(taskId)
@@ -151,6 +136,15 @@ export class CoordinatedAutomationAdapter {
     automationRunId: string
   ): Promise<{ taskId: string; dispatchId: string; outcome: string }[]> {
     const run = this.#getRunOrThrow(automationRunId)
+    if (
+      reconcilePersistedCompletionReceipt({
+        run,
+        store: this.#store,
+        trustedAuthorIdentity: this.#trustedAuthorIdentity
+      })
+    ) {
+      return []
+    }
     const snapshot = run.resolvedSnapshot
     if (!snapshot || !run.orchestrationRunId) {
       throw new Error(`Run "${automationRunId}" is not ready for dispatch.`)
@@ -166,29 +160,31 @@ export class CoordinatedAutomationAdapter {
     const taskToChild = new Map(
       (run.childMappings ?? []).map((m) => [m.taskId, childMap.get(m.childDefinitionId)!])
     )
-
     const inFlightTasks = tasks.filter(
       (t) => t.status === 'dispatched' || this.#activeTasks.has(t.id)
     )
-    const maxConcurrency = snapshot.globalCeilings?.maxConcurrency ?? Infinity
-
     const candidateTasks = selectEligibleTasksForDispatch({
       readyTasks,
       inFlightTasks,
       taskToChild,
-      maxConcurrency
+      maxConcurrency: snapshot.globalCeilings?.maxConcurrency ?? Infinity
     })
-
-    if (candidateTasks.length === 0) {
-      return []
-    }
-
-    return Promise.all(candidateTasks.map((task) => this.dispatchTask(automationRunId, task.id)))
+    return candidateTasks.length === 0
+      ? []
+      : Promise.all(candidateTasks.map((task) => this.dispatchTask(automationRunId, task.id)))
   }
 
   async runUntilSettled(automationRunId: string): Promise<AutomationRun> {
     let run = this.#getRunOrThrow(automationRunId)
     run = await this.runInParentLane(run.automationId, () => this.materializeRun(automationRunId))
+    const reconciled = reconcilePersistedCompletionReceipt({
+      run,
+      store: this.#store,
+      trustedAuthorIdentity: this.#trustedAuthorIdentity
+    })
+    if (reconciled) {
+      return reconciled
+    }
 
     while (true) {
       const tasks = this.#orchestrationDb.listTasks({ runId: run.orchestrationRunId! })

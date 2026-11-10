@@ -184,7 +184,25 @@ describe('Coordinated Automation Native Run and Task Adoption Field Checks', () 
       )
     })
 
-    it('refuses adoption when coordinator_orca_session_id_generation is invalid (> 1)', () => {
+    it('refuses adoption when coordinator_orca_session_id_generation is null', () => {
+      const { store, run, probe } = setupRun()
+      const exactRunId = deterministicCoordinatedRunId(run.id)
+      db.createRun({
+        id: exactRunId,
+        objective: 'Target statement',
+        coordinatorHandle: null,
+        coordinatorPaneKey: null
+      })
+      db.db
+        .prepare('UPDATE runs SET coordinator_orca_session_id_generation = NULL WHERE id = ?')
+        .run(exactRunId)
+
+      expect(() => materializeCoordinatedRun(store, db, probe, run.id)).toThrow(
+        CoordinatedAutomationLaunchRefusedError
+      )
+    })
+
+    it('refuses adoption when coordinator_orca_session_id_generation is alternate generation (!== 1)', () => {
       const { store, run, probe } = setupRun()
       const exactRunId = deterministicCoordinatedRunId(run.id)
       db.createRun({
@@ -195,7 +213,7 @@ describe('Coordinated Automation Native Run and Task Adoption Field Checks', () 
       })
       db.db
         .prepare('UPDATE runs SET coordinator_orca_session_id_generation = ? WHERE id = ?')
-        .run(99, exactRunId)
+        .run(2, exactRunId)
 
       expect(() => materializeCoordinatedRun(store, db, probe, run.id)).toThrow(
         CoordinatedAutomationLaunchRefusedError
@@ -314,15 +332,51 @@ describe('Coordinated Automation Native Run and Task Adoption Field Checks', () 
       )
     })
 
+    it('refuses adoption when task_title is null', () => {
+      const { store, run, probe, exactRunId, exactTaskIdA, exactTaskIdB } = setupTasksForAdoption()
+      db.createTask({
+        id: exactTaskIdB,
+        runId: exactRunId,
+        spec: 'prompt b',
+        displayName: 'Child B',
+        taskTitle: 'Child B',
+        deps: [exactTaskIdA]
+      })
+      db.db.prepare('UPDATE tasks SET task_title = NULL WHERE id = ?').run(exactTaskIdB)
+
+      expect(() => materializeCoordinatedRun(store, db, probe, run.id)).toThrow(
+        CoordinatedAutomationLaunchRefusedError
+      )
+    })
+
+    it('refuses adoption when task_title is alternate role-suffixed title', () => {
+      const { store, run, probe, exactRunId, exactTaskIdA, exactTaskIdB } = setupTasksForAdoption()
+      db.createTask({
+        id: exactTaskIdB,
+        runId: exactRunId,
+        spec: 'prompt b',
+        displayName: 'Child B',
+        taskTitle: 'Child B (worker)',
+        deps: [exactTaskIdA]
+      })
+      db.db
+        .prepare('UPDATE tasks SET task_title = ? WHERE id = ?')
+        .run('Child B (worker)', exactTaskIdB)
+
+      expect(() => materializeCoordinatedRun(store, db, probe, run.id)).toThrow(
+        CoordinatedAutomationLaunchRefusedError
+      )
+    })
+
     it('refuses adoption when task_title is tampered', () => {
-      const { store, run, probe, exactRunId, exactTaskIdB } = setupTasksForAdoption()
+      const { store, run, probe, exactRunId, exactTaskIdA, exactTaskIdB } = setupTasksForAdoption()
       db.createTask({
         id: exactTaskIdB,
         runId: exactRunId,
         spec: 'prompt b',
         displayName: 'Child B',
         taskTitle: 'Alien Title',
-        deps: []
+        deps: [exactTaskIdA]
       })
       db.db.prepare('UPDATE tasks SET task_title = ? WHERE id = ?').run('Alien Title', exactTaskIdB)
 
@@ -415,6 +469,25 @@ describe('Coordinated Automation Native Run and Task Adoption Field Checks', () 
       db.db
         .prepare('UPDATE tasks SET created_by_process_incarnation = ? WHERE id = ?')
         .run('inc_1', exactTaskIdB)
+
+      expect(() => materializeCoordinatedRun(store, db, probe, run.id)).toThrow(
+        CoordinatedAutomationLaunchRefusedError
+      )
+    })
+
+    it('refuses adoption when created_by_run_generation is 1 instead of null', () => {
+      const { store, run, probe, exactRunId, exactTaskIdA, exactTaskIdB } = setupTasksForAdoption()
+      db.createTask({
+        id: exactTaskIdB,
+        runId: exactRunId,
+        spec: 'prompt b',
+        displayName: 'Child B',
+        taskTitle: 'Child B',
+        deps: [exactTaskIdA]
+      })
+      db.db
+        .prepare('UPDATE tasks SET created_by_run_generation = ? WHERE id = ?')
+        .run(1, exactTaskIdB)
 
       expect(() => materializeCoordinatedRun(store, db, probe, run.id)).toThrow(
         CoordinatedAutomationLaunchRefusedError

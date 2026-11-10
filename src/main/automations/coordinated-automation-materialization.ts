@@ -77,6 +77,11 @@ export function materializeCoordinatedRun(
       `Coordinated run is quarantined: ${run.coordinatedQuarantine.reason}`
     )
   }
+  if (run.status === 'completed' && (!run.completionReceipt || !run.completionTrust)) {
+    throw new CoordinatedAutomationLaunchRefusedError(
+      `Completed coordinated run "${run.id}" is missing a valid completionReceipt or completionTrust.`
+    )
+  }
   const problem = coordinatedRunProblem(run)
   if (problem) {
     if (run.materializationPhase !== 'ready_for_dispatch') {
@@ -109,8 +114,7 @@ export function materializeCoordinatedRun(
         existingRun.coordinator_handle !== null ||
         existingRun.coordinator_pane_key !== null ||
         existingRun.coordinator_orca_session_id !== null ||
-        (existingRun.coordinator_orca_session_id_generation !== null &&
-          existingRun.coordinator_orca_session_id_generation !== 1) ||
+        existingRun.coordinator_orca_session_id_generation !== 1 ||
         existingRun.consumer_generation !== 1 ||
         existingRun.legacy !== 0 ||
         existingRun.home_database !== 'this_database'
@@ -166,13 +170,6 @@ export function materializeCoordinatedRun(
           Array.isArray(existingDeps) &&
           existingDeps.length === deps.length &&
           existingDeps.every((d, i) => d === deps[i])
-        const validTitle =
-          existingTask.task_title === null ||
-          existingTask.task_title === child.name ||
-          existingTask.task_title === `${child.name} (${child.role})`
-        const validGeneration =
-          existingTask.created_by_run_generation === null ||
-          existingTask.created_by_run_generation === 1
         const validStatus = ['pending', 'ready', 'dispatched', 'completed'].includes(
           existingTask.status
         )
@@ -181,14 +178,14 @@ export function materializeCoordinatedRun(
           existingTask.id !== exactTaskId ||
           existingTask.run_id !== run.orchestrationRunId ||
           existingTask.parent_id !== null ||
-          !validTitle ||
+          existingTask.task_title !== child.name ||
           existingTask.display_name !== child.name ||
           existingTask.spec !== child.prompt.text ||
           !depsMatch ||
           existingTask.created_by_terminal_handle !== null ||
           existingTask.created_by_pane_key !== null ||
           existingTask.created_by_process_incarnation !== null ||
-          !validGeneration ||
+          existingTask.created_by_run_generation !== null ||
           !validStatus
         ) {
           throw new CoordinatedAutomationLaunchRefusedError(

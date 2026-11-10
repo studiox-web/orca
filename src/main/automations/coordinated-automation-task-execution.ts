@@ -1,12 +1,10 @@
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import type { Store } from '../persistence/loading-store/store'
 import type { CoordinatedOrchestrationRecordProbe } from '../persistence/scheduling-automations/coordinated-automation-run-records'
-import type {
-  SemanticReceiptApproval,
-  SemanticReceiptEffect
-} from '../../shared/coordinated-automation-receipt-types'
+import type { SemanticReceiptEffect } from '../../shared/coordinated-automation-receipt-types'
 import { CoordinatedAutomationLaunchRefusedError } from './coordinated-automation-materialization'
 import {
+  type CoordinatedHostApproval,
   validateLaunchPolicy,
   validateStructuredWorkerResult
 } from './coordinated-automation-result-validation'
@@ -14,6 +12,33 @@ import type {
   CoordinatedWorkerIdentity,
   CoordinatedWorkerProvider
 } from './coordinated-automation-adapter'
+
+export function createDefaultFakeNoEffectsWorkerProvider(store: Store): CoordinatedWorkerProvider {
+  return {
+    capability: 'fake_no_effects',
+    run: async (id) => {
+      const run = store.listAutomationRuns().find((r) => r.id === id.automationRunId)
+      const checks = (run?.resolvedSnapshot?.outcomeContract.acceptanceCriteria ?? []).map((c) => ({
+        id: c.id,
+        outcome: 'passed' as const,
+        evidence: [`Criterion ${c.id} verified passed by fake worker`]
+      }))
+      return {
+        schemaVersion: 1,
+        ...id,
+        definitionRevision: run?.resolvedSnapshot?.definitionRevision ?? 1,
+        resolvedConfigDigest: run?.resolvedSnapshot?.canonicalDigest ?? `sha256:${'0'.repeat(64)}`,
+        outcome: 'succeeded',
+        summary: `Fake worker ${id.childDefinitionId} completed`,
+        reportMarkdown: `Fake worker ${id.childDefinitionId} report`,
+        artifacts: [],
+        checks,
+        effects: [],
+        blockers: []
+      }
+    }
+  }
+}
 
 export async function executeCoordinatedTaskDispatch(input: {
   automationRunId: string
@@ -23,9 +48,10 @@ export async function executeCoordinatedTaskDispatch(input: {
   orchestrationDb: OrchestrationDb
   probe: CoordinatedOrchestrationRecordProbe
   workerProvider: CoordinatedWorkerProvider
-  hostApprovals?: readonly SemanticReceiptApproval[]
+  hostApprovals?: readonly CoordinatedHostApproval[]
   hostEffectReceipts?: readonly SemanticReceiptEffect[]
   workspacePath?: string
+  trustedAuthorIdentity?: string
 }): Promise<{ taskId: string; dispatchId: string; outcome: string }> {
   const {
     automationRunId,
@@ -39,6 +65,11 @@ export async function executeCoordinatedTaskDispatch(input: {
   const run = store.listAutomationRuns().find((r) => r.id === automationRunId)
   if (!run) {
     throw new Error(`Automation run "${automationRunId}" not found.`)
+  }
+  if (run.status === 'completed' || run.completionReceipt !== null) {
+    throw new CoordinatedAutomationLaunchRefusedError(
+      `Run "${automationRunId}" is already completed; cannot dispatch task "${taskId}".`
+    )
   }
   if (run.materializationPhase !== 'ready_for_dispatch') {
     throw new Error(
@@ -164,7 +195,8 @@ export async function executeCoordinatedTaskDispatch(input: {
     snapshot,
     workspacePath: input.workspacePath ?? workspacePath,
     hostApprovals: input.hostApprovals,
-    hostEffectReceipts: input.hostEffectReceipts
+    hostEffectReceipts: input.hostEffectReceipts,
+    trustedAuthorIdentity: input.trustedAuthorIdentity
   })
 
   if (!validation.valid) {

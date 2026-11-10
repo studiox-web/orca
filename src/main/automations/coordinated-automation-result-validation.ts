@@ -1,7 +1,6 @@
 import Ajv, { type ValidateFunction } from 'ajv'
 import { StructuredWorkerResultSchema } from '../../shared/coordinated-automation-receipt-schemas'
 import type {
-  SemanticReceiptApproval,
   SemanticReceiptEffect,
   StructuredWorkerResult
 } from '../../shared/coordinated-automation-receipt-types'
@@ -10,11 +9,15 @@ import type {
   ResolvedChildSnapshot
 } from '../../shared/coordinated-automation-types'
 import {
+  type CoordinatedHostApproval,
+  validateStageApprovals
+} from './coordinated-automation-approval-validation'
+import {
   matchesPathPattern,
   validateWorkerArtifacts
 } from './coordinated-automation-artifact-validation'
 
-export { matchesPathPattern }
+export { type CoordinatedHostApproval, matchesPathPattern }
 
 export type WorkerResultValidationContext = Readonly<{
   automationRunId: string
@@ -28,8 +31,9 @@ export type WorkerResultValidationContext = Readonly<{
   snapshot: ResolvedAutomationRunSnapshot
   workspacePath?: string
   checkArtifactExistence?: (uri: string) => boolean
-  hostApprovals?: readonly SemanticReceiptApproval[]
+  hostApprovals?: readonly CoordinatedHostApproval[]
   hostEffectReceipts?: readonly SemanticReceiptEffect[]
+  trustedAuthorIdentity?: string
 }>
 
 export type WorkerResultValidationOutcome =
@@ -197,18 +201,20 @@ export function validateStructuredWorkerResult(
     }
   }
 
-  for (const req of context.child.stageAcceptance?.requiredApprovals ?? []) {
-    if (req.required !== false) {
-      const match = context.hostApprovals?.find(
-        (a) => a.role === req.role && Boolean(a.approverIdentity?.trim())
-      )
-      if (!match) {
-        return {
-          valid: false,
-          error: `Required stage approval role "${req.role}" missing from host approvals.`
-        }
-      }
+  const stageApprovalValidation = validateStageApprovals(
+    context.child.stageAcceptance?.requiredApprovals,
+    context.hostApprovals,
+    {
+      automationRunId: context.automationRunId,
+      orchestrationRunId: context.orchestrationRunId,
+      childDefinitionId: context.child.childDefinitionId,
+      taskId: context.taskId,
+      dispatchId: context.dispatchId,
+      trustedAuthorIdentity: context.trustedAuthorIdentity
     }
+  )
+  if (!stageApprovalValidation.valid) {
+    return { valid: false, error: stageApprovalValidation.error }
   }
 
   if (data.effects.some((e) => e.status !== 'denied')) {
