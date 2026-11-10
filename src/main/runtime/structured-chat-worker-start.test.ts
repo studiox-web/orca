@@ -105,6 +105,10 @@ describe('worker-start --terminal names a chat', () => {
       }
     })
     const dispatchId = String(receipt.dispatchId)
+    expect(db.db.prepare('SELECT id FROM dispatch_contexts WHERE task_id = ?').all(taskId)).toEqual(
+      [{ id: dispatchId }]
+    )
+    expect(db.listWorkerTerminalResources({ dispatchIds: [dispatchId] })).toHaveLength(1)
     const task = turnText(worker.turns[0]!)
     expect(task).toContain(`Your Orca session ID is: ${WORKER}`)
     expect(task).toContain('The coordinator cannot see this chat')
@@ -115,7 +119,8 @@ describe('worker-start --terminal names a chat', () => {
       assignee_handle: WORKER,
       assignee_orca_session_id: PEER_CHAT,
       assignee_pane_key: null,
-      process_incarnation: null
+      process_incarnation: null,
+      consumer_generation: 1
     })
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
       terminal_handle: WORKER,
@@ -145,6 +150,10 @@ describe('worker-start --terminal names a chat', () => {
     expect(JSON.stringify(receipt.nextCommands)).not.toContain('terminal read')
     expect(JSON.stringify(receipt.nextCommands)).toContain('worker-abandon')
     const dispatchId = String(receipt.dispatchId)
+    expect(db.db.prepare('SELECT id FROM dispatch_contexts WHERE task_id = ?').all(taskId)).toEqual(
+      [{ id: dispatchId }]
+    )
+    expect(db.listWorkerTerminalResources({ dispatchIds: [dispatchId] })).toHaveLength(1)
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('start_unknown')
     expect(worker.turns).toHaveLength(1)
 

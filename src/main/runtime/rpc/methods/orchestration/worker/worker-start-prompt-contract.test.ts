@@ -234,6 +234,14 @@ describe('orchestration worker-start prompt contract', () => {
     expect(harness.prematureSubmits()).toBe(0)
     expect(harness.writes.filter((data) => data === '\r')).toHaveLength(1)
     const persisted = reopenPromptContractDb(harness)
+    expect(
+      persisted.db
+        .prepare(
+          'SELECT id, assignee_handle, consumer_generation FROM dispatch_contexts WHERE task_id = ?'
+        )
+        .all(harness.taskId)
+    ).toEqual([{ id: dispatchId, assignee_handle: harness.handle, consumer_generation: 1 }])
+    expect(persisted.listWorkerTerminalResources({ dispatchIds: [dispatchId] })).toHaveLength(1)
     expect(persisted.getTask(harness.taskId)?.status).toBe('dispatched')
     expect(persisted.getDispatchContextById(dispatchId)).toMatchObject({
       status: 'dispatched',
@@ -265,7 +273,16 @@ describe('orchestration worker-start prompt contract', () => {
     vi.spyOn(harness.runtime, 'observeTerminalAgentPrompt').mockImplementation(
       async (_handle, prompt) => {
         const dispatch = harness.db.findActiveDispatchForAssignee(harness.handle)
-        expect(dispatch).toBeDefined()
+        expect(dispatch).toMatchObject({
+          task_id: harness.taskId,
+          assignee_handle: harness.handle,
+          consumer_generation: 1
+        })
+        expect(
+          harness.db.db
+            .prepare('SELECT id FROM dispatch_contexts WHERE task_id = ?')
+            .all(harness.taskId)
+        ).toEqual([{ id: dispatch!.id }])
         expect(
           harness.db.settleWorkerReport({
             taskId: harness.taskId,
@@ -381,6 +398,14 @@ describe('orchestration worker-start prompt contract', () => {
     expect(harness.prematureSubmits()).toBe(0)
     expect(harness.writes.filter((data) => data === '\r')).toHaveLength(1)
     const persisted = reopenPromptContractDb(harness)
+    expect(
+      persisted.db
+        .prepare(
+          'SELECT id, assignee_handle, consumer_generation FROM dispatch_contexts WHERE task_id = ?'
+        )
+        .all(harness.taskId)
+    ).toEqual([{ id: dispatchId, assignee_handle: harness.handle, consumer_generation: 1 }])
+    expect(persisted.listWorkerTerminalResources({ dispatchIds: [dispatchId] })).toHaveLength(1)
     expect(persisted.getTask(harness.taskId)?.status).toBe('blocked')
     expect(persisted.getDispatchContextById(dispatchId)).toMatchObject({
       status: 'pending',

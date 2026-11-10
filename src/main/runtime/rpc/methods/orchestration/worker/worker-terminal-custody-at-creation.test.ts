@@ -131,6 +131,12 @@ describe('worker terminal custody is recorded at terminal creation', () => {
       ownership_state: 'owned',
       terminal_handle: 'term_worker'
     })
+    expect(
+      h.db.db
+        .prepare('SELECT id, assignee_handle FROM dispatch_contexts WHERE task_id = ?')
+        .all(held.taskId)
+    ).toEqual([{ id: held.dispatchId, assignee_handle: 'term_worker' }])
+    expect(h.db.listWorkerTerminalResources({ dispatchIds: [held.dispatchId] })).toHaveLength(1)
 
     await expect(
       h.call('orchestration.workerRelease', { dispatch: held.dispatchId })
