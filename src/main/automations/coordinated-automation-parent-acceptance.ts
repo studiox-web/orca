@@ -3,8 +3,10 @@ import type {
   ReceiptValidationContext,
   SemanticCompletionReceipt,
   SemanticReceiptAcceptanceResult,
-  SemanticReceiptEffect
+  SemanticReceiptEffect,
+  StructuredWorkerResult
 } from '../../shared/coordinated-automation-receipt-types'
+import { StructuredWorkerResultSchema } from '../../shared/coordinated-automation-receipt-schemas'
 import { validateReceiptAgainstSnapshot } from '../../shared/coordinated-automation-receipt-validation'
 import type {
   CoordinatedCompletionTrust,
@@ -18,6 +20,7 @@ import {
   resolveParentReceiptApprovals
 } from './coordinated-automation-approval-validation'
 import { CoordinatedAutomationLaunchRefusedError } from './coordinated-automation-materialization'
+import { decodeWorkerReportResult } from './coordinated-automation-worker-report-envelope'
 
 export function reconcilePersistedCompletionReceipt(input: {
   run: AutomationRun
@@ -74,6 +77,10 @@ export function evaluateParentOutcomeAcceptance(input: {
     authorities: { identity: string; role: string }[]
   }
   productionDecision?: { approverIdentity: string; role: string; decidedAt: number }
+  /** Exact reports each stage was semantically accepted on; preferred over raw Task results. */
+  acceptedReports?: readonly StructuredWorkerResult[]
+  /** Identities that authored the work; none of them may grant a final approval. */
+  authorIdentities?: readonly string[]
 }): ParentOutcomeAcceptanceResult {
   const { run, snapshot, orchestrationDb, probe } = input
   const orchestrationRunId = run.orchestrationRunId
@@ -93,20 +100,16 @@ export function evaluateParentOutcomeAcceptance(input: {
     }
   }
 
-  const allChecks: { id: string; outcome: string; evidence?: string[] }[] = []
-
-  for (const task of tasks) {
-    if (task.result) {
-      try {
-        const parsed = JSON.parse(task.result) as Record<string, unknown>
-        if (Array.isArray(parsed.checks)) {
-          allChecks.push(...parsed.checks)
+  const allChecks: { id: string; outcome: string; evidence?: string[] }[] = input.acceptedReports
+    ? input.acceptedReports.flatMap((report) => report.checks)
+    : tasks.flatMap((task) => {
+        const decoded = decodeWorkerReportResult(task.result)
+        if (decoded.kind !== 'structured') {
+          return []
         }
-      } catch {
-        // Raw string summary or non-JSON result; ignored
-      }
-    }
-  }
+        const parsed = StructuredWorkerResultSchema.safeParse(decoded.report)
+        return parsed.success ? parsed.data.checks : []
+      })
 
   const acceptanceResults: SemanticReceiptAcceptanceResult[] = []
   for (const criterion of snapshot.outcomeContract.acceptanceCriteria) {
@@ -157,7 +160,10 @@ export function evaluateParentOutcomeAcceptance(input: {
       definitionRevision: snapshot.definitionRevision,
       automationRunId: run.id,
       orchestrationRunId,
-      trustedAuthorIdentity: authorIdentity
+      trustedAuthorIdentity: authorIdentity,
+      authorIdentities: input.authorIdentities
+        ? [...input.authorIdentities, authorIdentity]
+        : undefined
     }
   )
   if (!approvalResolution.valid) {

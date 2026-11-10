@@ -57,6 +57,10 @@ type LogFn = (msg: string) => void
 
 const noopLog: LogFn = () => {}
 
+function isStructuredResultPayload(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function parseObjectPayload(msg: MessageRow, onInvalidJson: () => void): Record<string, unknown> {
   if (!msg.payload) {
     return {}
@@ -270,7 +274,11 @@ function reconcileWorkerDoneMessage(
     completedBy: msg.from_handle,
     filesModified,
     reportPath: typeof payload.reportPath === 'string' ? payload.reportPath : null,
-    completedAt: new Date().toISOString()
+    completedAt: new Date().toISOString(),
+    // Coordinated Automations validate this versioned envelope; the readable body stays authoritative for people.
+    ...(isStructuredResultPayload(payload.structuredResult)
+      ? { structuredResult: payload.structuredResult }
+      : {})
   })
   const settlement = db.settleWorkerReport({
     taskId,

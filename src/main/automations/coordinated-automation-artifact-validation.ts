@@ -224,3 +224,16 @@ export function validateWorkerArtifacts(
 
   return { valid: true }
 }
+
+/** Current digest of an accepted artifact, or null when it is missing or escapes the workspace. */
+export function currentWorkspaceArtifactDigest(uri: string, workspacePath: string): string | null {
+  if (uri.includes('..') || !isValidArtifactUri(uri)) {
+    return null
+  }
+  const cleanUri = uri.replace(/^artifact:\/\//, '').replace(/^\/+/, '')
+  const resolved = resolveAndVerifyWorkspaceArtifact(cleanUri, workspacePath, uri, false)
+  if ('error' in resolved || !resolved.exists) {
+    return null
+  }
+  return `sha256:${createHash('sha256').update(readFileSync(resolved.realArtifactPath)).digest('hex')}`
+}

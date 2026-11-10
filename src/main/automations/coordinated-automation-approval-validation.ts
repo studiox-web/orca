@@ -39,6 +39,7 @@ export type StageApprovalValidationContext = Readonly<{
   taskId: string
   dispatchId: string
   trustedAuthorIdentity?: string
+  authorIdentities?: readonly string[]
 }>
 
 export type StageApprovalValidationResult = { valid: true } | { valid: false; error: string }
@@ -52,6 +53,7 @@ function validateCommonApprovalIdentity(
     automationRunId: string
     orchestrationRunId: string
     trustedAuthorIdentity?: string
+    authorIdentities?: readonly string[]
   },
   label: 'Stage' | 'Parent',
   expectedScope: 'stage' | 'parent',
@@ -95,6 +97,9 @@ function validateCommonApprovalIdentity(
   const effectiveAuthor = context.trustedAuthorIdentity ?? match.authorIdentity
   if (req.disallowAuthorApproval && effectiveAuthor && approver === effectiveAuthor) {
     return `Required ${label.toLowerCase()} approval "${req.id}" disallows author approval by "${approver}".`
+  }
+  if (context.authorIdentities?.includes(approver) || match.authorIdentity?.trim() === approver) {
+    return `${label} approval "${req.id}" is a self-approval: approver "${approver}" authored the approved work.`
   }
   if (usedApprovers.has(approver)) {
     return `Approver "${approver}" cannot satisfy multiple required ${label.toLowerCase()} approvals.`
@@ -169,6 +174,7 @@ export type ParentApprovalResolutionContext = Readonly<{
   automationRunId: string
   orchestrationRunId: string
   trustedAuthorIdentity: string
+  authorIdentities?: readonly string[]
 }>
 
 export type ParentApprovalResolutionResult =

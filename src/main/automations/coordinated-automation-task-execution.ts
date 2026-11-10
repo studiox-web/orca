@@ -1,22 +1,22 @@
-import type { OrchestrationDb } from '../runtime/orchestration/db'
+import type { StructuredWorkerResult } from '../../shared/coordinated-automation-receipt-types'
 import type { Store } from '../persistence/loading-store/store'
-import type { CoordinatedOrchestrationRecordProbe } from '../persistence/scheduling-automations/coordinated-automation-run-records'
-import type { SemanticReceiptEffect } from '../../shared/coordinated-automation-receipt-types'
 import { CoordinatedAutomationLaunchRefusedError } from './coordinated-automation-materialization'
+import { validateLaunchPolicy } from './coordinated-automation-result-validation'
 import {
-  type CoordinatedHostApproval,
-  validateLaunchPolicy,
-  validateStructuredWorkerResult
-} from './coordinated-automation-result-validation'
-import type {
-  CoordinatedWorkerIdentity,
-  CoordinatedWorkerProvider
-} from './coordinated-automation-adapter'
+  type CoordinatedRecoveryContext,
+  type CoordinatedWorkerIdentity,
+  type CoordinatedWorkerProvider,
+  CoordinatedWorkerStartError,
+  FAKE_EFFECT_ADAPTER_KIND
+} from './coordinated-automation-recovery-context'
+import { validateAttemptReport } from './coordinated-automation-attempt-validation'
+import { COORDINATED_START_FAILURE_PREFIX } from './coordinated-automation-stage-admission'
+import { encodeCoordinatedWorkerReport } from './coordinated-automation-worker-report-envelope'
 
 export function createDefaultFakeNoEffectsWorkerProvider(store: Store): CoordinatedWorkerProvider {
   return {
     capability: 'fake_no_effects',
-    run: async (id) => {
+    run: async (id): Promise<StructuredWorkerResult> => {
       const run = store.listAutomationRuns().find((r) => r.id === id.automationRunId)
       const checks = (run?.resolvedSnapshot?.outcomeContract.acceptanceCriteria ?? []).map((c) => ({
         id: c.id,
@@ -40,28 +40,21 @@ export function createDefaultFakeNoEffectsWorkerProvider(store: Store): Coordina
   }
 }
 
-export async function executeCoordinatedTaskDispatch(input: {
-  automationRunId: string
-  taskId: string
-  retryOfDispatchId?: string
-  store: Store
-  orchestrationDb: OrchestrationDb
-  probe: CoordinatedOrchestrationRecordProbe
-  workerProvider: CoordinatedWorkerProvider
-  hostApprovals?: readonly CoordinatedHostApproval[]
-  hostEffectReceipts?: readonly SemanticReceiptEffect[]
-  workspacePath?: string
-  trustedAuthorIdentity?: string
-}): Promise<{ taskId: string; dispatchId: string; outcome: string }> {
-  const {
-    automationRunId,
-    taskId,
-    retryOfDispatchId,
-    store,
-    orchestrationDb,
-    probe,
-    workerProvider
-  } = input
+const FAKE_WORKER_CAPABILITIES = new Set(['fake_no_effects', 'shadow_fake_worker'])
+
+function hasFakeWorkerCapability(provider: CoordinatedWorkerProvider): boolean {
+  return (
+    (provider.capability !== undefined && FAKE_WORKER_CAPABILITIES.has(provider.capability)) ||
+    (provider.capabilities ?? []).some((capability) => FAKE_WORKER_CAPABILITIES.has(capability))
+  )
+}
+
+export async function executeCoordinatedTaskDispatch(
+  ctx: CoordinatedRecoveryContext,
+  input: { automationRunId: string; taskId: string; retryOfDispatchId?: string }
+): Promise<{ taskId: string; dispatchId: string; outcome: string }> {
+  const { automationRunId, taskId, retryOfDispatchId } = input
+  const { store, orchestrationDb, probe, workerProvider } = ctx
   const run = store.listAutomationRuns().find((r) => r.id === automationRunId)
   if (!run) {
     throw new Error(`Automation run "${automationRunId}" not found.`)
@@ -106,21 +99,15 @@ export async function executeCoordinatedTaskDispatch(input: {
     )
   }
 
-  const policyCheck = validateLaunchPolicy(child, snapshot)
+  const policyCheck = validateLaunchPolicy(child, snapshot, {
+    fakeEffects: ctx.effectAdapter?.kind === FAKE_EFFECT_ADAPTER_KIND
+  })
   if (!policyCheck.allowed) {
     throw new CoordinatedAutomationLaunchRefusedError(policyCheck.reason)
   }
-
-  const hasFakeNoEffectCapability =
-    workerProvider.capability === 'fake_no_effects' ||
-    workerProvider.capability === 'shadow_fake_worker' ||
-    (Array.isArray(workerProvider.capabilities) &&
-      (workerProvider.capabilities.includes('fake_no_effects') ||
-        workerProvider.capabilities.includes('shadow_fake_worker')))
-
-  if (!hasFakeNoEffectCapability) {
+  if (!hasFakeWorkerCapability(workerProvider)) {
     throw new CoordinatedAutomationLaunchRefusedError(
-      'Provider rejected: Phase 4 disabled shadow implementation requires an explicit host-owned fake/no-effect provider capability.'
+      'Provider rejected: the disabled shadow implementation requires an explicit host-owned fake/no-effect provider capability.'
     )
   }
 
@@ -147,12 +134,19 @@ export async function executeCoordinatedTaskDispatch(input: {
       mode: { mode: 'headless' }
     }
   })
+  const boundaryDetail = {
+    automationRunId,
+    childDefinitionId: child.childDefinitionId,
+    label: dispatch.id
+  }
+  ctx.boundary('dispatch.after-native-start', boundaryDetail)
 
   store.recordCoordinatedChildDispatch({
     automationRunId: run.id,
     childDefinitionId: child.childDefinitionId,
     dispatchId: dispatch.id
   })
+  ctx.boundary('dispatch.after-mapping', boundaryDetail)
 
   const identity: CoordinatedWorkerIdentity = {
     automationRunId: run.id,
@@ -161,18 +155,19 @@ export async function executeCoordinatedTaskDispatch(input: {
     taskId,
     dispatchId: dispatch.id
   }
+  const settle = (outcome: 'succeeded' | 'failed', result: string): void => {
+    orchestrationDb.settleWorkerReport({ taskId, dispatchId: dispatch.id, outcome, result })
+    ctx.boundary('report.after-native-settle', boundaryDetail)
+  }
 
   let rawReport: unknown
   try {
     rawReport = await workerProvider.run(identity)
   } catch (error) {
-    orchestrationDb.settleWorkerReport({
-      taskId,
-      dispatchId: dispatch.id,
-      outcome: 'failed',
-      result: error instanceof Error ? error.message : String(error)
-    })
-    return { taskId, dispatchId: dispatch.id, outcome: 'failed' }
+    const message = error instanceof Error ? error.message : String(error)
+    const started = !(error instanceof CoordinatedWorkerStartError)
+    settle('failed', started ? message : `${COORDINATED_START_FAILURE_PREFIX} ${message}`)
+    return { taskId, dispatchId: dispatch.id, outcome: started ? 'failed' : 'start_failed' }
   }
 
   const currentRun = store.listAutomationRuns().find((r) => r.id === automationRunId)
@@ -180,56 +175,31 @@ export async function executeCoordinatedTaskDispatch(input: {
     (m) => m.taskId === taskId && m.childDefinitionId === child.childDefinitionId
   )?.dispatchId
   if (!currentMappedDispatchId || currentMappedDispatchId !== dispatch.id) {
-    orchestrationDb.settleWorkerReport({
-      taskId,
-      dispatchId: dispatch.id,
-      outcome: 'failed',
-      result: `Task "${taskId}" mapped dispatchId "${currentMappedDispatchId ?? ''}" does not match active dispatch "${dispatch.id}".`
-    })
+    settle(
+      'failed',
+      encodeCoordinatedWorkerReport(
+        rawReport,
+        `Task "${taskId}" mapped dispatchId "${currentMappedDispatchId ?? ''}" does not match active dispatch "${dispatch.id}".`
+      )
+    )
     return { taskId, dispatchId: dispatch.id, outcome: 'failed' }
   }
 
-  const automation = store.listAutomations().find((a) => a.id === run.automationId)
-  const projectId =
-    automation && 'projectId' in automation && typeof automation.projectId === 'string'
-      ? automation.projectId
-      : snapshot.executionTarget.id
-  const repo = store.getRepo(projectId)
-  const workspacePath = repo?.path
-
-  const validation = validateStructuredWorkerResult(rawReport, {
-    automationRunId: run.id,
-    orchestrationRunId: run.orchestrationRunId,
-    definitionRevision: snapshot.definitionRevision,
-    childDefinitionId: child.childDefinitionId,
-    taskId,
-    dispatchId: currentMappedDispatchId,
-    canonicalDigest: snapshot.canonicalDigest,
-    child,
+  const validation = validateAttemptReport(ctx, {
+    report: rawReport,
+    run,
     snapshot,
-    workspacePath: input.workspacePath ?? workspacePath,
-    hostApprovals: input.hostApprovals,
-    hostEffectReceipts: input.hostEffectReceipts,
-    trustedAuthorIdentity: input.trustedAuthorIdentity
+    child,
+    taskId,
+    dispatchId: currentMappedDispatchId
   })
-
   if (!validation.valid) {
-    orchestrationDb.settleWorkerReport({
-      taskId,
-      dispatchId: dispatch.id,
-      outcome: 'failed',
-      result: validation.error
-    })
+    settle('failed', encodeCoordinatedWorkerReport(rawReport, validation.error))
     return { taskId, dispatchId: dispatch.id, outcome: 'failed' }
   }
-
-  const outcome = validation.report.outcome === 'succeeded' ? 'succeeded' : 'failed'
-  orchestrationDb.settleWorkerReport({
-    taskId,
-    dispatchId: dispatch.id,
-    outcome,
-    result: JSON.stringify(validation.report)
-  })
-
+  settle(
+    validation.report.outcome === 'succeeded' ? 'succeeded' : 'failed',
+    encodeCoordinatedWorkerReport(validation.report)
+  )
   return { taskId, dispatchId: dispatch.id, outcome: validation.report.outcome }
 }

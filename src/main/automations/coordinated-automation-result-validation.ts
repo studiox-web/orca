@@ -34,6 +34,7 @@ export type WorkerResultValidationContext = Readonly<{
   hostApprovals?: readonly CoordinatedHostApproval[]
   hostEffectReceipts?: readonly SemanticReceiptEffect[]
   trustedAuthorIdentity?: string
+  authorIdentities?: readonly string[]
 }>
 
 export type WorkerResultValidationOutcome =
@@ -42,18 +43,25 @@ export type WorkerResultValidationOutcome =
 
 export function validateLaunchPolicy(
   child: ResolvedChildSnapshot,
-  snapshot: ResolvedAutomationRunSnapshot
+  snapshot: ResolvedAutomationRunSnapshot,
+  options: { fakeEffects?: boolean } = {}
 ): { allowed: true } | { allowed: false; reason: string } {
-  if (snapshot.publicationPolicy.allowExternalMutation) {
+  // Effects are permitted only against the host-owned deterministic fake adapter.
+  if (snapshot.publicationPolicy.allowExternalMutation && !options.fakeEffects) {
     return {
       allowed: false,
-      reason: 'Launch refused: external mutations are not permitted in Phase 4.'
+      reason:
+        'Launch refused: external mutations are not permitted without the fake effect adapter.'
     }
   }
-  if (child.stageAcceptance?.requiredEffects && child.stageAcceptance.requiredEffects.length > 0) {
+  if (
+    child.stageAcceptance?.requiredEffects &&
+    child.stageAcceptance.requiredEffects.length > 0 &&
+    !options.fakeEffects
+  ) {
     return {
       allowed: false,
-      reason: `Launch refused: child "${child.childDefinitionId}" requires effects, which are denied in Phase 4.`
+      reason: `Launch refused: child "${child.childDefinitionId}" requires effects, which are denied without the fake effect adapter.`
     }
   }
   return { allowed: true }
@@ -212,7 +220,8 @@ export function validateStructuredWorkerResult(
       childDefinitionId: context.child.childDefinitionId,
       taskId: context.taskId,
       dispatchId: context.dispatchId,
-      trustedAuthorIdentity: context.trustedAuthorIdentity
+      trustedAuthorIdentity: context.trustedAuthorIdentity,
+      authorIdentities: context.authorIdentities
     }
   )
   if (!stageApprovalValidation.valid) {

@@ -173,6 +173,20 @@ export class FakeEffectAdapter {
     return structuredClone(record)
   }
 
+  /** The external system later reveals what happened, without any apply call. */
+  async exposeExternalState(
+    effectId: string,
+    state: FakeEffectState,
+    receipt?: string
+  ): Promise<void> {
+    const document = await this.#read()
+    const record = this.#record(document, effectId)
+    record.state = state
+    record.receipt = receipt
+    await this.#write(document, effectId)
+    this.#acknowledge(effectId, 'effect-adapter.external-state-acknowledged', state)
+  }
+
   async query(effectId: string): Promise<Readonly<EffectRecord>> {
     const document = await this.#read()
     const record = this.#record(document, effectId)

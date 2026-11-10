@@ -53,3 +53,24 @@ PATH=/home/djvibe/.nvm/versions/node/v24.22.2/bin:$PATH \
   pnpm test tests/e2e/coordinated-automation-harness/coordinated-automation-test-harness.unit.test.ts \
   --maxWorkers=2
 ```
+
+## Phase 5 recovery matrix
+
+`coordinated-automation-recovery-env.ts` drives the real `CoordinatedAutomationAdapter` over a real
+Store, a file-backed orchestration database, and a file-backed progress ledger, all under the harness
+root. Workers are the scripted fake provider and effects are the fake effect adapter only.
+`env.reopen()` replaces the coordinator generation over the same evidence; `env.crashAt(boundary)`
+and `env.crashAtBoundaryIndex` throw at coordinator durable-write boundaries, while
+`harness.crashes.arm(point)` covers the harness stores, worker acknowledgement, and effect adapter.
+
+- `coordinated-automation-recovery-matrix.unit.test.ts`: lost/duplicate/stale reports, artifact
+  mutation, self-approval, review/fix limits, cost/time/concurrency/start ceilings, lane locks, and
+  mid-run definition edits.
+- `coordinated-automation-recovery-effects.unit.test.ts`: uncertain, late-verified, unverified,
+  applied, and denied fake effects, plus a crash sweep over every coordinator boundary and every
+  harness crash point, asserting one fake apply and identical converged state.
+
+```sh
+PATH=/home/djvibe/.nvm/versions/node/v24.22.2/bin:$PATH \
+  pnpm test tests/e2e/coordinated-automation-harness/ --maxWorkers=2
+```
