@@ -21,8 +21,10 @@ import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-s
 import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
 import type { WorkspaceSleepPlatform } from '../workspaces/workspace-sleep-platform'
 import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'
+import type { CoordinatedDefinitionWriteHost } from '../coordinated-definition-write-gate'
 
 export type RuntimeConstructionDependencies = {
+  coordinatedDefinitionWrites?: CoordinatedDefinitionWriteHost
   getSetupTerminalTitle?: () => string
   getLocalProvider?: () => IPtyProvider
   prepareClaudeAuth?: PrepareClaudeAuth

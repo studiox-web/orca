@@ -51,6 +51,11 @@ export class CoordinatedAutomationPersistence {
     this[coordinatedAutomationPersistenceContext] = automations
   }
 
+  coordinatedAutomationDefinitionAuthority(): 'desktop' | 'runtime' {
+    return getAutomationDefinitionOperations(this[coordinatedAutomationPersistenceContext])
+      .storageAuthority
+  }
+
   createCoordinatedAutomation(
     input: CoordinatedAutomationCreateInput,
     options?: { destination?: AutomationDestination; resolvedRepo?: Repo }

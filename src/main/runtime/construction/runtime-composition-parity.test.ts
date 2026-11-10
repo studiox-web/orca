@@ -165,7 +165,10 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
   }
 ]
 
-const UNWIRED_CONSTRUCTION_OPTIONS: Readonly<Record<string, string>> = {}
+const UNWIRED_CONSTRUCTION_OPTIONS: Readonly<Record<string, string>> = {
+  coordinatedDefinitionWrites:
+    'Isolated developer/test profile opt-in; absent from both live roots.'
+}
 
 const POSITIONAL_CONSTRUCTOR_PARAMETERS = ['stats'] as const
 

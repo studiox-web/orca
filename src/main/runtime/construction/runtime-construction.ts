@@ -205,10 +205,15 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
         skills: () => this.skillCommands.hasSkillCloudService()
       }
     )
-    this.automation = new RuntimeAutomationController(store, {
-      showRepo: (selector) => this.showRepo(selector),
-      showManagedWorktree: (selector, hostId) => this.showManagedWorktree(selector, hostId)
-    })
+    this.automation = new RuntimeAutomationController(
+      store,
+      {
+        showRepo: (selector) => this.showRepo(selector),
+        showManagedWorktree: (selector, hostId) => this.showManagedWorktree(selector, hostId)
+      },
+      deps?.coordinatedDefinitionWrites,
+      () => !this.servesHeadlessGraph
+    )
     const persistedClientTabSelections = store?.getMobileClientTabSelections?.()
     if (persistedClientTabSelections) {
       this.clientSessionTabSelections.hydrate(persistedClientTabSelections)

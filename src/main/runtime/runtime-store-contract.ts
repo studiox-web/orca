@@ -34,6 +34,7 @@ export type RuntimeStore = {
   getAllWorktreeMetaForHost?: Store['getAllWorktreeMetaForHost']
   captureNativeLocalWorktreeMetadataScanExpectation?: Store['captureNativeLocalWorktreeMetadataScanExpectation']
   pruneSessionlessMissingLocalWorktreeMetadataForRepo?: Store['pruneSessionlessMissingLocalWorktreeMetadataForRepo']
+  coordinatedAutomationDefinitionAuthority?: Store['coordinatedAutomationDefinitionAuthority']
   getProfileStorageDirectory?: Store['getProfileStorageDirectory']
   getWorktreeMeta: Store['getWorktreeMeta']
   setWorktreeMeta: Store['setWorktreeMeta']
@@ -97,6 +98,8 @@ export type RuntimeStore = {
   listAutomationRunsPage?: Store['listAutomationRunsPage']
   createAutomation?: Store['createAutomation']
   updateAutomation?: Store['updateAutomation']
+  createCoordinatedAutomation?: Store['createCoordinatedAutomation']
+  updateCoordinatedAutomation?: Store['updateCoordinatedAutomation']
   deleteAutomation?: Store['deleteAutomation']
   getSparsePresets?: Store['getSparsePresets']
   saveSparsePreset?: Store['saveSparsePreset']
@@ -124,6 +127,7 @@ export type RuntimeStore = {
     localWindowsRuntimeDefault?: GlobalSettings['localWindowsRuntimeDefault']
     // Stage 1 is opt-in: WSL-host-only explanations and routing need the setting on.
     experimentalWslHosts?: GlobalSettings['experimentalWslHosts']
+    experimentalCoordinatedAutomations?: GlobalSettings['experimentalCoordinatedAutomations']
     refreshLocalBaseRefOnWorktreeCreate: boolean
     localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string

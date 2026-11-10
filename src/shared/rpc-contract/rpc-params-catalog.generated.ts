@@ -195,6 +195,10 @@ import {
   ConnectorWatch
 } from './connector-params'
 import {
+  CoordinatedAutomationCreateRequest,
+  CoordinatedAutomationUpdate
+} from './coordinated-automation-params'
+import {
   AttachParams as AttachParamsOfEmulatorParams,
   AxParams,
   ButtonParams,
@@ -842,12 +846,14 @@ export const RPC_PARAMS_BY_METHOD = {
   'artifacts.unshare': SourceRequest,
   'artifacts.update': WriteRequest,
   'automation.create': AutomationCreate,
+  'automation.createCoordinated': CoordinatedAutomationCreateRequest,
   'automation.delete': AutomationId,
   'automation.list': AutomationList,
   'automation.runNow': AutomationId,
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'automation.updateCoordinated': CoordinatedAutomationUpdate,
   'browser.back': BrowserTarget,
   'browser.capture.start': BrowserTarget,
   'browser.capture.stop': BrowserTarget,

@@ -18,6 +18,10 @@ export const AUTOMATION_SETUP_CHOICE_RUNTIME_CAPABILITY = 'automations.setup-cho
 // Surface-only hosts retain this capability when the complete picker setup contract ships.
 export const AUTOMATION_SURFACE_RUNTIME_CAPABILITY = 'automations.surface.v1' as const
 
+// Advertised dynamically only by a host with the isolated definition write gate open.
+export const COORDINATED_AUTOMATION_DEFINITIONS_RUNTIME_CAPABILITY =
+  'automation.coordinated-definitions.v1' as const
+
 export const AUTOMATION_RUNTIME_CAPABILITIES = [
   AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,

@@ -15,9 +15,47 @@ import {
   type AutomationListResult
 } from '../../../../shared/automation-list-scope'
 import { OrcaRuntimeWithCrewOperations } from './crew-operations'
+import type {
+  RuntimeCoordinatedAutomationCreateInput,
+  RuntimeCoordinatedAutomationUpdateInput
+} from '../../../../shared/rpc-contract/coordinated-automation-params'
 
 export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntimeWithCrewOperations {
   abstract notifyAutomationsChanged(payload?: AutomationsChangedPayload): void
+
+  private assertCoordinatedDefinitionHost(): void {
+    if (this.servesHeadlessGraph) {
+      throw new Error(
+        'Coordinated definition writes are unavailable on remote runtime authorities.'
+      )
+    }
+  }
+
+  createCoordinatedAutomation(input: RuntimeCoordinatedAutomationCreateInput): Promise<Automation> {
+    this.assertCoordinatedDefinitionHost()
+    return this.automation.withExternalProbePriority(() =>
+      this.automation.createCoordinated(input).then((automation) => {
+        const selector = this.automationChangeSelector(automation.id)
+        this.publishAutomationDefinitionChange(selector, selector)
+        return automation
+      })
+    )
+  }
+
+  updateCoordinatedAutomation(
+    id: string,
+    updates: RuntimeCoordinatedAutomationUpdateInput,
+    options: AutomationUpdatePreconditions & { expectedOwner: AutomationOwnerPrecondition }
+  ): Promise<Automation> {
+    this.assertCoordinatedDefinitionHost()
+    return this.automation.withExternalProbePriority(() => {
+      const source = this.automationChangeSelector(id)
+      return this.automation.updateCoordinated(id, updates, options).then((automation) => {
+        this.publishAutomationDefinitionChange(source, this.automationChangeSelector(automation.id))
+        return automation
+      })
+    })
+  }
 
   private readAutomationRuns<T>(
     automationId: string | undefined,

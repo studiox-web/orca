@@ -13,6 +13,7 @@ import {
   AutomationSchedule,
   AutomationWorkspaceMode,
   Destination,
+  ExpectedOwner,
   ExtraAgentArgs,
   OptionalNullablePlainString,
   SetupDecision,
@@ -165,3 +166,26 @@ export const CoordinatedAutomationUpdateFields = z
       })
     }
   })
+
+export const CoordinatedAutomationCreateRequest = CoordinatedAutomationCreate.safeExtend({
+  enabled: z.literal(false).optional(),
+  destination: Destination.unwrap()
+})
+
+export const CoordinatedAutomationUpdate = z.strictObject({
+  id: requiredString('Missing automation id'),
+  updates: CoordinatedAutomationUpdateFields.safeExtend({
+    enabled: z.literal(false).optional(),
+    expectedDefinitionRevision: z.number().int().positive()
+  }),
+  expectedOwner: ExpectedOwner.unwrap(),
+  destination: Destination,
+  expectedWorkspaceMode: z.literal('new_per_run').optional()
+})
+
+export type RuntimeCoordinatedAutomationCreateInput = z.infer<
+  typeof CoordinatedAutomationCreateRequest
+>
+export type RuntimeCoordinatedAutomationUpdateInput = z.infer<
+  typeof CoordinatedAutomationUpdate
+>['updates']
