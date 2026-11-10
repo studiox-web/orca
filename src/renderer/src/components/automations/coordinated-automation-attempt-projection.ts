@@ -19,41 +19,30 @@ import type {
 
 function findCrewRowForAttempt(
   attempt: CoordinatedDispatchAttemptObservation,
-  crewSnapshot: OrchestrationCrewSnapshot | null | undefined,
-  fallbackAgent: string,
-  fallbackHostLabel: string | null
+  crewSnapshot: OrchestrationCrewSnapshot | null | undefined
 ): OrchestrationCrewRow | null {
-  if (attempt.crewRow) {
-    return attempt.crewRow
-  }
   if (crewSnapshot?.status === 'ok') {
     const allRows = [
       ...crewSnapshot.sections.managing,
       ...crewSnapshot.sections.talkingWith,
       ...crewSnapshot.sections.managedBy
     ]
-    const matched = allRows.find(
-      (row) =>
+    const address = `dispatch:${attempt.dispatchId}`
+    const matched = allRows.find((row) => {
+      if (row.sendAddress?.startsWith('dispatch:') && row.sendAddress !== address) {
+        return false
+      }
+      if (row.openTarget?.kind === 'dispatch' && row.openTarget.address !== address) {
+        return false
+      }
+      return (
         row.partyKey === attempt.dispatchId ||
-        row.sendAddress === `dispatch:${attempt.dispatchId}` ||
-        (row.openTarget?.kind === 'dispatch' &&
-          row.openTarget.address === `dispatch:${attempt.dispatchId}`)
-    )
+        row.sendAddress === address ||
+        (row.openTarget?.kind === 'dispatch' && row.openTarget.address === address)
+      )
+    })
     if (matched) {
       return matched
-    }
-  }
-  if (attempt.openTarget) {
-    return {
-      partyKey: attempt.dispatchId,
-      role: 'worker',
-      label: attempt.ownerLabel ?? `${attempt.childDefinitionId} (${attempt.dispatchId})`,
-      agentKind: attempt.agentKind ?? fallbackAgent,
-      ...((attempt.hostLabel ?? fallbackHostLabel)
-        ? { hostLabel: attempt.hostLabel ?? fallbackHostLabel ?? undefined }
-        : {}),
-      status: attempt.technicalStatus,
-      openTarget: attempt.openTarget
     }
   }
   return null
@@ -98,12 +87,7 @@ export function projectCoordinatedAttempt(input: {
     ? (acceptanceRecord?.status ?? 'unverified')
     : (acceptanceRecord?.status ??
       (obs.workerReportOutcome === 'succeeded' ? 'evaluating' : 'unverified'))
-  const crewRow = findCrewRowForAttempt(
-    obs,
-    crewSnapshot,
-    input.fallbackAgent,
-    input.fallbackHostLabel
-  )
+  const crewRow = findCrewRowForAttempt(obs, crewSnapshot)
   const openStatus = resolveAttemptOpenStatus(crewRow, effectiveTechnical)
   const report = obs.structuredResult
 

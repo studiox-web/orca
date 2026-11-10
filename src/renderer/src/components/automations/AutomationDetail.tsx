@@ -10,7 +10,9 @@ import {
   type AutomationRun
 } from '../../../../shared/automations-types'
 import { useAppStore } from '@/store'
-import { AutomationCoordinatedRunPanel } from './AutomationCoordinatedRunPanel'
+import { AutomationCoordinatedHostRunPanel } from './AutomationCoordinatedHostRunPanel'
+import type { AutomationCapturedOwner } from './automation-captured-owner'
+import type { CoordinatedRunRequests } from './coordinated-run-api-client'
 import { AutomationWorkersSection } from './AutomationWorkersSection'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
@@ -33,7 +35,6 @@ import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
 import { automationRunErrorText } from './automation-run-error-copy'
 import {
   DetailMetric,
-  focusConfiguredWorkerCard,
   formatGrace,
   getAutomationToolbarLabels,
   ToolbarIconButton,
@@ -41,6 +42,9 @@ import {
 } from './automation-detail-components'
 
 type AutomationDetailProps = {
+  capturedOwner?: AutomationCapturedOwner
+  coordinatedRunRequests?: CoordinatedRunRequests
+  historyUnavailable?: string | null
   automation: Automation | null
   runs: AutomationRun[]
   projectName: string
@@ -59,6 +63,9 @@ type AutomationDetailProps = {
 
 export function AutomationDetail({
   automation,
+  capturedOwner,
+  coordinatedRunRequests,
+  historyUnavailable,
   runs,
   projectName,
   workspaceName,
@@ -369,15 +376,15 @@ export function AutomationDetail({
             snapshotRunId={snapshotRunId}
             historicalSnapshot={historicalSnapshot}
           />
-          {runs.length > 0 ? (
-            <AutomationCoordinatedRunPanel
+          {coordinatedRunRequests ? (
+            <AutomationCoordinatedHostRunPanel
               automation={automation}
               runs={runs}
-              hostLabel={hostDisplay.label}
-              workspaceLabel={runLocationLabel}
-              isFeatureFlagEnabled={isCoordinatedFeatureEnabled}
-              now={now}
-              onInspectChildDefinition={focusConfiguredWorkerCard}
+              capturedOwner={capturedOwner}
+              hostEntry={hostEntry}
+              historyUnavailable={historyUnavailable}
+              requests={coordinatedRunRequests}
+              enabled={isCoordinatedFeatureEnabled}
             />
           ) : null}
         </>

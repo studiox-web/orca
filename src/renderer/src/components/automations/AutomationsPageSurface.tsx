@@ -1,4 +1,5 @@
 import React from 'react'
+import { capturedAutomationOwner } from './automation-captured-owner'
 import { translate } from '@/i18n/i18n'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { AutomationEditorDialog } from './AutomationEditorDialog'
@@ -257,6 +258,11 @@ export function AutomationsPageSurface({
           selectedExternal={selectedExternal}
           selectedRuns={setup.selectedRuns}
           selectedRunsNotice={setup.selectedRunsNotice}
+          coordinatedRunRequests={local.coordinatedRunRequests}
+          selectedCapturedOwner={capturedAutomationOwner(
+            list.capturedAutomationOwners,
+            selectedRow?.key ?? null
+          )}
           selectedHostEntry={destination.rowRecoveryHost(selectedRow?.key ?? null)}
           recoverSelectedRuns={(action) => {
             hostCatalog.recover(action, destination.rowRecoveryHost(selectedRow?.key ?? null))

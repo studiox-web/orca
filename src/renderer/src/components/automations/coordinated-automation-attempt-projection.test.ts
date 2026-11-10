@@ -69,4 +69,17 @@ describe('attempt crew navigation identity', () => {
     }
     expect(projectWithCrew(row).crewRow).toBe(row)
   })
+  it('rejects a crew row whose Dispatch address contradicts its target', () => {
+    expect(
+      projectWithCrew({
+        partyKey: 'ctx_old',
+        role: 'worker',
+        label: 'Wrong target',
+        agentKind: 'claude',
+        status: 'working',
+        sendAddress: 'dispatch:ctx_old',
+        openTarget: { kind: 'dispatch', address: 'dispatch:ctx_new' }
+      }).canOpenWorker
+    ).toBe(false)
+  })
 })

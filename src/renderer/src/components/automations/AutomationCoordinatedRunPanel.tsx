@@ -74,16 +74,17 @@ export function AutomationCoordinatedRunPanel({
 }: AutomationCoordinatedRunPanelProps): React.JSX.Element | null {
   const candidateRuns = useMemo(() => {
     if (run) {
-      return [run]
+      return run.automationId === automation.id ? [run] : []
     }
     return runs.filter(
       (candidate) =>
-        Boolean(candidate.resolvedSnapshot) ||
-        Boolean(candidate.completionReceipt) ||
-        Boolean(candidate.materializationPhase) ||
-        Boolean(candidate.coordinatedQuarantine) ||
-        Boolean(candidate.retainedEvidence) ||
-        isCoordinatedAutomation(automation)
+        candidate.automationId === automation.id &&
+        (Boolean(candidate.resolvedSnapshot) ||
+          Boolean(candidate.completionReceipt) ||
+          Boolean(candidate.materializationPhase) ||
+          Boolean(candidate.coordinatedQuarantine) ||
+          Boolean(candidate.retainedEvidence) ||
+          isCoordinatedAutomation(automation))
     )
   }, [automation, run, runs])
 
@@ -94,8 +95,7 @@ export function AutomationCoordinatedRunPanel({
 
   const activeRunId = selectedRunId ?? internalRunId ?? candidateRuns[0]?.id ?? null
   const activeRun = useMemo(
-    () =>
-      candidateRuns.find((candidate) => candidate.id === activeRunId) ?? candidateRuns[0] ?? null,
+    () => candidateRuns.find((candidate) => candidate.id === activeRunId) ?? null,
     [activeRunId, candidateRuns]
   )
 

@@ -10,7 +10,7 @@ export default defineConfig({
   projects: [
     {
       name: 'electron-headless',
-      testMatch: 'coordinated-app-lifecycle.spec.ts',
+      testMatch: ['coordinated-app-lifecycle.spec.ts', 'coordinated-app-renderer.spec.ts'],
       metadata: { orcaHeadful: false }
     }
   ]

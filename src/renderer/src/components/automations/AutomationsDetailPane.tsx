@@ -1,4 +1,6 @@
 import React from 'react'
+import type { AutomationCapturedOwner } from './automation-captured-owner'
+import type { CoordinatedRunRequests } from './coordinated-run-api-client'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -28,6 +30,8 @@ import {
 import { translate } from '@/i18n/i18n'
 
 type AutomationsDetailPaneProps = {
+  selectedCapturedOwner?: AutomationCapturedOwner
+  coordinatedRunRequests?: CoordinatedRunRequests
   selected: Automation | null
   selectedExternal: ExternalAutomationListEntry | null
   selectedRuns: AutomationRun[]
@@ -62,6 +66,8 @@ type AutomationsDetailPaneProps = {
 
 export function AutomationsDetailPane({
   selected,
+  selectedCapturedOwner,
+  coordinatedRunRequests,
   selectedExternal,
   selectedRuns,
   selectedRunsNotice,
@@ -182,6 +188,9 @@ export function AutomationsDetailPane({
           <TabsContent value="overview" className="scrollbar-sleek min-h-0 overflow-auto p-5">
             <AutomationDetail
               automation={selected}
+              capturedOwner={selectedCapturedOwner}
+              coordinatedRunRequests={coordinatedRunRequests}
+              historyUnavailable={selectedRunsNotice?.message}
               runs={selectedRuns}
               projectName={selectedRepoDisplayName}
               projectDefaultBaseRef={selectedRepoDefaultBaseRef}

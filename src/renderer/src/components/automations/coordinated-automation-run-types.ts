@@ -1,3 +1,4 @@
+import type { CoordinatedObservationScope } from './coordinated-run-observation-scope'
 import type {
   AutomationExecutionTargetType,
   AutomationOutcomeContract,
@@ -139,6 +140,7 @@ export type OccupiedMutationLaneObservation = {
 }
 
 export type CoordinatedRunLiveObservation = {
+  scope: CoordinatedObservationScope
   attempts?: readonly CoordinatedDispatchAttemptObservation[]
   stageAcceptances?: readonly StageAcceptanceRecord[]
   stageApprovals?: readonly CoordinatedApprovalObservation[]

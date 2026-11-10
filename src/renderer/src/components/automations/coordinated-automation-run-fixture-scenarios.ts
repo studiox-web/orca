@@ -5,6 +5,15 @@ import {
 import type { CoordinatedRunLiveObservation } from './coordinated-automation-run-projection'
 
 export const sampleActiveRunObservation: CoordinatedRunLiveObservation = {
+  scope: {
+    automationId: 'auto-article-coord',
+    automationRunId: 'run-coord-active-101',
+    orchestrationRunId: 'orch_run_live_101',
+    definitionRevision: 2,
+    executionAuthority: 'local:local-host',
+    canonicalDigest: sampleCoordinatedFrozenSnapshotRev2.canonicalDigest
+  },
+
   elapsedWallClockSeconds: 420,
   activeFixersCount: 1,
   dispatchStartFailuresCount: 0,
@@ -173,6 +182,7 @@ export const sampleActiveRunObservation: CoordinatedRunLiveObservation = {
 }
 
 export const sampleBlockedUncertainObservation: CoordinatedRunLiveObservation = {
+  scope: sampleActiveRunObservation.scope,
   elapsedWallClockSeconds: 1850,
   activeFixersCount: 0,
   dispatchStartFailuresCount: 3,
@@ -221,4 +231,19 @@ export const sampleBlockedUncertainObservation: CoordinatedRunLiveObservation = 
     }
   ],
   stageAcceptances: sampleActiveRunObservation.stageAcceptances
+}
+
+for (const observation of [sampleActiveRunObservation, sampleBlockedUncertainObservation]) {
+  observation.crewSnapshot = {
+    status: 'ok',
+    sections: {
+      managedBy: [],
+      talkingWith: [],
+      managing: (observation.attempts ?? []).flatMap((attempt) =>
+        attempt.crewRow
+          ? [{ ...attempt.crewRow, sendAddress: `dispatch:${attempt.dispatchId}` }]
+          : []
+      )
+    }
+  }
 }

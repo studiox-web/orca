@@ -1,3 +1,4 @@
+import { scopedCoordinatedEvidence } from './coordinated-run-observation-scope'
 import type {
   Automation,
   AutomationExecutionTargetType,
@@ -92,7 +93,8 @@ export function projectCoordinatedAutomationRun(input: {
     now?: number
   }
 }): ProjectedCoordinatedRun {
-  const { automation, run, observation, operatorActions, options } = input
+  const { automation, operatorActions, options } = input
+  const { run, observation } = scopedCoordinatedEvidence(automation, input.run, input.observation)
   const isFeatureFlagEnabled = options?.isFeatureFlagEnabled ?? true
   const snapshot = run.resolvedSnapshot ?? null
   const definitionRevision =
@@ -115,9 +117,7 @@ export function projectCoordinatedAutomationRun(input: {
   const targetType = snapshot?.executionTarget.type ?? automation.executionTargetType
   const targetId = snapshot?.executionTarget.id ?? automation.executionTargetId
   const targetExecutionAuthority =
-    run.completionReceipt?.identityChain.targetExecutionAuthority ??
-    run.retainedEvidence?.executionAuthority ??
-    `${targetType}:${targetId}`
+    run.retainedEvidence?.executionAuthority ?? `${targetType}:${targetId}`
   const isRemoteAuthority =
     targetType === 'ssh' ||
     targetExecutionAuthority.startsWith('ssh:') ||
@@ -147,7 +147,7 @@ export function projectCoordinatedAutomationRun(input: {
     }
   }
   for (const a of observation?.attempts ?? []) {
-    if (a.technicalStatus === 'completed' || a.workerReportOutcome === 'succeeded') {
+    if (a.technicalStatus === 'completed') {
       completedStageIds.add(a.childDefinitionId)
     }
   }

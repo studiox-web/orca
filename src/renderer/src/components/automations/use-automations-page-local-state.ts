@@ -11,6 +11,7 @@ import { AUTOMATION_DEFAULT_TIME } from './automation-draft-model'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationCreateDestination } from './automation-create-destination'
+import type { CoordinatedRunRequests } from './coordinated-run-api-client'
 import type { CoordinatedCreateIntent } from './automation-coordinated-save'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {
@@ -30,6 +31,7 @@ import type { AutomationsPageStoreState } from './use-automations-page-store-sta
 /** React-owned values for the page; host/catalog state remains in dedicated hooks. */
 export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const { defaultAgent, setSelectedId } = store
+  const coordinatedRunRequests = useRef<CoordinatedRunRequests>(new Map()).current
   const [automations, setAutomations] = useState<Automation[]>([])
   const [automationHostTargetKey, setAutomationHostTargetKey] = useState<string | null>(null)
   const [selectedAutomationRuns, setSelectedAutomationRuns] =
@@ -199,6 +201,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     setEditingHostStableKey,
     moveCreationKeysRef,
     coordinatedCreateIntentRef,
+    coordinatedRunRequests,
     relativeNow,
     setRelativeNow,
     pageView,
