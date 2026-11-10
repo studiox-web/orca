@@ -88,6 +88,33 @@ export type CoordinatedAutomationRunHost = {
   startManualRun: (request: CoordinatedManualRunRequest) => Promise<CoordinatedManualRunResult>
   reconcileRun: (request: CoordinatedRunScopeRequest) => Promise<CoordinatedRunReconcileResult>
   inspectRun: (request: CoordinatedRunScopeRequest) => CoordinatedRunInspection
+  stopRun: (request: CoordinatedRunStopRequest) => Promise<CoordinatedRunReconcileResult>
+  retryStage: (request: CoordinatedRunRetryRequest) => Promise<CoordinatedRunReconcileResult>
+  resolveGate: (request: CoordinatedRunGateRequest) => Promise<CoordinatedRunReconcileResult>
+}
+
+/** Operator actions bind to the run's frozen orchestration Run, revision, and authority. */
+export type CoordinatedRunOperatorScope = CoordinatedRunScopeRequest & {
+  orchestrationRunId: string | null
+  definitionRevision: number
+  targetExecutionAuthority: string
+}
+
+export type CoordinatedRunStopRequest = CoordinatedRunOperatorScope & { note?: string }
+
+export type CoordinatedRunRetryRequest = CoordinatedRunOperatorScope & {
+  childDefinitionId: string
+  taskId: string
+  retryOfDispatchId: string
+}
+
+export type CoordinatedRunGateRequest = CoordinatedRunOperatorScope & {
+  gateId: string
+  decision: 'approve' | 'reject' | 'escalate'
+  note?: string
+  childDefinitionId?: string
+  taskId?: string
+  dispatchId?: string
 }
 
 export class CoordinatedRunHostRefusedError extends Error {
@@ -108,6 +135,9 @@ export function createUnavailableCoordinatedRunHost(
     availability: { available: false, state, reason },
     startManualRun: async () => refuse(),
     reconcileRun: async () => refuse(),
-    inspectRun: () => refuse()
+    inspectRun: () => refuse(),
+    stopRun: async () => refuse(),
+    retryStage: async () => refuse(),
+    resolveGate: async () => refuse()
   }
 }

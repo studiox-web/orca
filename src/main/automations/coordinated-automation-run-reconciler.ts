@@ -24,16 +24,20 @@ import {
 } from './coordinated-automation-recovery-context'
 import { acceptedStageReports } from './coordinated-automation-accepted-reports'
 import { admitSettledAttempts } from './coordinated-automation-stage-admission'
+import { isCompleteCoordinatedHostApproval } from './coordinated-automation-approval-validation'
 import { resolveRunWorkspacePath } from './coordinated-automation-attempt-validation'
 import { dispatchRunnableStages } from './coordinated-automation-stage-dispatch'
 import {
   reconcileStartingAttempts,
-  repairNativeChildDispatchMappings
+  repairNativeChildDispatchMappings,
+  abandonStoppedAttempts
 } from './coordinated-automation-attempt-lineage'
 import { syncNativeReadiness } from './coordinated-automation-native-readiness'
+import { settleStoppingAttemptsForReconcile } from './coordinated-automation-native-stub-stop'
 import {
   haltedOrNativeUncertain,
-  nativeSettlementHolds
+  nativeSettlementHolds,
+  operatorStopOutcome
 } from './coordinated-automation-halt-outcome'
 import type { CoordinatedRunOutcome } from './coordinated-automation-halt-outcome'
 
@@ -218,12 +222,19 @@ export async function reconcileCoordinatedRun(
   })
   onClaimed?.(ledger)
   const ctx: CoordinatedPassContext = { ...base, ledger }
+  // Operator approvals are durable progress; acceptance reads only fully scoped records.
+  ctx.hostApprovals = () => [
+    ...base.hostApprovals(),
+    ...(ledger.progress.approvals ?? []).filter(isCompleteCoordinatedHostApproval)
+  ]
   let waiting: string[] = []
   for (let pass = 0; pass < MAX_PASSES; pass += 1) {
     assertCoordinatorActive(ctx)
     run = requireRun(ctx, automationRunId)
     let progressed = reconcileStartingAttempts(ctx, run)
     progressed = repairNativeChildDispatchMappings(ctx, run) || progressed
+    progressed = (await settleStoppingAttemptsForReconcile(ctx, run)) || progressed
+    progressed = abandonStoppedAttempts(ctx, run) || progressed
     progressed = admitSettledAttempts(ctx, run, snapshot) || progressed
     syncNativeReadiness(ctx, run, snapshot)
     reverifyAcceptedArtifacts(ctx, run, snapshot)
@@ -248,6 +259,10 @@ export async function reconcileCoordinatedRun(
   run = requireRun(ctx, automationRunId)
   if (ctx.ledger.progress.halt) {
     return haltedOrNativeUncertain(ctx, automationRunId)
+  }
+  const stopOutcome = await operatorStopOutcome(ctx, run, snapshot)
+  if (stopOutcome) {
+    return stopOutcome
   }
   const effects = unresolvedEffects(snapshot, ctx.ledger.progress)
   if (effects.uncertain.length > 0) {

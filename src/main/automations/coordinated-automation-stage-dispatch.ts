@@ -126,6 +126,7 @@ export async function dispatchRunnableStages(
   if (
     !ctx.isActive() ||
     ctx.ledger.progress.halt ||
+    ctx.ledger.progress.operatorStop ||
     effects.uncertain.length > 0 ||
     effectsInFlight
   ) {

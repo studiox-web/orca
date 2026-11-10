@@ -1,17 +1,11 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
-import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
 import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { inspectWorkerTerminal, resolvePinnedFederatedServer } from './worker-observation'
+import { resolvePinnedFederatedServer } from './worker-observation'
 import { refuseFederatedStopWhileKeptOpen } from './worker-keep-open'
-import { archiveWorkerOutputBeforeStop } from './worker-stop-archive'
-import {
-  resolveStructuredWorkerForDispatch,
-  stopStructuredWorker
-} from '../../orchestration-structured-worker-lifecycle'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import { finishLocalWorkerStop } from './worker-stop-local-finish'
 import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
@@ -121,128 +115,18 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             warning: contextOnlyStopWarning(begun)
           }
         }
-        const handle = begun.worker.agent_terminal_handle
-        if (!handle) {
-          return unknownReceipt(
-            params.dispatch,
-            db.markWorkerStopUnknown(
-              params.dispatch,
-              'The Dispatch has no recorded agent terminal.'
-            ),
-            'unknown'
-          )
-        }
-        if (isStructuredWorkerHandle(handle)) {
-          // Install the structured host after restart or observation/close stay unknown forever.
-          await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
-            console.warn(
-              '[orchestration] structured host install failed before stop',
-              handle,
-              error
-            )
-          })
-        }
-        const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
-        const liveHandle = observation.terminalHandle ?? handle
-        // The host exit can settle this stop while terminal inspection is awaiting inventory.
-        if (db.getWorkerDispatch(params.dispatch)?.state === 'stopped') {
+        const finished = await finishLocalWorkerStop(runtime, db, params.dispatch, begun.worker)
+        if (finished.kind === 'stopped') {
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
           return {
             dispatchId: params.dispatch,
-            state: 'stopped',
+            state: finished.worker.state,
             alreadySettled: false,
-            processAction: 'none'
+            processAction: finished.processAction,
+            ...(finished.close !== undefined ? { close: finished.close } : {})
           }
         }
-        // Still attempt stop on unverifiable contact. Structured exited is also addressable: close/hide its current /clear session to prevent restart on mail.
-        if (
-          !observation.exact ||
-          (observation.status !== 'live' &&
-            observation.status !== 'unverifiable' &&
-            !isStructuredWorkerHandle(handle))
-        ) {
-          return unknownReceipt(
-            params.dispatch,
-            db.markWorkerStopUnknown(
-              params.dispatch,
-              `The recorded worker process is ${observation.status}; no terminal was closed.`
-            ),
-            'none'
-          )
-        }
-        const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
-        if (!resource || resource.ownership_state !== 'owned') {
-          const ownership = resource?.ownership_state ?? 'unproven'
-          return unknownReceipt(
-            params.dispatch,
-            db.markWorkerStopUnknown(
-              params.dispatch,
-              `The worker terminal is ${ownership}; no terminal was closed.`
-            ),
-            'none'
-          )
-        }
-        await archiveWorkerOutputBeforeStop({
-          runtime,
-          db,
-          dispatchId: params.dispatch,
-          terminalHandle: liveHandle,
-          attachedAt: begun.worker.created_at
-        })
-        const structured = resolveStructuredWorkerForDispatch(db, params.dispatch)
-        if (structured) {
-          const stop = await stopStructuredWorker(structured, runtime)
-          if (!stop.stopped) {
-            // Only proven exit settles; if no close was issued, the receipt must not claim one.
-            return unknownReceipt(
-              params.dispatch,
-              db.markWorkerStopUnknown(params.dispatch, stop.reason ?? 'The close was not proven.'),
-              stop.closeAttempted ? 'closed_agent_terminal' : 'none'
-            )
-          }
-          const stopped = db.settleWorkerStop(params.dispatch)
-          runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-          return {
-            dispatchId: params.dispatch,
-            state: stopped.state,
-            alreadySettled: false,
-            processAction: 'closed_agent_terminal'
-          }
-        }
-        const closed = await runtime
-          .closeTerminal(liveHandle)
-          .then((close) => ({ close }) as const)
-          .catch(
-            (error: unknown) =>
-              ({ error: error instanceof Error ? error.message : String(error) }) as const
-          )
-        // A concurrent process exit already proves and settles stop; do not re-settle or report uncertainty.
-        if (db.getWorkerDispatch(params.dispatch)?.state !== 'stopped') {
-          if ('error' in closed) {
-            return unknownReceipt(
-              params.dispatch,
-              db.markWorkerStopUnknown(params.dispatch, closed.error),
-              'unknown'
-            )
-          }
-          if (!closed.close.ptyKilled) {
-            // Tab retirement alone does not prove the agent stopped.
-            return unknownReceipt(
-              params.dispatch,
-              db.markWorkerStopUnknown(params.dispatch, describeUnconfirmedAgentStop(closed.close)),
-              'closed_agent_terminal'
-            )
-          }
-          db.settleWorkerStop(params.dispatch)
-        }
-        runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-        return {
-          dispatchId: params.dispatch,
-          state: db.getWorkerDispatch(params.dispatch)?.state ?? 'stopped',
-          alreadySettled: false,
-          processAction: 'closed_agent_terminal',
-          ...('close' in closed ? { close: closed.close } : {})
-        }
+        return unknownReceipt(params.dispatch, finished.worker, finished.processAction)
       })
   })
 ]

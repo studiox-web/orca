@@ -1,4 +1,5 @@
 import type { SemanticReceiptApproval } from '../../shared/coordinated-automation-receipt-types'
+import type { CoordinatedRunApproval } from '../../shared/coordinated-automation-progress-types'
 import type {
   OutcomeRequiredApproval,
   StageApprovalRequirement
@@ -29,6 +30,29 @@ export type CoordinatedParentHostApproval = SemanticReceiptApproval & {
 }
 
 export type CoordinatedHostApproval = CoordinatedStageHostApproval | CoordinatedParentHostApproval
+
+/**
+ * Only a fully scoped record can satisfy acceptance validation: stage approvals must name the
+ * exact Task and Dispatch, parent approvals must name no stage scope. Incomplete operator
+ * records stay inert instead of masquerading as host approvals.
+ */
+export function isCompleteCoordinatedHostApproval(
+  approval: CoordinatedRunApproval
+): approval is CoordinatedHostApproval {
+  if (approval.scope === 'stage') {
+    return (
+      typeof approval.childDefinitionId === 'string' &&
+      typeof approval.taskId === 'string' &&
+      typeof approval.dispatchId === 'string' &&
+      approval.targetChildId === undefined
+    )
+  }
+  return (
+    approval.childDefinitionId === undefined &&
+    approval.taskId === undefined &&
+    approval.dispatchId === undefined
+  )
+}
 
 export type StageApprovalValidationContext = Readonly<{
   automationId: string

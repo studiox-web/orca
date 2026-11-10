@@ -1,5 +1,8 @@
 import type {
   CoordinatedEscalation,
+  CoordinatedOperatorDecision,
+  CoordinatedOperatorStop,
+  CoordinatedRunApproval,
   CoordinatedRunHalt,
   CoordinatedRunProgress,
   CoordinatedStageProgress
@@ -20,6 +23,7 @@ export type CoordinatedDurableBoundary =
   | 'effect.after-intent'
   | 'effect.after-adapter-ack'
   | 'receipt.after-persist'
+  | 'operator.after-decision'
 
 export type CoordinatedBoundaryHook = (
   boundary: CoordinatedDurableBoundary,
@@ -107,6 +111,32 @@ export function withHalt(
   return progress.halt ? progress : { ...progress, halt }
 }
 
+export function withOperatorStop(
+  progress: CoordinatedRunProgress,
+  stop: CoordinatedOperatorStop
+): CoordinatedRunProgress {
+  return progress.operatorStop ? progress : { ...progress, operatorStop: stop }
+}
+
+export function withOperatorDecision(
+  progress: CoordinatedRunProgress,
+  decision: CoordinatedOperatorDecision
+): CoordinatedRunProgress {
+  return { ...progress, operatorDecisions: [...(progress.operatorDecisions ?? []), decision] }
+}
+
+/** One approval per scope/id; a duplicate records nothing so replays stay idempotent. */
+export function withRunApproval(
+  progress: CoordinatedRunProgress,
+  approval: CoordinatedRunApproval
+): CoordinatedRunProgress {
+  const approvals = progress.approvals ?? []
+  if (approvals.some((a) => a.scope === approval.scope && a.approvalId === approval.approvalId)) {
+    return progress
+  }
+  return { ...progress, approvals: [...approvals, approval] }
+}
+
 export function withStage(
   progress: CoordinatedRunProgress,
   childDefinitionId: string,
@@ -156,7 +186,7 @@ export class CoordinatedProgressLedger {
         `Coordinated progress for run "${input.automationRunId}" belongs to another snapshot, revision, authority, or orchestration Run: ${problem}`
       )
     }
-    const base: CoordinatedRunProgress = stored ?? {
+    const raw: CoordinatedRunProgress = stored ?? {
       schemaVersion: 1,
       automationId: input.snapshot.automationId,
       definitionRevision: input.snapshot.definitionRevision,
@@ -177,7 +207,17 @@ export class CoordinatedProgressLedger {
       reports: [],
       effects: {},
       escalations: [],
-      halt: null
+      halt: null,
+      approvals: [],
+      operatorDecisions: [],
+      operatorStop: null
+    }
+    // Older progress files predate the operator fields; claim normalizes instead of migrating.
+    const base: CoordinatedRunProgress = {
+      ...raw,
+      approvals: raw.approvals ?? [],
+      operatorDecisions: raw.operatorDecisions ?? [],
+      operatorStop: raw.operatorStop ?? null
     }
     const next = { ...base, generation: base.generation + 1, sequence: base.sequence + 1 }
     input.store.write(next, base.sequence)

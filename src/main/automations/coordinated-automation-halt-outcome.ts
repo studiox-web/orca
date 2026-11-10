@@ -4,6 +4,9 @@ import {
 } from './coordinated-automation-native-attempt'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
+import type { ResolvedAutomationRunSnapshot } from '../../shared/coordinated-automation-types'
+import { unresolvedEffects } from './coordinated-automation-effect-gate'
+import { isOpenAttempt } from './coordinated-automation-attempt-lineage'
 import {
   assertCoordinatorActive,
   type CoordinatedPassContext
@@ -98,4 +101,53 @@ export function haltedOrNativeUncertain(
     reason
   })
   return { state: 'outcome_uncertain', reason, run: held, progress: ctx.ledger.progress }
+}
+
+/**
+ * An operator stop stays uncertain until every attempt is durably terminal and no effect is
+ * uncertain; only then does it settle final as a dispatch failure. Exit evidence is never
+ * synthesized: `stop_unknown` workers keep the run uncertain, as do unsettled native reports.
+ */
+export async function operatorStopOutcome(
+  ctx: CoordinatedPassContext,
+  run: AutomationRun,
+  snapshot: ResolvedAutomationRunSnapshot
+): Promise<CoordinatedRunOutcome | null> {
+  const stop = ctx.ledger.progress.operatorStop
+  if (!stop) {
+    return null
+  }
+  const detail = `Operator stop requested at ${stop.at}${stop.reason ? `: ${stop.reason}` : ''}`
+  const hold = (reason: string) => {
+    const held = ctx.store.recordCoordinatedRunHold({
+      automationRunId: run.id,
+      state: 'outcome_uncertain',
+      reason
+    })
+    return { state: 'outcome_uncertain' as const, reason, run: held, progress: ctx.ledger.progress }
+  }
+  const open = Object.values(ctx.ledger.progress.stages)
+    .flatMap((stage) => stage.lineage)
+    .filter(isOpenAttempt)
+  if (open.length > 0) {
+    return hold(
+      `${detail}; awaiting exit evidence for attempt(s) ${open
+        .map((record) => record.dispatchId ?? `#${record.attemptNumber}`)
+        .join(', ')}.`
+    )
+  }
+  const effects = unresolvedEffects(snapshot, ctx.ledger.progress)
+  if (effects.uncertain.length > 0) {
+    return hold(`${detail}; effect(s) ${effects.uncertain.join(', ')} remain uncertain.`)
+  }
+  const holds = nativeSettlementHolds(ctx, run)
+  if (holds.length > 0) {
+    return hold(`${detail}; native settlement is still unsettled: ${holds.join(' ')}`)
+  }
+  const settled = ctx.store.recordCoordinatedRunSettlement({
+    automationRunId: run.id,
+    status: 'dispatch_failed',
+    error: detail
+  })
+  return { state: 'failed', reason: detail, run: settled, progress: ctx.ledger.progress }
 }

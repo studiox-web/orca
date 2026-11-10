@@ -222,3 +222,43 @@ export function repairNativeChildDispatchMappings(
   }
   return ctx.ledger.progress.sequence !== before
 }
+
+const ABANDONED_WORKER_STATES = ['stopped', 'abandoned']
+
+/**
+ * A Dispatch whose worker reached a proven terminal stop (or was abandoned) will never deliver a
+ * report; its open attempt record is abandoned durably so the run stops awaiting evidence it
+ * cannot receive. `stop_unknown` deliberately stays open — that outcome is not proof of exit.
+ */
+export function abandonStoppedAttempts(ctx: CoordinatedPassContext, run: AutomationRun): boolean {
+  const before = ctx.ledger.progress.sequence
+  for (const [id, stage] of Object.entries(ctx.ledger.progress.stages)) {
+    if (ctx.inFlightTaskIds.has(stageIdTask(run, id))) {
+      continue
+    }
+    for (const record of stage.lineage.filter(isOpenAttempt)) {
+      if (!record.dispatchId) {
+        continue
+      }
+      const worker = ctx.orchestrationDb.getWorkerDispatch(record.dispatchId)
+      if (!worker || !ABANDONED_WORKER_STATES.includes(worker.state)) {
+        continue
+      }
+      ctx.ledger.update(
+        'attempt-abandoned-stopped',
+        (progress) =>
+          withAttemptStatus(progress, id, (r) => r.attemptNumber === record.attemptNumber, {
+            status: 'abandoned'
+          }),
+        id
+      )
+    }
+  }
+  return ctx.ledger.progress.sequence !== before
+}
+
+function stageIdTask(run: AutomationRun, childDefinitionId: string): string {
+  return (
+    (run.childMappings ?? []).find((m) => m.childDefinitionId === childDefinitionId)?.taskId ?? ''
+  )
+}

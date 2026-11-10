@@ -1,3 +1,5 @@
+import type { SemanticReceiptApproval } from './coordinated-automation-receipt-types'
+
 /**
  * Host-owned durable progress for one coordinated run. Stage acceptance, loop counters,
  * effect intents, and escalations live here so no agent owns the only copy.
@@ -118,6 +120,38 @@ export type CoordinatedRunHalt = {
   at: number
 }
 
+/**
+ * A host-recorded operator approval. The same record satisfies stage and parent acceptance
+ * validation; its scope fields must name the exact run and, for stage scope, the exact
+ * Task/Dispatch it approves.
+ */
+export type CoordinatedRunApproval = SemanticReceiptApproval & {
+  scope: 'stage' | 'parent'
+  automationId: string
+  definitionRevision: number
+  automationRunId: string
+  orchestrationRunId: string
+  childDefinitionId?: string
+  taskId?: string
+  dispatchId?: string
+  targetChildId?: string
+}
+
+export type CoordinatedOperatorDecision = {
+  kind: 'stop' | 'retry' | 'gate_resolution'
+  at: number
+  /** The authenticated local operator identity; never a worker author identity. */
+  actor: string
+  childDefinitionId: string | null
+  dispatchId: string | null
+  gateId: string | null
+  decision: 'approve' | 'reject' | 'escalate' | null
+  detail: string
+}
+
+/** Durable operator stop request; fences every further dispatch until exit evidence settles. */
+export type CoordinatedOperatorStop = { at: number; reason: string | null }
+
 export type CoordinatedRunProgress = {
   schemaVersion: 1
   automationId: string
@@ -140,4 +174,10 @@ export type CoordinatedRunProgress = {
   effects: Record<string, CoordinatedEffectEntry>
   escalations: CoordinatedEscalation[]
   halt: CoordinatedRunHalt | null
+  /** Operator approvals recorded through the gate-resolution authority. */
+  approvals?: CoordinatedRunApproval[]
+  /** Append-only audit of operator stop/retry/gate decisions. */
+  operatorDecisions?: CoordinatedOperatorDecision[]
+  /** Set once by the stop authority; idempotent replays do not rewrite it. */
+  operatorStop?: CoordinatedOperatorStop | null
 }

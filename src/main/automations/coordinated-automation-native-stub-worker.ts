@@ -25,17 +25,19 @@ import {
 import type { CoordinatedRecoveryContext } from './coordinated-automation-recovery-context'
 
 export type CoordinatedNativeStubWorker = Readonly<{ kind: typeof NATIVE_STUB_ATTEMPT }>
-type Host = {
+export type NativeStubWorkerHost = {
   runtime: OrcaRuntimeService
   store: Store
   db: OrchestrationDb
   composition: NativeStubSessionTestComposition
 }
-const hosts = new WeakMap<CoordinatedNativeStubWorker, Host>()
+const hosts = new WeakMap<CoordinatedNativeStubWorker, NativeStubWorkerHost>()
 const lanes = new WeakMap<OrchestrationDb, Map<string, Promise<void>>>()
 
 /** Process-local admission only; neither a capability string nor an RPC payload installs a host. */
-export function createCoordinatedNativeStubWorker(input: Host): CoordinatedNativeStubWorker {
+export function createCoordinatedNativeStubWorker(
+  input: NativeStubWorkerHost
+): CoordinatedNativeStubWorker {
   assertNativeStubComposition(input.composition, input.runtime, input.store)
   if (input.runtime.getOrchestrationDb() !== input.db) {
     throw new Error('native_stub_database_mismatch')
@@ -77,7 +79,22 @@ export function coordinatedNativeStubHostIsActive(
   }
 }
 
-function readHost(ctx: CoordinatedRecoveryContext): Host {
+/** Stop-path host resolution; shared with the native stop authority module. */
+export function resolveActiveNativeStubHost(
+  worker: CoordinatedNativeStubWorker
+): NativeStubWorkerHost {
+  const host = hosts.get(worker)
+  if (!host) {
+    throw new Error('coordinated_native_stub_host_refused')
+  }
+  assertNativeStubComposition(host.composition, host.runtime, host.store)
+  if (host.runtime.getOrchestrationDb() !== host.db) {
+    throw new Error('coordinated_native_stub_host_changed')
+  }
+  return host
+}
+
+function readHost(ctx: CoordinatedRecoveryContext): NativeStubWorkerHost {
   const host = ctx.nativeStubWorker && hosts.get(ctx.nativeStubWorker)
   if (!host || host.store !== ctx.store || host.db !== ctx.orchestrationDb || ctx.effectAdapter) {
     throw new Error('coordinated_native_stub_host_refused')

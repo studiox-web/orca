@@ -1,9 +1,8 @@
 import type { CoordinatedAutomationRunHost } from '../automations/coordinated-automation-run-host-types'
 import type {
-  AutomationOwnerPrecondition,
-  AutomationOwnerFenceOperation
-} from '../../shared/automation-owner-precondition'
-import type { CoordinatedRunInspection } from '../../shared/coordinated-automation-run-inspection'
+  CoordinatedRunInspection,
+  CoordinatedRunReconcileResult
+} from '../../shared/coordinated-automation-run-inspection'
 import type {
   CoordinatedFakeRunReconcileResponse,
   CoordinatedFakeRunStartResponse,
@@ -13,17 +12,23 @@ import type {
 import {
   CoordinatedFakeRunStart,
   CoordinatedRunSelection,
+  ResolveCoordinatedGate,
+  RetryCoordinatedStage,
+  StopCoordinatedRun,
   type CoordinatedFakeRunStartInput,
-  type CoordinatedRunSelectionInput
+  type CoordinatedRunSelectionInput,
+  type ResolveCoordinatedGateInput,
+  type RetryCoordinatedStageInput,
+  type StopCoordinatedRunInput
 } from '../../shared/rpc-contract/coordinated-automation-run-params'
-import { assertCoordinatedDefinitionLocalTarget } from './coordinated-definition-write-gate'
+import {
+  assertCoordinatedRunParent,
+  assertCoordinatedRunSelection,
+  humanResolutionActionAvailability,
+  retryActionAvailability,
+  stopActionAvailability
+} from './runtime-coordinated-run-actions'
 import type { RuntimeStore } from './runtime-store-contract'
-
-type ParentSelection = {
-  runtimeId: string
-  automationId: string
-  expectedOwner: AutomationOwnerPrecondition
-}
 
 export class RuntimeCoordinatedRunController {
   constructor(
@@ -69,7 +74,7 @@ export class RuntimeCoordinatedRunController {
   ): Promise<CoordinatedFakeRunStartResponse> {
     const request = CoordinatedFakeRunStart.parse(input)
     const host = this.requireHost()
-    this.assertParent(request, runtimeId, 'mutate')
+    assertCoordinatedRunParent(this.store!, request, runtimeId, 'mutate')
     const result = await host.startManualRun({
       automationId: request.automationId,
       expectedOwner: request.expectedOwner,
@@ -89,7 +94,7 @@ export class RuntimeCoordinatedRunController {
   inspect(input: CoordinatedRunSelectionInput, runtimeId: string): { view: CoordinatedRunView } {
     const request = CoordinatedRunSelection.parse(input)
     const host = this.requireHost()
-    this.assertSelection(request, runtimeId)
+    assertCoordinatedRunSelection(this.store!, request, runtimeId)
     const inspection = host.inspectRun({
       automationId: request.automationId,
       automationRunId: request.automationRunId,
@@ -105,7 +110,7 @@ export class RuntimeCoordinatedRunController {
   ): Promise<CoordinatedFakeRunReconcileResponse> {
     const request = CoordinatedRunSelection.parse(input)
     const host = this.requireHost()
-    this.assertSelection(request, runtimeId)
+    assertCoordinatedRunSelection(this.store!, request, runtimeId)
     const result = await host.reconcileRun({
       automationId: request.automationId,
       automationRunId: request.automationRunId,
@@ -122,16 +127,59 @@ export class RuntimeCoordinatedRunController {
     }
   }
 
+  async stop(
+    input: StopCoordinatedRunInput,
+    runtimeId: string
+  ): Promise<CoordinatedFakeRunReconcileResponse> {
+    const request = StopCoordinatedRun.parse(input)
+    return this.operatorAction(request, runtimeId, (host, req) => host.stopRun(req))
+  }
+
+  async retryStage(
+    input: RetryCoordinatedStageInput,
+    runtimeId: string
+  ): Promise<CoordinatedFakeRunReconcileResponse> {
+    const request = RetryCoordinatedStage.parse(input)
+    return this.operatorAction(request, runtimeId, (host, req) => host.retryStage(req))
+  }
+
+  async resolveGate(
+    input: ResolveCoordinatedGateInput,
+    runtimeId: string
+  ): Promise<CoordinatedFakeRunReconcileResponse> {
+    const request = ResolveCoordinatedGate.parse(input)
+    return this.operatorAction(request, runtimeId, (host, req) => host.resolveGate(req))
+  }
+
+  private async operatorAction<T extends CoordinatedRunSelectionInput>(
+    request: T,
+    runtimeId: string,
+    invoke: (
+      host: CoordinatedAutomationRunHost,
+      request: T
+    ) => Promise<CoordinatedRunReconcileResult>
+  ): Promise<CoordinatedFakeRunReconcileResponse> {
+    const host = this.requireHost()
+    assertCoordinatedRunSelection(this.store!, request, runtimeId)
+    const result = await invoke(host, request)
+    const inspection = await this.finishMutation(host, request, runtimeId)
+    return {
+      state: result.state,
+      reason: result.reason,
+      view: this.view(inspection, request, runtimeId)
+    }
+  }
+
   private async finishMutation(
     host: CoordinatedAutomationRunHost,
     selection: CoordinatedRunSelectionInput,
     runtimeId: string
   ): Promise<CoordinatedRunInspection> {
     this.assertCurrentHost(host)
-    this.assertSelection(selection, runtimeId)
+    assertCoordinatedRunSelection(this.store!, selection, runtimeId)
     await this.store!.flushPendingOrThrowAsync!({ drainToStableGeneration: false })
     this.assertCurrentHost(host)
-    this.assertSelection(selection, runtimeId)
+    assertCoordinatedRunSelection(this.store!, selection, runtimeId)
     return host.inspectRun({
       automationId: selection.automationId,
       automationRunId: selection.automationRunId,
@@ -157,60 +205,6 @@ export class RuntimeCoordinatedRunController {
     }
   }
 
-  private assertParent(
-    input: ParentSelection,
-    runtimeId: string,
-    operation: AutomationOwnerFenceOperation
-  ): void {
-    if (input.runtimeId !== runtimeId) {
-      throw new Error('Coordinated request belongs to a different runtime authority.')
-    }
-    const store = this.store!
-    const parent = store.listAutomations!().find((entry) => entry.id === input.automationId)
-    if (!parent || parent.kind !== 'coordinated' || parent.enabled) {
-      throw new Error('A disabled coordinated Automation is required.')
-    }
-    store.assertAutomationOwnerFence!({
-      id: parent.id,
-      expectedOwner: input.expectedOwner,
-      operation
-    })
-    if (
-      input.expectedOwner.selector.kind !== 'self' ||
-      store.automationOwnerPrecondition!(parent.id)?.selector.kind !== 'self' ||
-      parent.executionTargetType !== 'local' ||
-      parent.schedulerOwner !== 'local_host_service'
-    ) {
-      throw new Error('Coordinated fake runs require a confirmed local desktop owner.')
-    }
-    assertCoordinatedDefinitionLocalTarget(store.getRepo(parent.projectId))
-  }
-
-  private assertSelection(input: CoordinatedRunSelectionInput, runtimeId: string): void {
-    if (input.runtimeId !== runtimeId || input.expectedOwner.selector.kind !== 'self') {
-      throw new Error(
-        'Coordinated run selection requires the exact local runtime and frozen owner.'
-      )
-    }
-    const parent = this.store!.listAutomations!().find((entry) => entry.id === input.automationId)
-    if (!parent || parent.kind !== 'coordinated') {
-      throw new Error('The coordinated parent is unavailable or archived.')
-    }
-    const run = this.store!.listAutomationRuns!().find(
-      (entry) => entry.id === input.automationRunId
-    )
-    if (
-      !run ||
-      run.automationId !== input.automationId ||
-      run.materializationPhase === undefined ||
-      run.coordinatedQuarantine !== undefined
-    ) {
-      throw new Error(
-        'Coordinated AutomationRun does not belong to this Automation or is unavailable.'
-      )
-    }
-  }
-
   private startAvailability(
     selection: CoordinatedRunSelectionInput,
     runtimeId: string
@@ -220,7 +214,7 @@ export class RuntimeCoordinatedRunController {
       return availability
     }
     try {
-      this.assertParent(selection, runtimeId, 'mutate')
+      assertCoordinatedRunParent(this.store!, selection, runtimeId, 'mutate')
       return availability
     } catch (error) {
       return {
@@ -236,7 +230,7 @@ export class RuntimeCoordinatedRunController {
     selection: CoordinatedRunSelectionInput,
     runtimeId: string
   ): CoordinatedRunView {
-    this.assertSelection(selection, runtimeId)
+    assertCoordinatedRunSelection(this.store!, selection, runtimeId)
     if (
       inspection.automationId !== selection.automationId ||
       inspection.automationRunId !== selection.automationRunId
@@ -250,12 +244,9 @@ export class RuntimeCoordinatedRunController {
       actions: {
         start: this.startAvailability(selection, runtimeId),
         reconcile: available,
-        stop: { available: false, reason: 'This host has no reviewed coordinated stop operation.' },
-        retry: {
-          available: false,
-          reason: 'This host has no reviewed coordinated retry operation.'
-        },
-        humanResolution: inspection.humanResolution
+        stop: stopActionAvailability(available, inspection),
+        retry: retryActionAvailability(available, inspection),
+        humanResolution: humanResolutionActionAvailability(available, inspection)
       },
       findings: {
         kind: 'unavailable',

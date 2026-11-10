@@ -20,18 +20,24 @@ import {
   materializeCoordinatedRun,
   orchestrationRecordProbe
 } from './coordinated-automation-materialization'
-import { selectEligibleTasksForDispatch } from './coordinated-automation-lane-scheduler'
 import {
   createDefaultFakeNoEffectsWorkerProvider,
   executeCoordinatedTaskDispatch
 } from './coordinated-automation-task-execution'
+import {
+  operatorResolveGate,
+  operatorRetryStage,
+  operatorStopRun,
+  type CoordinatedOperatorScopeInput
+} from './coordinated-automation-operator-actions'
+import { requestCoordinatedNativeStops } from './coordinated-automation-native-stub-stop'
 import type { CoordinatedRunProgressStore } from './coordinated-automation-progress-store'
 import { defaultCoordinatedProgressStore } from './coordinated-automation-dispatcher'
 import {
   type CoordinatedBoundaryHook,
   CoordinatedProgressLedger
 } from './coordinated-automation-progress-ledger'
-import { acceptedStageIds } from './coordinated-automation-native-readiness'
+import { dispatchReadyCoordinatedTasks } from './coordinated-automation-dispatcher'
 import {
   abandonCoordinatorWaits,
   assertCoordinatorActive,
@@ -166,47 +172,60 @@ export class CoordinatedAutomationAdapter {
   async dispatchReadyTasks(
     automationRunId: string
   ): Promise<{ taskId: string; dispatchId: string; outcome: string }[]> {
+    return dispatchReadyCoordinatedTasks(this.#ctx, this.#getRunOrThrow(automationRunId))
+  }
+
+  /** Operator stop: durable marker fences dispatch, native cancellation, then one reconcile. */
+  async stopRun(
+    input: CoordinatedOperatorScopeInput & { automationRunId: string; note?: string }
+  ): Promise<CoordinatedRunOutcome> {
+    return this.#operatorMutation(input.automationRunId, (run) => {
+      operatorStopRun(this.#ctx, run, input)
+      if (this.#ctx.nativeStubWorker) {
+        requestCoordinatedNativeStops(this.#ctx.nativeStubWorker, run)
+      }
+    })
+  }
+
+  async retryStage(
+    input: CoordinatedOperatorScopeInput & {
+      automationRunId: string
+      childDefinitionId: string
+      taskId: string
+      retryOfDispatchId: string
+    }
+  ): Promise<CoordinatedRunOutcome> {
+    return this.#operatorMutation(input.automationRunId, (run) =>
+      operatorRetryStage(this.#ctx, run, input)
+    )
+  }
+
+  async resolveGate(
+    input: CoordinatedOperatorScopeInput & {
+      automationRunId: string
+      gateId: string
+      decision: 'approve' | 'reject' | 'escalate'
+      note?: string
+      childDefinitionId?: string
+      taskId?: string
+      dispatchId?: string
+    }
+  ): Promise<CoordinatedRunOutcome> {
+    return this.#operatorMutation(input.automationRunId, (run) =>
+      operatorResolveGate(this.#ctx, run, input)
+    )
+  }
+
+  async #operatorMutation(
+    automationRunId: string,
+    mutate: (run: AutomationRun) => void
+  ): Promise<CoordinatedRunOutcome> {
     const run = this.#getRunOrThrow(automationRunId)
-    if (run.status === 'completed' || run.completionReceipt) {
-      return []
-    }
-    const snapshot = run.resolvedSnapshot
-    if (!snapshot || !run.orchestrationRunId) {
-      throw new Error(`Run "${automationRunId}" is not ready for dispatch.`)
-    }
-    const tasks = this.#ctx.orchestrationDb.listTasks({ runId: run.orchestrationRunId })
-    // Native readiness is never enough: every dependency must be durably accepted.
-    const accepted = acceptedStageIds(this.#ctx.progressStore.read(automationRunId))
-    const childByTask = new Map(
-      (run.childMappings ?? []).map((m) => [m.taskId, m.childDefinitionId] as const)
-    )
-    const readyTasks = tasks.filter((t) => {
-      const child = snapshot.resolvedChildren.find(
-        (c) => c.childDefinitionId === childByTask.get(t.id)
-      )
-      return (
-        t.status === 'ready' &&
-        child !== undefined &&
-        !accepted.has(child.childDefinitionId) &&
-        child.dependencies.every((dep) => accepted.has(dep.childId))
-      )
+    return this.runInParentLane(run.automationId, async () => {
+      assertCoordinatorActive(this.#ctx)
+      mutate(run)
+      return this.reconcileRunInLane(automationRunId)
     })
-    const childMap = new Map(snapshot.resolvedChildren.map((c) => [c.childDefinitionId, c]))
-    const taskToChild = new Map(
-      (run.childMappings ?? []).flatMap((m) => {
-        const child = childMap.get(m.childDefinitionId)
-        return child ? [[m.taskId, child] as const] : []
-      })
-    )
-    const candidateTasks = selectEligibleTasksForDispatch({
-      readyTasks,
-      inFlightTasks: tasks.filter(
-        (t) => t.status === 'dispatched' || this.#ctx.inFlightTaskIds.has(t.id)
-      ),
-      taskToChild,
-      maxConcurrency: snapshot.globalCeilings?.maxConcurrency ?? Infinity
-    })
-    return Promise.all(candidateTasks.map((task) => this.dispatchTask(automationRunId, task.id)))
   }
 
   /** Materializes if needed, then reconciles persisted evidence until the run cannot advance. */

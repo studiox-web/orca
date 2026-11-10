@@ -1,6 +1,9 @@
 import type {
   CoordinatedFakeRunStartInput,
-  CoordinatedRunSelectionInput
+  CoordinatedRunSelectionInput,
+  ResolveCoordinatedGateInput,
+  RetryCoordinatedStageInput,
+  StopCoordinatedRunInput
 } from '../../../../shared/rpc-contract/coordinated-automation-run-params'
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
 import type {
@@ -78,6 +81,30 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
   reconcileCoordinatedFakeRun(input: CoordinatedRunSelectionInput) {
     return this.automation.withExternalProbePriority(async () => {
       const result = await this.automation.coordinatedRuns.reconcile(input, this.getRuntimeId())
+      this.notifyAutomationsChanged({ reason: 'run', selector: { kind: 'self' } })
+      return result
+    })
+  }
+
+  stopCoordinatedRun(input: StopCoordinatedRunInput) {
+    return this.automation.withExternalProbePriority(async () => {
+      const result = await this.automation.coordinatedRuns.stop(input, this.getRuntimeId())
+      this.notifyAutomationsChanged({ reason: 'run', selector: { kind: 'self' } })
+      return result
+    })
+  }
+
+  retryCoordinatedStage(input: RetryCoordinatedStageInput) {
+    return this.automation.withExternalProbePriority(async () => {
+      const result = await this.automation.coordinatedRuns.retryStage(input, this.getRuntimeId())
+      this.notifyAutomationsChanged({ reason: 'run', selector: { kind: 'self' } })
+      return result
+    })
+  }
+
+  resolveCoordinatedGate(input: ResolveCoordinatedGateInput) {
+    return this.automation.withExternalProbePriority(async () => {
+      const result = await this.automation.coordinatedRuns.resolveGate(input, this.getRuntimeId())
       this.notifyAutomationsChanged({ reason: 'run', selector: { kind: 'self' } })
       return result
     })

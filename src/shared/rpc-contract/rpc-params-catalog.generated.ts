@@ -200,7 +200,10 @@ import {
 } from './coordinated-automation-params'
 import {
   CoordinatedFakeRunStart,
-  CoordinatedRunSelection
+  CoordinatedRunSelection,
+  ResolveCoordinatedGate,
+  RetryCoordinatedStage,
+  StopCoordinatedRun
 } from './coordinated-automation-run-params'
 import {
   AttachParams as AttachParamsOfEmulatorParams,
@@ -855,10 +858,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.inspectCoordinatedRun': CoordinatedRunSelection,
   'automation.list': AutomationList,
   'automation.reconcileCoordinatedFakeRun': CoordinatedRunSelection,
+  'automation.resolveCoordinatedGate': ResolveCoordinatedGate,
+  'automation.retryCoordinatedStage': RetryCoordinatedStage,
   'automation.runNow': AutomationId,
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.startCoordinatedFakeRun': CoordinatedFakeRunStart,
+  'automation.stopCoordinatedRun': StopCoordinatedRun,
   'automation.update': AutomationUpdate,
   'automation.updateCoordinated': CoordinatedAutomationUpdate,
   'browser.back': BrowserTarget,

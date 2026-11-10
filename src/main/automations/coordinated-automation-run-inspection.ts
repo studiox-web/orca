@@ -1,8 +1,5 @@
 import type { AutomationRun } from '../../shared/automations-types'
-import type {
-  CoordinatedRunProgress,
-  CoordinatedStageProgress
-} from '../../shared/coordinated-automation-progress-types'
+import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
 import { validateReceiptAgainstSnapshot } from '../../shared/coordinated-automation-receipt-validation'
 import type {
   ResolvedAutomationRunSnapshot,
@@ -14,18 +11,20 @@ import {
   coordinatedMappingProblem,
   nativeDispatchLineageProblem
 } from './coordinated-automation-native-validation'
+import { runIsOperatorSettled } from './coordinated-automation-operator-actions'
+import {
+  approvalObservations,
+  runHumanResolution,
+  stageEvidenceProblem,
+  stageOperatorEligibility,
+  stageSessionTarget
+} from './coordinated-automation-run-inspection-details'
 import type { CoordinatedRunProgressStore } from './coordinated-automation-progress-store'
 import type {
   Availability,
   CoordinatedRunInspection,
   CoordinatedStageInspection
 } from './coordinated-automation-run-host-types'
-
-const HUMAN_RESOLUTION_UNAVAILABLE =
-  'Uncertain effects, effect-reset conflicts, and review limits need a separately reviewed host resolution API.'
-
-const NO_SESSION_TARGET =
-  'The fake_no_effects provider runs in-process; there is no chat or terminal session to open.'
 
 type ProgressRead = Availability<{ progress: CoordinatedRunProgress }>
 
@@ -58,59 +57,6 @@ function readTrustedProgress(
 }
 
 /** Every Dispatch the stage names must be a native attempt of exactly this run's mapped Task. */
-function stageEvidenceProblem(
-  db: OrchestrationDb,
-  orchestrationRunId: string,
-  taskId: string | null,
-  id: string,
-  stage: CoordinatedStageProgress,
-  progress: CoordinatedRunProgress
-): string | null {
-  if (!taskId) {
-    return `Stage ${id} has progress but no mapped Task.`
-  }
-  const task = db.getTask(taskId)
-  if (!task || task.run_id !== orchestrationRunId) {
-    return `Task ${taskId} is not in orchestration Run ${orchestrationRunId}.`
-  }
-  const named = [
-    stage.activeDispatchId,
-    stage.acceptedDispatchId,
-    ...stage.lineage.map((r) => r.dispatchId)
-  ]
-  for (const dispatchId of named) {
-    const problem =
-      dispatchId === null
-        ? null
-        : nativeDispatchLineageProblem(db, db.getDispatchContextById(dispatchId), {
-            dispatchId,
-            taskId,
-            orchestrationRunId
-          })
-    if (problem) {
-      return problem
-    }
-  }
-  if (stage.status !== 'accepted') {
-    return null
-  }
-  if (!stage.acceptedDispatchId || !stage.acceptedReportDigest) {
-    return `Accepted stage ${id} has no accepted Dispatch or report digest.`
-  }
-  const admitted = progress.reports.find(
-    (r) => r.dispatchId === stage.acceptedDispatchId && r.disposition === 'accepted'
-  )
-  if (
-    !admitted ||
-    admitted.childDefinitionId !== id ||
-    admitted.taskId !== taskId ||
-    admitted.reportDigest !== stage.acceptedReportDigest
-  ) {
-    return `Accepted Dispatch ${stage.acceptedDispatchId} has no matching admitted report for stage ${id}.`
-  }
-  return null
-}
-
 function nativeStage(
   db: OrchestrationDb,
   orchestrationRunId: string | null,
@@ -252,6 +198,8 @@ export function inspectCoordinatedRun(input: {
           reason: `Child mappings are not trusted: ${mappingProblem}`
         }
       : null
+    const runSettled = runIsOperatorSettled(run)
+    const operator = stageOperatorEligibility({ progress, child, runSettled })
     return {
       childDefinitionId: child.childDefinitionId,
       name: child.name,
@@ -261,7 +209,11 @@ export function inspectCoordinatedRun(input: {
       mappedDispatchId: untrusted ? null : (mapping?.dispatchId ?? null),
       native: untrusted ?? nativeStage(db, orchestrationRunId, taskId),
       semantic: untrusted ?? semanticStage(db, run, child, taskId, progress),
-      sessionTarget: { kind: 'unavailable', reason: NO_SESSION_TARGET }
+      sessionTarget: untrusted
+        ? { kind: 'unavailable', reason: untrusted.reason }
+        : stageSessionTarget(db, run, child, taskId, mapping?.dispatchId ?? null),
+      retryEligibility: operator.retry,
+      gateResolutionEligibility: operator.gate
     }
   })
   return {
@@ -290,6 +242,18 @@ export function inspectCoordinatedRun(input: {
     receipt: mappingProblem
       ? { kind: 'unavailable', reason: `Child mappings are not trusted: ${mappingProblem}` }
       : trustedReceipt(db, run, snapshot),
-    humanResolution: { available: false, reason: HUMAN_RESOLUTION_UNAVAILABLE }
+    approvals: snapshot
+      ? approvalObservations({ run, snapshot, progress: trustedProgressOrNull(progress) })
+      : { stage: [], parent: [] },
+    operatorStop: trustedProgressOrNull(progress)?.operatorStop ?? null,
+    humanResolution: snapshot
+      ? runHumanResolution({ snapshot, progress: trustedProgressOrNull(progress) })
+      : { available: false, reason: 'The run has no frozen snapshot.', pendingDecisionKeys: [] }
   }
+}
+
+function trustedProgressOrNull(
+  progress: Availability<{ progress: CoordinatedRunProgress }>
+): CoordinatedRunProgress | null {
+  return progress.kind === 'available' ? progress.progress : null
 }

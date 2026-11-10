@@ -21,7 +21,10 @@ import {
   type CoordinatedRunScopeRequest,
   type CoordinatedRunHostInjection,
   type CoordinatedRunInspection,
-  type CoordinatedRunReconcileResult
+  type CoordinatedRunReconcileResult,
+  type CoordinatedRunStopRequest,
+  type CoordinatedRunRetryRequest,
+  type CoordinatedRunGateRequest
 } from './coordinated-automation-run-host-types'
 
 export const COORDINATED_PROGRESS_DIRECTORY = 'coordinated-automation-progress'
@@ -234,6 +237,39 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
     const outcome = await this.#adapter.reconcileRun(request.automationRunId, {
       precondition: () => this.#refuseIf(this.#runRefusal(request))
     })
+    return {
+      automationRunId: request.automationRunId,
+      state: outcome.state,
+      reason: outcome.reason,
+      inspection: this.#read(request)
+    }
+  }
+
+  async stopRun(request: CoordinatedRunStopRequest): Promise<CoordinatedRunReconcileResult> {
+    this.#refuseIf(this.#runRefusal(request))
+    await this.#admit()
+    const outcome = await this.#adapter.stopRun(request)
+    return this.#operatorResult(request, outcome)
+  }
+
+  async retryStage(request: CoordinatedRunRetryRequest): Promise<CoordinatedRunReconcileResult> {
+    this.#refuseIf(this.#runRefusal(request))
+    await this.#admit()
+    const outcome = await this.#adapter.retryStage(request)
+    return this.#operatorResult(request, outcome)
+  }
+
+  async resolveGate(request: CoordinatedRunGateRequest): Promise<CoordinatedRunReconcileResult> {
+    this.#refuseIf(this.#runRefusal(request))
+    await this.#admit()
+    const outcome = await this.#adapter.resolveGate(request)
+    return this.#operatorResult(request, outcome)
+  }
+
+  #operatorResult(
+    request: CoordinatedRunScopeRequest,
+    outcome: { state: CoordinatedRunReconcileResult['state']; reason: string | null }
+  ): CoordinatedRunReconcileResult {
     return {
       automationRunId: request.automationRunId,
       state: outcome.state,

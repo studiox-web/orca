@@ -15,9 +15,9 @@ export type CoordinatedRunView = {
   actions: {
     start: CoordinatedRunActionAvailability
     reconcile: CoordinatedRunActionAvailability
-    stop: { available: false; reason: string }
-    retry: { available: false; reason: string }
-    humanResolution: { available: false; reason: string }
+    stop: CoordinatedRunActionAvailability
+    retry: CoordinatedRunActionAvailability
+    humanResolution: CoordinatedRunActionAvailability
   }
   findings: UnavailableEvidence
   limits: UnavailableEvidence
