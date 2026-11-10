@@ -175,6 +175,20 @@ export async function executeCoordinatedTaskDispatch(input: {
     return { taskId, dispatchId: dispatch.id, outcome: 'failed' }
   }
 
+  const currentRun = store.listAutomationRuns().find((r) => r.id === automationRunId)
+  const currentMappedDispatchId = (currentRun?.childMappings ?? []).find(
+    (m) => m.taskId === taskId && m.childDefinitionId === child.childDefinitionId
+  )?.dispatchId
+  if (!currentMappedDispatchId || currentMappedDispatchId !== dispatch.id) {
+    orchestrationDb.settleWorkerReport({
+      taskId,
+      dispatchId: dispatch.id,
+      outcome: 'failed',
+      result: `Task "${taskId}" mapped dispatchId "${currentMappedDispatchId ?? ''}" does not match active dispatch "${dispatch.id}".`
+    })
+    return { taskId, dispatchId: dispatch.id, outcome: 'failed' }
+  }
+
   const automation = store.listAutomations().find((a) => a.id === run.automationId)
   const projectId =
     automation && 'projectId' in automation && typeof automation.projectId === 'string'
@@ -189,7 +203,7 @@ export async function executeCoordinatedTaskDispatch(input: {
     definitionRevision: snapshot.definitionRevision,
     childDefinitionId: child.childDefinitionId,
     taskId,
-    dispatchId: dispatch.id,
+    dispatchId: currentMappedDispatchId,
     canonicalDigest: snapshot.canonicalDigest,
     child,
     snapshot,

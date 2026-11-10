@@ -23,6 +23,7 @@ import {
 } from './coordinated-automation-deterministic-ids'
 import {
   CoordinatedAutomationAdapter,
+  type CoordinatedHostApproval,
   CoordinatedAutomationLaunchRefusedError,
   type CoordinatedWorkerIdentity,
   type CoordinatedWorkerProvider
@@ -632,14 +633,13 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
 
       let scenario: 'missing_crit' | 'smuggle_approval' | 'missing_approval' | 'valid' =
         'missing_crit'
+      const hostApprovals: CoordinatedHostApproval[] = []
 
       const workerProvider: CoordinatedWorkerProvider = {
         capability: 'fake_no_effects',
         run: async (id) => {
           if (scenario === 'missing_crit') {
-            return makeWorkerResult(id, store, {
-              checks: []
-            })
+            return makeWorkerResult(id, store, { checks: [] })
           }
           if (scenario === 'smuggle_approval') {
             return makeWorkerResult(id, store, {
@@ -647,9 +647,24 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
               approvals: [{ role: 'editor', approverIdentity: 'attacker@evil.com' }]
             })
           }
-          if (scenario === 'missing_approval') {
-            return makeWorkerResult(id, store, {
-              checks: [{ id: 'crit_review', outcome: 'passed' }]
+          if (scenario === 'valid') {
+            const mappedDispatchId = store
+              .listAutomationRuns()
+              .find((r) => r.id === run!.id)!
+              .childMappings!.find((m) => m.childDefinitionId === 'step_approval')!.dispatchId!
+            hostApprovals.splice(0, hostApprovals.length, {
+              approvalId: 'appr_editor',
+              role: 'editor',
+              approverIdentity: 'alice@orca.test',
+              approvedAt: 1000,
+              automationId: automation.id,
+              definitionRevision: run!.resolvedSnapshot!.definitionRevision,
+              automationRunId: run!.id,
+              orchestrationRunId: critFail.orchestrationRunId!,
+              scope: 'stage',
+              childDefinitionId: 'step_approval',
+              taskId: task.id,
+              dispatchId: mappedDispatchId
             })
           }
           return makeWorkerResult(id, store, {
@@ -699,21 +714,7 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
         store,
         orchestrationDb: db,
         workerProvider,
-        hostApprovals: [
-          {
-            approvalId: 'appr_editor',
-            role: 'editor',
-            approverIdentity: 'alice@orca.test',
-            approvedAt: 1000,
-            automationId: automation.id,
-            definitionRevision: run!.resolvedSnapshot!.definitionRevision,
-            automationRunId: run!.id,
-            orchestrationRunId: critFail.orchestrationRunId!,
-            scope: 'stage',
-            childDefinitionId: 'step_approval',
-            taskId: task.id
-          }
-        ]
+        hostApprovals
       })
       const validResult = await adapterWithHostApproval.retryTask({
         automationRunId: run!.id,

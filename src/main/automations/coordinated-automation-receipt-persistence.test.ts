@@ -408,7 +408,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       'Required stage approval "stage_appr_1" (role "reviewer") missing'
     )
 
-    const validStageApproval: CoordinatedStageHostApproval = {
+    const buildValidStageApproval = (dispatchId: string): CoordinatedStageHostApproval => ({
       approvalId: 'stage_appr_1',
       role: 'reviewer',
       approverIdentity: 'rev@orca.test',
@@ -419,14 +419,29 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       orchestrationRunId: orchRunId,
       scope: 'stage',
       childDefinitionId: 'step_1',
-      taskId: task.id
-    }
+      taskId: task.id,
+      dispatchId
+    })
 
-    const retryStageWith = async (approvals: readonly CoordinatedHostApproval[]) => {
+    const retryStageWith = async (
+      buildApprovals: (currentDispatchId: string) => readonly CoordinatedHostApproval[]
+    ) => {
+      const approvals: CoordinatedHostApproval[] = []
+      const stageProvider: CoordinatedWorkerProvider = {
+        capability: 'fake_no_effects',
+        run: async (id) => {
+          const currentMappedDispatchId = store
+            .listAutomationRuns()
+            .find((r) => r.id === run!.id)!
+            .childMappings!.find((m) => m.childDefinitionId === 'step_1')!.dispatchId!
+          approvals.splice(0, approvals.length, ...buildApprovals(currentMappedDispatchId))
+          return makeWorkerResult(id, store)
+        }
+      }
       const a = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
-        workerProvider,
+        workerProvider: stageProvider,
         hostApprovals: approvals
       })
       await a.retryTask({
@@ -438,73 +453,103 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     }
 
     // 2. Stage wrong-ID / same-role
-    task = await retryStageWith([{ ...validStageApproval, approvalId: 'wrong_stage_id' }])
+    task = await retryStageWith((d) => [
+      { ...buildValidStageApproval(d), approvalId: 'wrong_stage_id' }
+    ])
     expect(task.result).toContain(
       'Required stage approval "stage_appr_1" (role "reviewer") missing'
     )
 
     // 3. Stage wrong-scope (parent scope) and omitted scope
-    task = await retryStageWith([
+    task = await retryStageWith((d) => [
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: testing runtime rejection of invalid scope
-      { ...validStageApproval, scope: 'parent' } as unknown as CoordinatedHostApproval
+      { ...buildValidStageApproval(d), scope: 'parent' } as unknown as CoordinatedHostApproval
     ])
     expect(task.result).toContain('Stage approval "stage_appr_1" has wrong scope "parent"')
 
-    task = await retryStageWith([
+    task = await retryStageWith((d) => [
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: testing runtime rejection of omitted scope
-      { ...validStageApproval, scope: undefined } as unknown as CoordinatedHostApproval
+      { ...buildValidStageApproval(d), scope: undefined } as unknown as CoordinatedHostApproval
     ])
     expect(task.result).toContain('Stage approval "stage_appr_1" is missing required scope')
 
-    // 4. Stage omitted orchestrationRunId and foreign-run / wrong worker scope
-    task = await retryStageWith([
+    // 4. Stage omitted orchestrationRunId, foreign-run, wrong worker scope, omitted/mismatched/previous-attempt dispatchId
+    task = await retryStageWith((d) => [
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: testing runtime rejection of omitted orchestrationRunId
-      { ...validStageApproval, orchestrationRunId: undefined } as unknown as CoordinatedHostApproval
+      {
+        ...buildValidStageApproval(d),
+        orchestrationRunId: undefined
+      } as unknown as CoordinatedHostApproval
     ])
     expect(task.result).toContain(
       'Stage approval "stage_appr_1" belongs to foreign or missing orchestrationRunId'
     )
 
-    task = await retryStageWith([{ ...validStageApproval, automationRunId: 'run_foreign_999' }])
+    task = await retryStageWith((d) => [
+      { ...buildValidStageApproval(d), automationRunId: 'run_foreign_999' }
+    ])
     expect(task.result).toContain(
       'Stage approval "stage_appr_1" belongs to foreign or missing automationRunId'
     )
 
-    task = await retryStageWith([{ ...validStageApproval, automationId: 'auto_foreign' }])
+    task = await retryStageWith((d) => [
+      { ...buildValidStageApproval(d), automationId: 'auto_foreign' }
+    ])
     expect(task.result).toContain(
       'Stage approval "stage_appr_1" belongs to foreign or missing automationId'
     )
 
-    task = await retryStageWith([{ ...validStageApproval, definitionRevision: 99 }])
+    task = await retryStageWith((d) => [{ ...buildValidStageApproval(d), definitionRevision: 99 }])
     expect(task.result).toContain(
       'Stage approval "stage_appr_1" belongs to foreign or missing definitionRevision'
     )
 
-    task = await retryStageWith([{ ...validStageApproval, taskId: 'task_wrong_worker' }])
+    task = await retryStageWith((d) => [
+      { ...buildValidStageApproval(d), taskId: 'task_wrong_worker' }
+    ])
+    expect(task.result).toContain(
+      'Stage approval "stage_appr_1" has wrong or incomplete stage worker scope'
+    )
+
+    task = await retryStageWith((d) => [
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: testing runtime rejection of omitted dispatchId
+      { ...buildValidStageApproval(d), dispatchId: undefined } as unknown as CoordinatedHostApproval
+    ])
+    expect(task.result).toContain(
+      'Stage approval "stage_appr_1" has wrong or incomplete stage worker scope'
+    )
+
+    task = await retryStageWith((d) => [
+      { ...buildValidStageApproval(d), dispatchId: 'ctx_foreign_dispatch' }
+    ])
+    expect(task.result).toContain(
+      'Stage approval "stage_appr_1" has wrong or incomplete stage worker scope'
+    )
+
+    const previousAttemptDispatchId = db.getDispatchContext(task.id)!.id
+    task = await retryStageWith(() => [buildValidStageApproval(previousAttemptDispatchId)])
+    expect(task.status).toBe('failed')
     expect(task.result).toContain(
       'Stage approval "stage_appr_1" has wrong or incomplete stage worker scope'
     )
 
     // 5. Stage duplicate approvalId
-    task = await retryStageWith([
-      validStageApproval,
-      { ...validStageApproval, approverIdentity: 'rev2@orca.test' }
+    task = await retryStageWith((d) => [
+      buildValidStageApproval(d),
+      { ...buildValidStageApproval(d), approverIdentity: 'rev2@orca.test' }
     ])
     expect(task.result).toContain('Duplicate host approval for stage requirement "stage_appr_1"')
 
-    // 6. Stage positive + Parent missing approval
+    // 6. Stage positive (exact current-dispatch acceptance) + Parent missing approval
+    task = await retryStageWith((d) => [buildValidStageApproval(d)])
+    expect(task.status).toBe('completed')
+    const validStageApproval = buildValidStageApproval(db.getDispatchContext(task.id)!.id)
     const stageOnlyAdapter = new CoordinatedAutomationAdapter({
       store,
       orchestrationDb: db,
       workerProvider,
       hostApprovals: [validStageApproval]
     })
-    await stageOnlyAdapter.retryTask({
-      automationRunId: run!.id,
-      taskId: task.id,
-      retryOfDispatchId: db.getDispatchContext(task.id)!.id
-    })
-    expect(db.getTask(task.id)?.status).toBe('completed')
     let parentCheck = await stageOnlyAdapter.runUntilSettled(run!.id)
     expect(parentCheck.status).toBe('dispatch_failed')
     expect(parentCheck.error).toContain(

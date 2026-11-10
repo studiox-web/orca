@@ -12,7 +12,7 @@ export type CoordinatedStageHostApproval = SemanticReceiptApproval & {
   orchestrationRunId: string
   childDefinitionId: string
   taskId: string
-  dispatchId?: string
+  dispatchId: string
   targetChildId?: never
 }
 
@@ -148,13 +148,14 @@ export function validateStageApprovals(
       match.childDefinitionId !== context.childDefinitionId ||
       !match.taskId ||
       match.taskId !== context.taskId ||
-      (match.dispatchId !== undefined &&
-        (!match.dispatchId || match.dispatchId !== context.dispatchId)) ||
+      !context.dispatchId ||
+      !match.dispatchId ||
+      match.dispatchId !== context.dispatchId ||
       match.targetChildId !== undefined
     ) {
       return {
         valid: false,
-        error: `Stage approval "${req.id}" has wrong or incomplete stage worker scope (expected child "${context.childDefinitionId}" task "${context.taskId}").`
+        error: `Stage approval "${req.id}" has wrong or incomplete stage worker scope (expected child "${context.childDefinitionId}" task "${context.taskId}" dispatch "${context.dispatchId}").`
       }
     }
   }
