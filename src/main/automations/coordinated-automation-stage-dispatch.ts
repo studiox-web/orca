@@ -7,7 +7,16 @@ import type {
 } from '../../shared/coordinated-automation-types'
 import type { TaskRow } from '../runtime/orchestration/types'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
-import { evaluateDispatchCeilings, stageAttemptLimit } from './coordinated-automation-ceilings'
+import { evaluateDispatchCeilings } from './coordinated-automation-ceilings'
+import {
+  fixerLeaseKeys,
+  isOpenAttempt,
+  planAttempt,
+  reserveAttempt,
+  saturatedLeaseKey,
+  stageAttemptBudget,
+  withAttemptStatus
+} from './coordinated-automation-attempt-lineage'
 import { unresolvedEffects } from './coordinated-automation-effect-gate'
 import { selectEligibleTasksForDispatch } from './coordinated-automation-lane-scheduler'
 import { withEscalation, withHalt } from './coordinated-automation-progress-ledger'
@@ -54,15 +63,20 @@ function runnableStages(
     if (!child.enabled || !stage || stage.status === 'accepted' || stage.status === 'invalidated') {
       continue
     }
+    // Durable acceptance gates every dependency; native completion never does.
     if (!child.dependencies.every((dep) => stages[dep.childId]?.status === 'accepted')) {
       continue
     }
-    if (stage.status === 'rejected' && stage.attempts >= stageAttemptLimit(child)) {
+    if (stage.lineage.some(isOpenAttempt)) {
+      continue
+    }
+    const budget = stageAttemptBudget(child, stage)
+    if (stage.attempts >= budget) {
       haltWith(ctx, {
         key: `stage_rejected:${child.childDefinitionId}:${stage.activeDispatchId ?? ''}`,
         code: 'stage_rejected',
         childDefinitionId: child.childDefinitionId,
-        detail: `Stage "${child.childDefinitionId}" was rejected after ${stage.attempts} attempt(s): ${stage.lastError ?? 'no reason recorded'}`,
+        detail: `Stage "${child.childDefinitionId}" used all ${budget} attempt(s): ${stage.lastError ?? 'no reason recorded'}`,
         state: 'failed'
       })
       return []
@@ -72,15 +86,22 @@ function runnableStages(
   return runnable
 }
 
-/** Retries keep native lineage; fresh attempts (fixes, resets) reopen the Task as ready. */
+/**
+ * Native retry lineage is used whenever orchestration allows it (failed predecessor); otherwise
+ * the Task is reopened and the durable attempt record alone carries the logical `retryOf`.
+ */
 function prepareNativeTask(
   ctx: CoordinatedPassContext,
-  child: ResolvedChildSnapshot,
-  task: TaskRow
+  task: TaskRow,
+  retryOfDispatchId: string | null
 ): string | undefined {
-  const stage = ctx.ledger.progress.stages[child.childDefinitionId]
   const latest = ctx.orchestrationDb.getDispatchContext(task.id)
-  if (stage?.status === 'rejected' && latest?.status === 'failed' && task.status === 'failed') {
+  if (
+    retryOfDispatchId !== null &&
+    latest?.id === retryOfDispatchId &&
+    latest.status === 'failed' &&
+    (task.status === 'failed' || task.status === 'blocked')
+  ) {
     return latest.id
   }
   if (task.status !== 'ready') {
@@ -181,13 +202,36 @@ export async function dispatchRunnableStages(
       }
       release = lock.release
     }
-    const retryOfDispatchId = prepareNativeTask(ctx, child, task)
+    const stage = ctx.ledger.progress.stages[child.childDefinitionId]!
+    const plan = planAttempt(stage)
+    const leaseKeys = fixerLeaseKeys(child, stage, plan.kind)
+    const saturated = saturatedLeaseKey(ctx.ledger.progress, snapshot, leaseKeys)
+    if (saturated) {
+      waiting.push(`Fixer limit reached for ${saturated}; "${child.childDefinitionId}" waits.`)
+      release?.()
+      continue
+    }
+    const record = reserveAttempt(ctx, { child, taskId: task.id, ...plan, leaseKeys })
+    const nativeRetryOf = prepareNativeTask(ctx, task, plan.retryOfDispatchId)
     ctx.inFlightTaskIds.add(task.id)
+    const id = child.childDefinitionId
     launches.push(
       executeCoordinatedTaskDispatch(ctx, {
         automationRunId: run.id,
         taskId: task.id,
-        retryOfDispatchId
+        retryOfDispatchId: nativeRetryOf,
+        deadlineAt: record.deadlineAt,
+        assertCurrent: () => void ctx.ledger.refresh(),
+        onDispatchCreated: (dispatchId) =>
+          void ctx.ledger.update(
+            `attempt-bound:${record.attemptNumber}`,
+            (progress) =>
+              withAttemptStatus(progress, id, (r) => r.attemptNumber === record.attemptNumber, {
+                status: 'active',
+                dispatchId
+              }),
+            id
+          )
       })
         .catch((error: unknown) => {
           if (!(error instanceof OrchestrationError) || error.code !== 'task_not_startable') {

@@ -25,8 +25,15 @@ export type CoordinatedBoundaryHook = (
   detail: Readonly<{ automationRunId: string; childDefinitionId?: string; label?: string }>
 ) => void
 
-export type CoordinatedLedgerSnapshot = Pick<ResolvedAutomationRunSnapshot, 'canonicalDigest'> & {
+export type CoordinatedLedgerSnapshot = Pick<
+  ResolvedAutomationRunSnapshot,
+  'canonicalDigest' | 'automationId' | 'definitionRevision' | 'executionTarget'
+> & {
   resolvedChildren: readonly Pick<ResolvedChildSnapshot, 'childDefinitionId' | 'enabled'>[]
+}
+
+function executionAuthority(snapshot: CoordinatedLedgerSnapshot): string {
+  return `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}`
 }
 
 export class CoordinatedGenerationFencedError extends Error {
@@ -46,6 +53,8 @@ export function initialStageProgress(): CoordinatedStageProgress {
     acceptedReportDigest: null,
     acceptedArtifacts: [],
     attempts: 0,
+    reopenings: 0,
+    lineage: [],
     reviewIterations: 0,
     findings: [],
     lastError: null
@@ -106,14 +115,20 @@ export class CoordinatedProgressLedger {
     if (
       stored &&
       (stored.canonicalDigest !== input.snapshot.canonicalDigest ||
-        stored.orchestrationRunId !== input.orchestrationRunId)
+        stored.orchestrationRunId !== input.orchestrationRunId ||
+        stored.automationId !== input.snapshot.automationId ||
+        stored.definitionRevision !== input.snapshot.definitionRevision ||
+        stored.executionAuthority !== executionAuthority(input.snapshot))
     ) {
       throw new Error(
-        `Coordinated progress for run "${input.automationRunId}" belongs to another snapshot or orchestration Run.`
+        `Coordinated progress for run "${input.automationRunId}" belongs to another snapshot, revision, authority, or orchestration Run.`
       )
     }
     const base: CoordinatedRunProgress = stored ?? {
       schemaVersion: 1,
+      automationId: input.snapshot.automationId,
+      definitionRevision: input.snapshot.definitionRevision,
+      executionAuthority: executionAuthority(input.snapshot),
       automationRunId: input.automationRunId,
       orchestrationRunId: input.orchestrationRunId,
       canonicalDigest: input.snapshot.canonicalDigest,

@@ -63,7 +63,11 @@ export type CoordinatedLaneLockProvider = {
   tryAcquire: (lane: string, owner: string) => CoordinatedLaneLockResult
 }
 
-export type CoordinatedClock = { now: () => number }
+export type CoordinatedClock = {
+  now: () => number
+  /** Fires `callback` after `delayMs` on this clock; returns a cancel function. */
+  setTimer?: (delayMs: number, callback: () => void) => () => void
+}
 
 export type CoordinatedRecoveryContext = {
   store: Store

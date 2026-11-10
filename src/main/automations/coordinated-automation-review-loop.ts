@@ -54,10 +54,21 @@ export function applyReviewFindings(
   reason: string,
   now: number
 ): CoordinatedRunProgress {
+  // Only dependencies the reviewer gates on acceptance are reviewable; `completed` ones are inputs.
   const targets = reviewer.dependencies
+    .filter((dep) => (dep.condition ?? 'accepted') === 'accepted')
     .map((dep) => snapshot.resolvedChildren.find((c) => c.childDefinitionId === dep.childId))
     .filter((child): child is ResolvedChildSnapshot => Boolean(child?.enabled))
   let next = progress
+  if (targets.length === 0) {
+    return blockReview(next, {
+      key: `stage_rejected:${reviewer.childDefinitionId}:${fingerprint}`,
+      code: 'stage_rejected',
+      childDefinitionId: reviewer.childDefinitionId,
+      detail: `Reviewer "${reviewer.childDefinitionId}" reported a finding but has no acceptance-gated upstream to revise.`,
+      now
+    })
+  }
   for (const target of targets) {
     const stage = next.stages[target.childDefinitionId]
     if (stage?.findings.includes(fingerprint)) {
@@ -89,11 +100,25 @@ export function applyReviewFindings(
     }
   }
   const targetIds = new Set(targets.map((t) => t.childDefinitionId))
+  const reopened = new Set([...targetIds, ...downstreamStages(snapshot, targetIds)])
+  // Reopening a stage whose effect already ran (or is uncertain) would claim new work under an old effect.
+  const effected = Object.values(next.effects).find((entry) =>
+    reopened.has(entry.childDefinitionId)
+  )
+  if (effected) {
+    return blockReview(next, {
+      key: `effect_reset_conflict:${effected.effectId}`,
+      code: 'effect_reset_conflict',
+      childDefinitionId: effected.childDefinitionId,
+      detail: `Review finding would reopen "${effected.childDefinitionId}", whose effect ${effected.effectId} is ${effected.status}; a human must decide.`,
+      now
+    })
+  }
   for (const id of targetIds) {
     next = withStage(next, id, (stage) => ({
       ...stage,
       status: 'revision_requested',
-      attempts: 0,
+      reopenings: stage.reopenings + 1,
       reviewIterations: stage.reviewIterations + 1,
       findings: [...stage.findings, fingerprint],
       lastError: reason
@@ -103,7 +128,7 @@ export function applyReviewFindings(
     next = withStage(next, id, (stage) => ({
       ...stage,
       status: 'pending',
-      attempts: 0,
+      reopenings: stage.reopenings + 1,
       acceptedDispatchId: null,
       acceptedReportDigest: null,
       acceptedArtifacts: [],
@@ -112,4 +137,27 @@ export function applyReviewFindings(
     }))
   }
   return next
+}
+
+function blockReview(
+  progress: CoordinatedRunProgress,
+  input: {
+    key: string
+    code: 'stage_rejected' | 'effect_reset_conflict'
+    childDefinitionId: string
+    detail: string
+    now: number
+  }
+): CoordinatedRunProgress {
+  return withHalt(
+    withEscalation(progress, {
+      key: input.key,
+      code: input.code,
+      childDefinitionId: input.childDefinitionId,
+      detail: input.detail,
+      requiresHumanDecision: true,
+      at: input.now
+    }),
+    { state: 'blocked', reason: input.detail, at: input.now }
+  )
 }

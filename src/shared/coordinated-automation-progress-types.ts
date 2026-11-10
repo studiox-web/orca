@@ -12,6 +12,29 @@ export type CoordinatedStageStatus =
 
 export type CoordinatedAcceptedArtifact = { uri: string; sha256: string }
 
+export type CoordinatedAttemptKind = 'initial' | 'retry' | 'fix' | 'rerun'
+
+export type CoordinatedAttemptStatus = 'starting' | 'active' | 'admitted' | 'abandoned'
+
+/**
+ * One attempt in a stage's durable lineage, written before its native Dispatch starts so a
+ * restart can bind, time out, or abandon it deterministically.
+ */
+export type CoordinatedAttemptRecord = {
+  attemptNumber: number
+  kind: CoordinatedAttemptKind
+  dispatchId: string | null
+  /** Logical predecessor; kept even when native retry lineage cannot be expressed. */
+  retryOfDispatchId: string | null
+  /** Latest native Dispatch before this attempt started; binds a crash-orphaned start. */
+  previousLatestDispatchId: string | null
+  startedAt: number
+  deadlineAt: number
+  /** Artifact identities this attempt holds a fixer lease on (fix/retry attempts only). */
+  leaseKeys: string[]
+  status: CoordinatedAttemptStatus
+}
+
 export type CoordinatedStageProgress = {
   status: CoordinatedStageStatus
   /** Dispatch the coordinator launched last for this stage. */
@@ -19,8 +42,11 @@ export type CoordinatedStageProgress = {
   acceptedDispatchId: string | null
   acceptedReportDigest: string | null
   acceptedArtifacts: CoordinatedAcceptedArtifact[]
-  /** Dispatches started for this stage across retries and fixes. */
+  /** Admitted attempts; bounded by the retry budget plus one per reopening. */
   attempts: number
+  /** Times a review reset reopened this stage; each grants exactly one extra attempt. */
+  reopenings: number
+  lineage: CoordinatedAttemptRecord[]
   /** Fix iterations opened because a reviewer reported a material finding. */
   reviewIterations: number
   /** Fingerprints of findings already sent back to this stage. */
@@ -71,6 +97,8 @@ export type CoordinatedEscalationCode =
   | 'effect_denied'
   | 'lock_unavailable'
   | 'artifact_mutated'
+  | 'stage_timeout'
+  | 'effect_reset_conflict'
 
 export type CoordinatedEscalation = {
   /** Deterministic key; an escalation is recorded once per key. */
@@ -92,6 +120,10 @@ export type CoordinatedRunHalt = {
 
 export type CoordinatedRunProgress = {
   schemaVersion: 1
+  automationId: string
+  definitionRevision: number
+  /** `<type>:<id>` of the frozen execution target that owns this run. */
+  executionAuthority: string
   automationRunId: string
   orchestrationRunId: string
   /** Frozen snapshot digest; a ledger for another digest is never reused. */

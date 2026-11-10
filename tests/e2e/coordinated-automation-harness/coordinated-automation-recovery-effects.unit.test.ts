@@ -55,6 +55,7 @@ function effectPipeline(): CoordinatedAutomationCreateInput {
 }
 
 let env: RecoveryEnv
+const STAGE_DEADLINE_MS = 1_800_000
 
 async function startEffectRun(states: FakeEffectState[] = ['verified']) {
   const { runId } = env.createRun(effectPipeline())
@@ -182,82 +183,99 @@ function normalize(progress: CoordinatedRunProgress): NormalizedProgress {
 }
 
 describe('coordinated recovery: crash at every durable boundary', () => {
-  it('every coordinator write boundary converges to the clean outcome with one fake effect', async () => {
-    const clean = await startEffectRun()
-    expect((await env.adapter.reconcileRun(clean.runId)).state).toBe('completed')
-    const expected = normalize(env.adapter.inspectProgress(clean.runId)!)
-    const boundaryCount = env.boundaries.length
-    expect(new Set(env.boundaries.map((b) => b.boundary))).toEqual(
-      new Set([
-        'progress.after-write',
-        'dispatch.after-native-start',
-        'dispatch.after-mapping',
-        'report.after-native-settle',
-        'effect.after-intent',
-        'effect.after-adapter-ack',
-        'receipt.after-persist'
-      ])
-    )
-    await env.dispose()
-
-    for (let index = 0; index < boundaryCount; index += 1) {
-      env = await RecoveryEnv.create()
-      env.scripts.set('draft', (identity, attempt) =>
-        env.artifactReport(identity, `draft v${attempt}`)
+  it(
+    'every coordinator write boundary converges to the clean outcome with one fake effect',
+    async () => {
+      const clean = await startEffectRun()
+      expect((await env.adapter.reconcileRun(clean.runId)).state).toBe('completed')
+      const expected = normalize(env.adapter.inspectProgress(clean.runId)!)
+      const boundaryCount = env.boundaries.length
+      expect(new Set(env.boundaries.map((b) => b.boundary))).toEqual(
+        new Set([
+          'progress.after-write',
+          'dispatch.after-native-start',
+          'dispatch.after-mapping',
+          'report.after-native-settle',
+          'effect.after-intent',
+          'effect.after-adapter-ack',
+          'receipt.after-persist'
+        ])
       )
-      for (const id of ['stage', 'review']) {
-        env.scripts.set(id, (identity) => [{ type: 'report', result: env.report(identity) }])
-      }
-      const { runId, effectId } = await startEffectRun()
-      env.crashAtBoundaryIndex = index
-      await expect(env.adapter.reconcileRun(runId), `boundary #${index}`).rejects.toThrow(
-        InjectedCoordinatorCrash
-      )
-
-      await env.reopen()
-      const recovered = await env.adapter.reconcileRun(runId)
-      expect(recovered.state, `boundary #${index}`).toBe('completed')
-      expect(normalize(env.adapter.inspectProgress(runId)!), `boundary #${index}`).toEqual(expected)
-      expect((await effectRecord(effectId)).applyCount, `boundary #${index}`).toBe(1)
-      expect(recovered.run.completionReceipt!.effectReceipts).toHaveLength(1)
-
-      await env.reopen()
-      const replayed = await env.adapter.reconcileRun(runId)
-      expect(replayed.run.completionReceipt).toEqual(recovered.run.completionReceipt)
-      if (index < boundaryCount - 1) {
-        await env.dispose()
-      }
-    }
-  }, 120_000)
-
-  it('every harness crash point converges without a duplicate effect or false completion', async () => {
-    for (const point of HARNESS_CRASH_POINTS) {
-      if (point.startsWith('automation-store') || point.startsWith('orchestration-store')) {
-        continue
-      }
       await env.dispose()
-      env = await RecoveryEnv.create()
-      env.scripts.set('draft', (identity, attempt) =>
-        env.artifactReport(identity, `draft v${attempt}`)
-      )
-      for (const id of ['stage', 'review']) {
-        env.scripts.set(id, (identity) => [{ type: 'report', result: env.report(identity) }])
-      }
-      const { runId, effectId } = await startEffectRun()
-      env.harness.crashes.arm(point)
-      const first = await env.adapter.reconcileRun(runId).catch((error: unknown) => {
-        expect(error, point).toBeInstanceOf(InjectedHarnessCrash)
-        return null
-      })
-      if (first) {
-        expect(first.state, point).toBe('completed')
-      } else {
-        expect(env.run(runId).completionReceipt, point).toBeNull()
+
+      for (let index = 0; index < boundaryCount; index += 1) {
+        env = await RecoveryEnv.create()
+        env.scripts.set('draft', (identity, attempt) =>
+          env.artifactReport(identity, `draft v${attempt}`)
+        )
+        for (const id of ['stage', 'review']) {
+          env.scripts.set(id, (identity) => [{ type: 'report', result: env.report(identity) }])
+        }
+        const { runId, effectId } = await startEffectRun()
+        env.crashAtBoundaryIndex = index
+        await expect(env.adapter.reconcileRun(runId), `boundary #${index}`).rejects.toThrow(
+          InjectedCoordinatorCrash
+        )
+
         await env.reopen()
-        expect((await env.adapter.reconcileRun(runId)).state, point).toBe('completed')
+        let recovered = await env.adapter.reconcileRun(runId)
+        // An orphaned attempt keeps its persisted deadline; recovery resumes once it passes.
+        for (let round = 0; recovered.state === 'waiting' && round < 3; round += 1) {
+          await env.harness.clock.advanceBy(STAGE_DEADLINE_MS)
+          recovered = await env.adapter.reconcileRun(runId)
+        }
+        expect(recovered.state, `boundary #${index}`).toBe('completed')
+        expect(normalize(env.adapter.inspectProgress(runId)!), `boundary #${index}`).toEqual(
+          expected
+        )
+        expect((await effectRecord(effectId)).applyCount, `boundary #${index}`).toBe(1)
+        expect(recovered.run.completionReceipt!.effectReceipts).toHaveLength(1)
+
+        await env.reopen()
+        const replayed = await env.adapter.reconcileRun(runId)
+        expect(replayed.run.completionReceipt).toEqual(recovered.run.completionReceipt)
+        if (index < boundaryCount - 1) {
+          await env.dispose()
+        }
       }
-      env.harness.crashes.disarm()
-      expect((await effectRecord(effectId)).applyCount, point).toBe(1)
-    }
-  }, 120_000)
+    },
+    // Sweeps ~20 full crash/reopen cycles over real SQLite and Store files; deterministic but I/O bound.
+    120_000
+  )
+
+  it(
+    'every harness crash point converges without a duplicate effect or false completion',
+    async () => {
+      for (const point of HARNESS_CRASH_POINTS) {
+        if (point.startsWith('automation-store') || point.startsWith('orchestration-store')) {
+          continue
+        }
+        await env.dispose()
+        env = await RecoveryEnv.create()
+        env.scripts.set('draft', (identity, attempt) =>
+          env.artifactReport(identity, `draft v${attempt}`)
+        )
+        for (const id of ['stage', 'review']) {
+          env.scripts.set(id, (identity) => [{ type: 'report', result: env.report(identity) }])
+        }
+        const { runId, effectId } = await startEffectRun()
+        env.harness.crashes.arm(point)
+        const first = await env.adapter.reconcileRun(runId).catch((error: unknown) => {
+          expect(error, point).toBeInstanceOf(InjectedHarnessCrash)
+          return null
+        })
+        if (first) {
+          expect(first.state, point).toBe('completed')
+        } else {
+          expect(env.run(runId).completionReceipt, point).toBeNull()
+          await env.reopen()
+          expect((await env.adapter.reconcileRun(runId)).state, point).toBe('completed')
+        }
+        env.harness.crashes.disarm()
+        expect((await effectRecord(effectId)).applyCount, point).toBe(1)
+      }
+    },
+    // Sweeps every harness crash point with a full reopen each; deterministic but I/O bound.
+    120_000
+  )
 })

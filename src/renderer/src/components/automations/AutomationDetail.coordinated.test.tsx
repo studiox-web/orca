@@ -31,7 +31,7 @@ async function renderDetail(
           workspaceName="main"
           projectDefaultBaseRef="main"
           runNowAvailability={{ canRunNow: true, reason: 'available', message: null }}
-          now={Date.now()}
+          now={1_700_000_000_000}
           onRunNow={vi.fn()}
           onEdit={vi.fn()}
           onToggle={vi.fn()}

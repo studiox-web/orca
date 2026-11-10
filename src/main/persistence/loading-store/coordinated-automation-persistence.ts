@@ -30,6 +30,7 @@ import {
   persistCoordinatedChildMappings as persistCoordinatedChildMappingsOperation,
   recordCoordinatedChildDispatch as recordCoordinatedChildDispatchOperation,
   recordCoordinatedMaterializationFailure as recordCoordinatedMaterializationFailureOperation,
+  recordCoordinatedRunHold as recordCoordinatedRunHoldOperation,
   recordCoordinatedRunSettlement as recordCoordinatedRunSettlementOperation,
   recordCoordinatedTasksCreated as recordCoordinatedTasksCreatedOperation
 } from '../scheduling-automations/coordinated-automation-run-links'
@@ -166,6 +167,17 @@ export class CoordinatedAutomationPersistence {
     completionTrust?: CoordinatedCompletionTrust | null
   }): AutomationRun {
     return recordCoordinatedRunSettlementOperation(
+      getCoordinatedAutomationRunOperations(this[coordinatedAutomationPersistenceContext]),
+      input
+    )
+  }
+
+  recordCoordinatedRunHold(input: {
+    automationRunId: string
+    state: 'blocked' | 'outcome_uncertain'
+    reason: string
+  }): AutomationRun {
+    return recordCoordinatedRunHoldOperation(
       getCoordinatedAutomationRunOperations(this[coordinatedAutomationPersistenceContext]),
       input
     )

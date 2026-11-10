@@ -10,6 +10,18 @@ import type {
 const Digest = z.string().regex(/^sha256:[0-9a-f]{64}$/)
 const Identifier = z.string().min(1).max(256)
 
+const AttemptRecordSchema = z.object({
+  attemptNumber: z.number().int().positive(),
+  kind: z.enum(['initial', 'retry', 'fix', 'rerun']),
+  dispatchId: Identifier.nullable(),
+  retryOfDispatchId: Identifier.nullable(),
+  previousLatestDispatchId: Identifier.nullable(),
+  startedAt: z.number(),
+  deadlineAt: z.number(),
+  leaseKeys: z.array(z.string().min(1)),
+  status: z.enum(['starting', 'active', 'admitted', 'abandoned'])
+})
+
 const StageProgressSchema: z.ZodType<CoordinatedStageProgress> = z.object({
   status: z.enum(['pending', 'accepted', 'revision_requested', 'rejected', 'invalidated']),
   activeDispatchId: Identifier.nullable(),
@@ -17,6 +29,8 @@ const StageProgressSchema: z.ZodType<CoordinatedStageProgress> = z.object({
   acceptedReportDigest: Digest.nullable(),
   acceptedArtifacts: z.array(z.object({ uri: z.string().min(1), sha256: Digest })),
   attempts: z.number().int().nonnegative(),
+  reopenings: z.number().int().nonnegative(),
+  lineage: z.array(AttemptRecordSchema),
   reviewIterations: z.number().int().nonnegative(),
   findings: z.array(z.string()),
   lastError: z.string().nullable()
@@ -55,7 +69,9 @@ const EscalationSchema: z.ZodType<CoordinatedEscalation> = z.object({
     'uncertain_effect',
     'effect_denied',
     'lock_unavailable',
-    'artifact_mutated'
+    'artifact_mutated',
+    'stage_timeout',
+    'effect_reset_conflict'
   ]),
   childDefinitionId: Identifier.nullable(),
   detail: z.string(),
@@ -65,6 +81,9 @@ const EscalationSchema: z.ZodType<CoordinatedEscalation> = z.object({
 
 export const CoordinatedRunProgressSchema: z.ZodType<CoordinatedRunProgress> = z.object({
   schemaVersion: z.literal(1),
+  automationId: Identifier,
+  definitionRevision: z.number().int().positive(),
+  executionAuthority: z.string().min(1),
   automationRunId: Identifier,
   orchestrationRunId: Identifier,
   canonicalDigest: Digest,

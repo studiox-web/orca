@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { app } from 'electron'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { isCoordinatedAutomation } from '../../shared/coordinated-automation-types'
 import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
@@ -26,10 +28,14 @@ import {
   executeCoordinatedTaskDispatch
 } from './coordinated-automation-task-execution'
 import {
-  createMemoryCoordinatedRunProgressStore,
+  createFileCoordinatedRunProgressStore,
   type CoordinatedRunProgressStore
 } from './coordinated-automation-progress-store'
-import type { CoordinatedBoundaryHook } from './coordinated-automation-progress-ledger'
+import {
+  type CoordinatedBoundaryHook,
+  CoordinatedProgressLedger
+} from './coordinated-automation-progress-ledger'
+import { acceptedStageIds } from './coordinated-automation-native-readiness'
 import type {
   CoordinatedClock,
   CoordinatedFakeEffectAdapter,
@@ -68,7 +74,7 @@ export type CoordinatedAutomationAdapterContext = {
   hostEffectReceipts?: readonly SemanticReceiptEffect[]
   workspacePath?: string
   trustedAuthorIdentity?: string
-  /** Durable progress; defaults to process memory, which does not survive restart. */
+  /** Durable progress; defaults to the profile's coordinated progress directory. */
   progressStore?: CoordinatedRunProgressStore
   clock?: CoordinatedClock
   durableBoundary?: CoordinatedBoundaryHook
@@ -80,6 +86,8 @@ export class CoordinatedAutomationAdapter {
   readonly #ctx: CoordinatedRecoveryContext
   readonly #runInParentLane: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
   readonly #parentLanes = new Map<string, Promise<void>>()
+  /** The generation this adapter last claimed per run; replaced generations are fenced. */
+  readonly #ledgers = new Map<string, CoordinatedProgressLedger>()
 
   constructor(ctx: CoordinatedAutomationAdapterContext) {
     const approvals = ctx.hostApprovals
@@ -88,8 +96,14 @@ export class CoordinatedAutomationAdapter {
       orchestrationDb: ctx.orchestrationDb,
       probe: orchestrationRecordProbe(ctx.orchestrationDb),
       workerProvider: ctx.workerProvider ?? createDefaultFakeNoEffectsWorkerProvider(ctx.store),
-      progressStore: ctx.progressStore ?? createMemoryCoordinatedRunProgressStore(),
-      clock: ctx.clock ?? { now: () => Date.now() },
+      progressStore: ctx.progressStore ?? defaultProgressStore(),
+      clock: ctx.clock ?? {
+        now: () => Date.now(),
+        setTimer: (delayMs, callback) => {
+          const timer = setTimeout(callback, delayMs)
+          return () => clearTimeout(timer)
+        }
+      },
       boundary: ctx.durableBoundary ?? (() => {}),
       hostApprovals: typeof approvals === 'function' ? approvals : () => approvals ?? [],
       hostEffectReceipts: ctx.hostEffectReceipts,
@@ -155,7 +169,22 @@ export class CoordinatedAutomationAdapter {
       throw new Error(`Run "${automationRunId}" is not ready for dispatch.`)
     }
     const tasks = this.#ctx.orchestrationDb.listTasks({ runId: run.orchestrationRunId })
-    const readyTasks = tasks.filter((t) => t.status === 'ready')
+    // Native readiness is never enough: every dependency must be durably accepted.
+    const accepted = acceptedStageIds(this.#ctx.progressStore.read(automationRunId))
+    const childByTask = new Map(
+      (run.childMappings ?? []).map((m) => [m.taskId, m.childDefinitionId] as const)
+    )
+    const readyTasks = tasks.filter((t) => {
+      const child = snapshot.resolvedChildren.find(
+        (c) => c.childDefinitionId === childByTask.get(t.id)
+      )
+      return (
+        t.status === 'ready' &&
+        child !== undefined &&
+        !accepted.has(child.childDefinitionId) &&
+        child.dependencies.every((dep) => accepted.has(dep.childId))
+      )
+    })
     const childMap = new Map(snapshot.resolvedChildren.map((c) => [c.childDefinitionId, c]))
     const taskToChild = new Map(
       (run.childMappings ?? []).flatMap((m) => {
@@ -179,7 +208,9 @@ export class CoordinatedAutomationAdapter {
     const run = this.#getRunOrThrow(automationRunId)
     return this.runInParentLane(run.automationId, async () => {
       await this.materializeRun(automationRunId)
-      return reconcileCoordinatedRun(this.#ctx, automationRunId)
+      return reconcileCoordinatedRun(this.#ctx, automationRunId, (ledger) =>
+        this.#ledgers.set(automationRunId, ledger)
+      )
     })
   }
 
@@ -194,7 +225,7 @@ export class CoordinatedAutomationAdapter {
     dispatchId: string
     report: unknown
   }): CoordinatedReportSubmission {
-    return submitCoordinatedWorkerReport(this.#ctx, input)
+    return submitCoordinatedWorkerReport(this.#ctx, this.#ledgerFor(input.automationRunId), input)
   }
 
   inspectProgress(automationRunId: string): CoordinatedRunProgress | null {
@@ -225,6 +256,27 @@ export class CoordinatedAutomationAdapter {
     }
   }
 
+  #ledgerFor(automationRunId: string): CoordinatedProgressLedger {
+    const cached = this.#ledgers.get(automationRunId)
+    if (cached) {
+      return cached
+    }
+    const run = this.#getRunOrThrow(automationRunId)
+    if (!run.resolvedSnapshot || !run.orchestrationRunId) {
+      throw new Error(`Run "${automationRunId}" is not materialized; reports cannot be admitted.`)
+    }
+    const ledger = CoordinatedProgressLedger.claim({
+      store: this.#ctx.progressStore,
+      automationRunId,
+      orchestrationRunId: run.orchestrationRunId,
+      snapshot: run.resolvedSnapshot,
+      now: this.#ctx.clock.now(),
+      boundary: this.#ctx.boundary
+    })
+    this.#ledgers.set(automationRunId, ledger)
+    return ledger
+  }
+
   #getRunOrThrow(automationRunId: string): AutomationRun {
     const run = this.#ctx.store.listAutomationRuns().find((r) => r.id === automationRunId)
     if (!run) {
@@ -232,6 +284,12 @@ export class CoordinatedAutomationAdapter {
     }
     return run
   }
+}
+
+function defaultProgressStore(): CoordinatedRunProgressStore {
+  return createFileCoordinatedRunProgressStore(
+    join(app.getPath('userData'), 'coordinated-automation-progress')
+  )
 }
 
 export function createCoordinatedAutomationDispatcher(

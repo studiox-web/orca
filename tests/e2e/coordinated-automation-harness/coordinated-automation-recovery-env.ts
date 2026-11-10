@@ -87,7 +87,13 @@ export class RecoveryEnv {
       orchestrationDb: this.db,
       workspacePath: this.workspacePath,
       progressStore: createFileCoordinatedRunProgressStore(join(this.harness.root, 'progress')),
-      clock: this.harness.clock,
+      clock: {
+        now: () => this.harness.clock.now(),
+        setTimer: (delayMs, callback) => {
+          const id = this.harness.clock.scheduleIn('stage-deadline', delayMs, callback)
+          return () => void this.harness.clock.cancel(id)
+        }
+      },
       effectAdapter: this.harness.effects,
       laneLocks: this.laneLocks,
       hostApprovals: () => this.approvals(),
@@ -135,6 +141,11 @@ export class RecoveryEnv {
 
   crashAt(boundary: CoordinatedDurableBoundary, occurrence = 1): void {
     this.crashOn = { boundary, occurrence, seen: 0 }
+  }
+
+  /** A second coordinator over the same live Store and DB, e.g. while the first is still awaiting a worker. */
+  replacementAdapter(): CoordinatedAutomationAdapter {
+    return new CoordinatedAutomationAdapter(this.#adapterContext())
   }
 
   /** Simulates a coordinator process replacement over the same durable evidence. */

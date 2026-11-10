@@ -10,7 +10,10 @@ import {
   FAKE_EFFECT_ADAPTER_KIND
 } from './coordinated-automation-recovery-context'
 import { validateAttemptReport } from './coordinated-automation-attempt-validation'
-import { COORDINATED_START_FAILURE_PREFIX } from './coordinated-automation-stage-admission'
+import {
+  COORDINATED_START_FAILURE_PREFIX,
+  COORDINATED_TIMEOUT_PREFIX
+} from './coordinated-automation-attempt-prefixes'
 import { encodeCoordinatedWorkerReport } from './coordinated-automation-worker-report-envelope'
 
 export function createDefaultFakeNoEffectsWorkerProvider(store: Store): CoordinatedWorkerProvider {
@@ -51,7 +54,17 @@ function hasFakeWorkerCapability(provider: CoordinatedWorkerProvider): boolean {
 
 export async function executeCoordinatedTaskDispatch(
   ctx: CoordinatedRecoveryContext,
-  input: { automationRunId: string; taskId: string; retryOfDispatchId?: string }
+  input: {
+    automationRunId: string
+    taskId: string
+    retryOfDispatchId?: string
+    /** Persisted attempt deadline; the worker is raced against it on the coordinator clock. */
+    deadlineAt?: number
+    /** Binds the write-ahead attempt record to the created native Dispatch. */
+    onDispatchCreated?: (dispatchId: string) => void
+    /** Throws when this coordinator generation was replaced; no native write follows. */
+    assertCurrent?: () => void
+  }
 ): Promise<{ taskId: string; dispatchId: string; outcome: string }> {
   const { automationRunId, taskId, retryOfDispatchId } = input
   const { store, orchestrationDb, probe, workerProvider } = ctx
@@ -140,6 +153,7 @@ export async function executeCoordinatedTaskDispatch(
     label: dispatch.id
   }
   ctx.boundary('dispatch.after-native-start', boundaryDetail)
+  input.onDispatchCreated?.(dispatch.id)
 
   store.recordCoordinatedChildDispatch({
     automationRunId: run.id,
@@ -156,13 +170,22 @@ export async function executeCoordinatedTaskDispatch(
     dispatchId: dispatch.id
   }
   const settle = (outcome: 'succeeded' | 'failed', result: string): void => {
+    input.assertCurrent?.()
     orchestrationDb.settleWorkerReport({ taskId, dispatchId: dispatch.id, outcome, result })
     ctx.boundary('report.after-native-settle', boundaryDetail)
   }
 
   let rawReport: unknown
   try {
-    rawReport = await workerProvider.run(identity)
+    const raced = await raceWorkerDeadline(ctx, workerProvider.run(identity), input.deadlineAt)
+    if (raced.timedOut) {
+      settle(
+        'failed',
+        `${COORDINATED_TIMEOUT_PREFIX} attempt ${dispatch.id} passed its ${child.launchConfig.timeoutSeconds}s deadline.`
+      )
+      return { taskId, dispatchId: dispatch.id, outcome: 'timed_out' }
+    }
+    rawReport = raced.value
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const started = !(error instanceof CoordinatedWorkerStartError)
@@ -202,4 +225,30 @@ export async function executeCoordinatedTaskDispatch(
     encodeCoordinatedWorkerReport(validation.report)
   )
   return { taskId, dispatchId: dispatch.id, outcome: validation.report.outcome }
+}
+
+/** Resolves with the worker's value, or `timedOut` once the persisted deadline passes. */
+function raceWorkerDeadline(
+  ctx: CoordinatedRecoveryContext,
+  work: Promise<unknown>,
+  deadlineAt: number | undefined
+): Promise<{ timedOut: true } | { timedOut: false; value: unknown }> {
+  const setTimer = ctx.clock.setTimer
+  if (deadlineAt === undefined || !setTimer) {
+    return work.then((value) => ({ timedOut: false, value }))
+  }
+  const remaining = Math.max(0, deadlineAt - ctx.clock.now())
+  return new Promise((resolve, reject) => {
+    const cancel = setTimer(remaining, () => resolve({ timedOut: true }))
+    work.then(
+      (value) => {
+        cancel()
+        resolve({ timedOut: false, value })
+      },
+      (error: unknown) => {
+        cancel()
+        reject(error)
+      }
+    )
+  })
 }

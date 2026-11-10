@@ -52,6 +52,8 @@ async function replaceIndex(path: string, index: ArtifactIndex): Promise<void> {
 export class TemporaryArtifactStore {
   readonly #artifactRoot: string
   readonly #indexPath: string
+  /** Index read-modify-writes are serialized so concurrent fake workers cannot race. */
+  #indexQueue: Promise<unknown> = Promise.resolve()
 
   constructor(readonly runtime: StoreRuntime) {
     this.#artifactRoot = join(runtime.root, 'artifacts')
@@ -64,9 +66,9 @@ export class TemporaryArtifactStore {
     await writeFile(path, content, { mode: 0o600 })
     this.#durableBoundary(uri, 'content')
     const digest = await this.#digest(path)
-    const index = await readIndex(this.#indexPath)
-    index.records[uri] = { uri, recordedDigest: digest, writtenAt: this.runtime.clock.now() }
-    await replaceIndex(this.#indexPath, index)
+    await this.#updateIndex((index) => {
+      index.records[uri] = { uri, recordedDigest: digest, writtenAt: this.runtime.clock.now() }
+    })
     this.#durableBoundary(uri, 'index')
     this.runtime.crashes.reach('artifact-store.before-acknowledgement', { artifactUri: uri })
     this.runtime.trace.record(
@@ -166,6 +168,16 @@ export class TemporaryArtifactStore {
       stale: staleReasons.length > 0,
       staleReasons
     }
+  }
+
+  #updateIndex(mutate: (index: ArtifactIndex) => void): Promise<void> {
+    const next = this.#indexQueue.then(async () => {
+      const index = await readIndex(this.#indexPath)
+      mutate(index)
+      await replaceIndex(this.#indexPath, index)
+    })
+    this.#indexQueue = next.catch(() => undefined)
+    return next
   }
 
   #durableBoundary(uri: string, writeKind: string): void {

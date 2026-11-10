@@ -1,3 +1,4 @@
+import { createMemoryCoordinatedRunProgressStore } from './coordinated-automation-progress-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
@@ -135,6 +136,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     const adapter = new CoordinatedAutomationAdapter({
       store,
       orchestrationDb: db,
+      progressStore: createMemoryCoordinatedRunProgressStore(),
       workerProvider
     })
 
@@ -296,6 +298,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     const adapter = new CoordinatedAutomationAdapter({
       store,
       orchestrationDb: db,
+      progressStore: createMemoryCoordinatedRunProgressStore(),
       workerProvider
     })
 
@@ -332,6 +335,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     const reloadedAdapter = new CoordinatedAutomationAdapter({
       store: reloadedStore,
       orchestrationDb: db,
+      progressStore: createMemoryCoordinatedRunProgressStore(),
       workerProvider
     })
 
@@ -357,6 +361,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     const brokenAdapter = new CoordinatedAutomationAdapter({
       store: brokenStore,
       orchestrationDb: db,
+      progressStore: createMemoryCoordinatedRunProgressStore(),
       workerProvider
     })
     await expect(brokenAdapter.runUntilSettled(run!.id)).rejects.toThrow(
@@ -398,6 +403,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     const missingStageAdapter = new CoordinatedAutomationAdapter({
       store,
       orchestrationDb: db,
+      progressStore: createMemoryCoordinatedRunProgressStore(),
       workerProvider
     })
     const missingStageRun = await missingStageAdapter.runUntilSettled(run!.id)
@@ -441,6 +447,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       const a = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
+        progressStore: createMemoryCoordinatedRunProgressStore(),
         workerProvider: stageProvider,
         hostApprovals: approvals
       })
@@ -547,11 +554,12 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     const stageOnlyAdapter = new CoordinatedAutomationAdapter({
       store,
       orchestrationDb: db,
+      progressStore: createMemoryCoordinatedRunProgressStore(),
       workerProvider,
       hostApprovals: [validStageApproval]
     })
     let parentCheck = await stageOnlyAdapter.runUntilSettled(run!.id)
-    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.status).toBe('dispatched')
     expect(parentCheck.error).toContain(
       'Required approval "parent_appr_1" (role "publisher") is missing from host approvals'
     )
@@ -573,6 +581,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       const a = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
+        progressStore: createMemoryCoordinatedRunProgressStore(),
         workerProvider,
         hostApprovals: approvals
       })
@@ -584,7 +593,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       validStageApproval,
       { ...validParentApproval, approvalId: 'wrong_parent_id' }
     ])
-    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.status).toBe('dispatched')
     expect(parentCheck.error).toContain(
       'Required approval "parent_appr_1" (role "publisher") is missing from host approvals'
     )
@@ -594,7 +603,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       validStageApproval,
       { ...validParentApproval, targetChildId: 'other_child' }
     ])
-    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.status).toBe('dispatched')
     expect(parentCheck.error).toContain(
       'Parent approval "parent_appr_1" has wrong or missing targetChildId scope'
     )
@@ -604,7 +613,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: testing runtime rejection of omitted scope
       { ...validParentApproval, scope: undefined } as unknown as CoordinatedHostApproval
     ])
-    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.status).toBe('dispatched')
     expect(parentCheck.error).toContain('Parent approval "parent_appr_1" is missing required scope')
 
     // 9. Parent omitted orchestrationRunId and foreign-run / wrong automationId / wrong revision
@@ -616,7 +625,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
         orchestrationRunId: undefined
       } as unknown as CoordinatedHostApproval
     ])
-    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.status).toBe('dispatched')
     expect(parentCheck.error).toContain(
       'Parent approval "parent_appr_1" belongs to foreign or missing orchestrationRunId'
     )
@@ -625,7 +634,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       validStageApproval,
       { ...validParentApproval, automationRunId: 'run_foreign_parent' }
     ])
-    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.status).toBe('dispatched')
     expect(parentCheck.error).toContain(
       'Parent approval "parent_appr_1" belongs to foreign or missing automationRunId'
     )
@@ -634,7 +643,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       validStageApproval,
       { ...validParentApproval, automationId: 'auto_foreign_parent' }
     ])
-    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.status).toBe('dispatched')
     expect(parentCheck.error).toContain(
       'Parent approval "parent_appr_1" belongs to foreign or missing automationId'
     )
@@ -643,7 +652,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       validStageApproval,
       { ...validParentApproval, definitionRevision: 77 }
     ])
-    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.status).toBe('dispatched')
     expect(parentCheck.error).toContain(
       'Parent approval "parent_appr_1" belongs to foreign or missing definitionRevision'
     )
@@ -654,7 +663,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       validParentApproval,
       { ...validParentApproval, approverIdentity: 'pub2@orca.test' }
     ])
-    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.status).toBe('dispatched')
     expect(parentCheck.error).toContain('Duplicate host approval for requirement "parent_appr_1"')
 
     // 11. Parent positive exact-match
@@ -716,6 +725,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       const adapter = new CoordinatedAutomationAdapter({
         store,
         orchestrationDb: db,
+        progressStore: createMemoryCoordinatedRunProgressStore(),
         workerProvider,
         workspacePath: testState.dir
       })

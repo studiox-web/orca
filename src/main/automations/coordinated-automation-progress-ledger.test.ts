@@ -19,6 +19,9 @@ const DIGEST = `sha256:${'a'.repeat(64)}`
 function snapshot(canonicalDigest = DIGEST): CoordinatedLedgerSnapshot {
   return {
     canonicalDigest,
+    automationId: 'automation-1',
+    definitionRevision: 1,
+    executionTarget: { type: 'local', id: 'local-1' },
     resolvedChildren: [
       { childDefinitionId: 'draft', enabled: true },
       { childDefinitionId: 'removed', enabled: false }
@@ -79,6 +82,40 @@ describe('coordinated progress ledger', () => {
   it('refuses progress recorded for a different frozen snapshot', () => {
     claim()
     expect(() => claim(undefined, `sha256:${'b'.repeat(64)}`)).toThrow(/another snapshot/)
+  })
+
+  it('binds automation identity, revision, and execution authority', () => {
+    const ledger = claim()
+    expect(ledger.progress).toMatchObject({
+      automationId: 'automation-1',
+      definitionRevision: 1,
+      executionAuthority: 'local:local-1'
+    })
+    const foreign = { ...snapshot(), executionTarget: { type: 'ssh' as const, id: 'other' } }
+    expect(() =>
+      CoordinatedProgressLedger.claim({
+        store: createFileCoordinatedRunProgressStore(root),
+        automationRunId: 'run-1',
+        orchestrationRunId: 'run_000000000001',
+        snapshot: foreign,
+        now: 1000,
+        boundary: () => {}
+      })
+    ).toThrow(/authority/)
+  })
+
+  it('rejects a lower generation write even with a matching sequence', () => {
+    const store = createFileCoordinatedRunProgressStore(root)
+    const older = claim(store)
+    const newer = claim(store)
+    const stale = {
+      ...older.progress,
+      generation: older.generation,
+      sequence: newer.progress.sequence + 1
+    }
+    expect(() => store.write(stale, newer.progress.sequence)).toThrow(
+      CoordinatedProgressConflictError
+    )
   })
 
   it('fails closed on an unreadable progress document instead of resetting it', () => {

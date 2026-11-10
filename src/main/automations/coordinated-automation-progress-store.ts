@@ -30,6 +30,11 @@ function assertSequence(
   expectedSequence: number
 ): void {
   const stored = current?.sequence ?? -1
+  if (current && next.generation < current.generation) {
+    throw new CoordinatedProgressConflictError(
+      `Generation ${next.generation} cannot write progress owned by generation ${current.generation} for run "${next.automationRunId}".`
+    )
+  }
   if (stored !== expectedSequence || next.sequence !== expectedSequence + 1) {
     throw new CoordinatedProgressConflictError(
       `Progress for run "${next.automationRunId}" moved to sequence ${stored}; expected ${expectedSequence}.`

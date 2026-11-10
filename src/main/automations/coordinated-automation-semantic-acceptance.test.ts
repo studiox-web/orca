@@ -778,7 +778,9 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
       const settledRun = await adapter.runUntilSettled(run!.id)
 
       // Even though worker completed, parent outcome acceptance rejected the completion!
-      expect(settledRun.status).toBe('dispatch_failed')
+      // Acceptance failure is a non-final hold; it is never completed and stays re-evaluable.
+      expect(settledRun.status).toBe('dispatched')
+      expect(settledRun.completionReceipt).toBeNull()
       expect(settledRun.error).toContain('Parent outcome acceptance validation failed')
       expect(settledRun.error).toContain(
         'Required acceptance criterion "article-reviewed" failed acceptance evaluation'

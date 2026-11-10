@@ -1,5 +1,9 @@
 import { StructuredWorkerResultSchema } from '../../shared/coordinated-automation-receipt-schemas'
-import type { CoordinatedReportDisposition } from '../../shared/coordinated-automation-progress-types'
+import type {
+  CoordinatedAdmittedReport,
+  CoordinatedReportDisposition
+} from '../../shared/coordinated-automation-progress-types'
+import type { CoordinatedProgressLedger } from './coordinated-automation-progress-ledger'
 import type { CoordinatedRecoveryContext } from './coordinated-automation-recovery-context'
 import {
   encodeCoordinatedWorkerReport,
@@ -19,16 +23,25 @@ export type CoordinatedReportSubmission = Readonly<{
  */
 export function submitCoordinatedWorkerReport(
   ctx: CoordinatedRecoveryContext,
+  ledger: CoordinatedProgressLedger,
   input: { automationRunId: string; taskId: string; dispatchId: string; report: unknown }
 ): CoordinatedReportSubmission {
   const run = ctx.store.listAutomationRuns().find((r) => r.id === input.automationRunId)
   const mapping = (run?.childMappings ?? []).find((m) => m.taskId === input.taskId)
-  if (!run || !mapping) {
-    throw new Error(
-      `Task "${input.taskId}" is not mapped in coordinated run "${input.automationRunId}".`
-    )
-  }
   const reportDigest = structuredReportDigest(input.report)
+  // Fence first: a replaced generation must not settle natively or append audit records.
+  ledger.refresh()
+  if (!run || !mapping) {
+    appendAudit(ledger, ctx, {
+      childDefinitionId: 'foreign',
+      taskId: input.taskId,
+      dispatchId: input.dispatchId,
+      reportDigest,
+      disposition: 'stale',
+      reason: `Task "${input.taskId}" is not mapped in coordinated run "${input.automationRunId}".`
+    })
+    return { disposition: 'stale', reportDigest, reason: 'Foreign Task.' }
+  }
   const parsed = StructuredWorkerResultSchema.safeParse(input.report)
   const settlement = ctx.orchestrationDb.settleWorkerReport({
     taskId: input.taskId,
@@ -36,8 +49,7 @@ export function submitCoordinatedWorkerReport(
     outcome: parsed.success && parsed.data.outcome === 'succeeded' ? 'succeeded' : 'failed',
     result: encodeCoordinatedWorkerReport(input.report)
   })
-  const progress = ctx.progressStore.read(input.automationRunId)
-  const prior = progress?.reports.find(
+  const prior = ledger.progress.reports.find(
     (r) =>
       r.dispatchId === input.dispatchId &&
       (r.disposition === 'accepted' || r.disposition === 'rejected')
@@ -53,31 +65,31 @@ export function submitCoordinatedWorkerReport(
     settlement.action === 'rejected'
       ? settlement.reason
       : `Dispatch ${input.dispatchId} was already admitted with report ${prior?.reportDigest ?? 'unknown'}.`
-  if (
-    progress &&
-    !progress.reports.some(
-      (r) => r.dispatchId === input.dispatchId && r.reportDigest === reportDigest
-    )
-  ) {
-    ctx.progressStore.write(
-      {
-        ...progress,
-        sequence: progress.sequence + 1,
-        reports: [
-          ...progress.reports,
-          {
-            childDefinitionId: mapping.childDefinitionId,
-            taskId: input.taskId,
-            dispatchId: input.dispatchId,
-            reportDigest,
-            disposition,
-            reason,
-            admittedAt: ctx.clock.now()
-          }
-        ]
-      },
-      progress.sequence
-    )
-  }
+  appendAudit(ledger, ctx, {
+    childDefinitionId: mapping.childDefinitionId,
+    taskId: input.taskId,
+    dispatchId: input.dispatchId,
+    reportDigest,
+    disposition,
+    reason
+  })
   return { disposition, reportDigest, reason }
+}
+
+function appendAudit(
+  ledger: CoordinatedProgressLedger,
+  ctx: CoordinatedRecoveryContext,
+  record: Omit<CoordinatedAdmittedReport, 'admittedAt'>
+): void {
+  const now = ctx.clock.now()
+  ledger.update(`audit:${record.disposition}`, (progress) =>
+    progress.reports.some(
+      (r) =>
+        r.dispatchId === record.dispatchId &&
+        r.reportDigest === record.reportDigest &&
+        r.disposition === record.disposition
+    )
+      ? progress
+      : { ...progress, reports: [...progress.reports, { ...record, admittedAt: now }] }
+  )
 }

@@ -255,3 +255,23 @@ export function recordCoordinatedRunSettlement(
 
   return replaceRun(operations, updatedRun)
 }
+
+/**
+ * Records a non-final semantic hold (blocked or uncertain). The run stays `dispatched` so it is
+ * never evictable or displayed as finished, and a later reconcile may still complete it.
+ */
+export function recordCoordinatedRunHold(
+  operations: CoordinatedAutomationRunOperations,
+  input: { automationRunId: string; state: 'blocked' | 'outcome_uncertain'; reason: string }
+): AutomationRun {
+  const run = requireCoordinatedRun(operations, input.automationRunId)
+  assertPhase(run, ['ready_for_dispatch'])
+  if (run.status === 'completed' || run.completionReceipt) {
+    throw new CoordinatedRunConflictError('A completed coordinated run cannot be put on hold.')
+  }
+  const error = `Coordinated run is ${input.state}: ${input.reason}`
+  if (run.status === 'dispatched' && run.error === error) {
+    return detachCoordinatedRun(run)
+  }
+  return replaceRun(operations, { ...run, status: 'dispatched', error })
+}
