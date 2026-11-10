@@ -1,3 +1,4 @@
+import { isDispatchedNativeStubLaunch } from '../../runtime/native-stub-session-test-host'
 import { agentHookServer } from '../../agent-hooks/server'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/migration-unsupported-pty-state'
 import { registerPty } from '../../memory/pty-registry'
@@ -41,15 +42,17 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     daemon: state.isDaemonHostSpawn,
     reattach: result.isReattach ?? false
   })
-  recordCodexPaneAccountForSpawn({
-    ptyId: result.id,
-    isDaemonHostSpawn: state.isDaemonHostSpawn,
-    isReattach: result.isReattach === true,
-    pinnedByResume: state.codexResumeHomeSelected,
-    launchCodexHomePath: state.selectedCodexHomePath,
-    target: state.codexSelectionTarget,
-    settings: deps.getSettings?.()
-  })
+  if (!isDispatchedNativeStubLaunch(args.preparedNativeStub)) {
+    recordCodexPaneAccountForSpawn({
+      ptyId: result.id,
+      isDaemonHostSpawn: state.isDaemonHostSpawn,
+      isReattach: result.isReattach === true,
+      pinnedByResume: state.codexResumeHomeSelected,
+      launchCodexHomePath: state.selectedCodexHomePath,
+      target: state.codexSelectionTarget,
+      settings: deps.getSettings?.()
+    })
+  }
   if (input.hiddenDelivery === 'renderer-scoped' && input.initiallyHidden) {
     markRendererScopedHiddenAtCommit(state)
   }
@@ -109,22 +112,24 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
   })
   // Inventory cannot infer background/reattached PTYs from mounted views.
   deps.sendPtySpawnedToRenderer(result.id)
-  deps.options?.onCodexHomePtySpawned?.({
-    id: result.id,
-    codexHomePath: state.selectedCodexHomePath,
-    startedAt: state.codexHomeLaunchStartedAt,
-    startedSequence: state.codexHomeLaunchStartedSequence,
-    ...codexReattachedHomeRouteField(
-      state.reattachedCodexHomeRoutes,
-      result.id,
-      result.isReattach === true
-    ),
-    ...(result.isReattach === true
-      ? { reattached: true }
-      : input.codexLaunchEnv
-        ? { launchEnv: input.codexLaunchEnv }
-        : {})
-  })
+  if (!isDispatchedNativeStubLaunch(args.preparedNativeStub)) {
+    deps.options?.onCodexHomePtySpawned?.({
+      id: result.id,
+      codexHomePath: state.selectedCodexHomePath,
+      startedAt: state.codexHomeLaunchStartedAt,
+      startedSequence: state.codexHomeLaunchStartedSequence,
+      ...codexReattachedHomeRouteField(
+        state.reattachedCodexHomeRoutes,
+        result.id,
+        result.isReattach === true
+      ),
+      ...(result.isReattach === true
+        ? { reattached: true }
+        : input.codexLaunchEnv
+          ? { launchEnv: input.codexLaunchEnv }
+          : {})
+    })
+  }
   return { kind: 'committed', result: input.response }
 }
 

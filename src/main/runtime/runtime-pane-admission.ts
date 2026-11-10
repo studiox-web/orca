@@ -1,3 +1,4 @@
+import { assertNativeStubRuntimeSpawn } from './native-stub-launch-options'
 import { PaneOwnerContentionError } from '../ipc/pty/pane/pane-spawn-operation'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -150,6 +151,9 @@ export async function spawnInAdmittedPane(
   { startStatus, ...args }: AdmittedSpawnArgs & PaneStartArgs
 ): ReturnType<Spawn> {
   const { groupId: _groupId, afterTabId: _afterTabId, ...spawnArgs } = args
+  if (spawnArgs.preparedNativeStub !== undefined) {
+    assertNativeStubRuntimeSpawn(spawnArgs)
+  }
   const paneKey = `${args.tabId}:${args.leafId}`
   let admittedAs: TerminalPaneAdmissionOutcome | undefined
   startStatus?.sink.set(paneKey, { status: 'starting' })
@@ -181,6 +185,9 @@ export async function spawnInAdmittedPane(
       throw new Error(
         admitted === 'tab_closed' ? 'tab_not_found' : 'terminal_split_source_not_found'
       )
+    }
+    if (spawnArgs.preparedNativeStub !== undefined) {
+      assertNativeStubRuntimeSpawn(spawnArgs)
     }
     admittedAs = admitted
     // SAFETY: Callers require spawn; a lost capability during admission keeps the original failure.

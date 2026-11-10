@@ -1,3 +1,4 @@
+import type { PreparedNativeStubLaunch } from './native-stub-session-test-host'
 import type { RuntimePtyWorktreeRecord, RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
@@ -30,6 +31,7 @@ import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'
 
 export type TerminalCreateOptions = {
+  preparedNativeStub?: PreparedNativeStubLaunch
   command?: string
   /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string

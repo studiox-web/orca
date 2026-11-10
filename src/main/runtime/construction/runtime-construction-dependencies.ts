@@ -1,3 +1,4 @@
+import type { NativeStubSessionTestComposition } from '../native-stub-session-test-host'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
@@ -24,6 +25,7 @@ import type { SessionSearchSettingsApply } from '../runtime-session-search-setti
 import type { CoordinatedDefinitionWriteHost } from '../coordinated-definition-write-gate'
 
 export type RuntimeConstructionDependencies = {
+  nativeStubSessionTest?: NativeStubSessionTestComposition
   coordinatedDefinitionWrites?: CoordinatedDefinitionWriteHost
   getSetupTerminalTitle?: () => string
   getLocalProvider?: () => IPtyProvider

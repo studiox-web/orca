@@ -1,3 +1,4 @@
+import { requireNativeStubLaunch } from '../../runtime/native-stub-session-test-host'
 import { randomUUID } from 'node:crypto'
 import { observePtyForeground } from '../../pty/pty-master-foreground-observation'
 import type * as pty from 'node-pty'
@@ -69,6 +70,12 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
+    if (
+      args.preparedNativeStub !== undefined &&
+      requireNativeStubLaunch(args.preparedNativeStub).composition.provider !== this
+    ) {
+      throw new Error('native_stub_provider_changed')
+    }
     return spawnLocalPty(args, () => this.opts)
   }
 

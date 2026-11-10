@@ -66,6 +66,11 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Side effects are delivered to a desktop window only.'
   },
   {
+    wiring: 'ctor:coordinatedDefinitionWrites',
+    missingOn: 'orcad',
+    reason: 'Desktop startup accepts isolated test composition; ordinary startup leaves it absent.'
+  },
+  {
     wiring: 'ctor:attestAgentHookCompatibilityAuthority',
     missingOn: 'orcad',
     reason: 'Compatibility hook authority belongs to desktop-launched panes.'
@@ -166,8 +171,7 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
 ]
 
 const UNWIRED_CONSTRUCTION_OPTIONS: Readonly<Record<string, string>> = {
-  coordinatedDefinitionWrites:
-    'Isolated developer/test profile opt-in; absent from both live roots.'
+  nativeStubSessionTest: 'Pinned in-process test fixture only; absent from both live roots.'
 }
 
 const POSITIONAL_CONSTRUCTOR_PARAMETERS = ['stats'] as const

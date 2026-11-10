@@ -1,3 +1,4 @@
+import { requireNativeStubLaunch } from '../../runtime/native-stub-session-test-host'
 import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-process-recognition'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
@@ -191,6 +192,30 @@ export function createLocalPtyLaunchPlan(
   args: PtySpawnOptions,
   getOptions: () => LocalPtyProviderOptions
 ): LocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan {
+  if (args.preparedNativeStub) {
+    const record = requireNativeStubLaunch(args.preparedNativeStub)
+    const cwd = record.workspace.path
+    return {
+      startupAgentRecognition: null,
+      defaultCwd: cwd,
+      cwd,
+      wslInfo: null,
+      worktreeWslContext: undefined,
+      preferredWslContext: undefined,
+      launchWslContext: undefined,
+      shellPath: record.composition.file,
+      shellArgs: [record.composition.fixture],
+      effectiveCwd: cwd,
+      validationCwd: cwd,
+      startupCommandDeliveredInShellArgs: true,
+      windowsFallbackAttempts: [],
+      shellReadyLaunch: null,
+      getFallbackShellReadyConfig: undefined,
+      primaryPreLaunchEnv: {},
+      isWslShell: false,
+      launchWslDistro: null
+    }
+  }
   const startupAgentRecognition = args.command
     ? recognizeAgentProcessFromCommandLine(args.command)
     : null

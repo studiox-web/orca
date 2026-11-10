@@ -1,3 +1,8 @@
+import {
+  assertNativeStubRuntimeSpawn,
+  assertNativeStubProviderSpawn
+} from '../../../runtime/native-stub-launch-options'
+import { getLocalPtyProvider } from '../provider/registry'
 import { runPtySpawn, normalizePtySpawnSessionId } from '../spawn-operation'
 import { requireAcceptedSpawn } from '../spawn-outcome'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
@@ -17,12 +22,19 @@ export async function spawnPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   request: RuntimePtySpawnArgs
 ) {
+  if (request.preparedNativeStub !== undefined) {
+    assertNativeStubRuntimeSpawn(request, deps.runtime)
+  }
   const args = { ...request, sessionId: normalizePtySpawnSessionId(request.sessionId) }
   const ctx = createRuntimePtySpawnState(deps, args)
   const outcome = await runPtySpawn({
     state: ctx,
     prepare: async () => {
-      ctx.args = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
+      if (ctx.args.preparedNativeStub !== undefined) {
+        assertNativeStubRuntimeSpawn(ctx.args, deps.runtime)
+      } else {
+        ctx.args = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
+      }
       await prepareRuntimePtySpawn(ctx)
       await buildRuntimePtySpawnOptions(ctx)
     },
@@ -36,6 +48,15 @@ export async function spawnPtyFromRuntimeController(
       },
       paneKey: ctx.spawnIdentityPaneKey,
       preAllocatedHandle: args.preAllocatedHandle,
+      validateDispatch: () => {
+        if (ctx.args.preparedNativeStub !== undefined) {
+          assertNativeStubRuntimeSpawn(ctx.args, deps.runtime)
+          assertNativeStubProviderSpawn(ctx.spawnOptions)
+          if (ctx.provider !== getLocalPtyProvider()) {
+            throw new Error('native_stub_provider_changed')
+          }
+        }
+      },
       beforeProviderSpawn: () => markRuntimeSpawnHiddenBeforeSpawn(ctx),
       reportPtySpawnCommitted: () => ctx.reportPtySpawnCommitted()
     }),

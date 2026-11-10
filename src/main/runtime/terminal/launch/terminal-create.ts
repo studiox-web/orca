@@ -1,3 +1,5 @@
+import { beginNativeStubTerminal, bindNativeStubSurface } from '../../native-stub-launch-options'
+import { requireNativeStubLaunch } from '../../native-stub-session-test-host'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import {
   recordTerminalLaunchMetadata,
@@ -26,6 +28,10 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
     // Internal creation evidence; RPC and preload callers never supply it.
     ...evidence: TerminalWorkspaceCreationEvidence
   ): Promise<dependencies.RuntimeTerminalCreate> {
+    if (opts.preparedNativeStub !== undefined) {
+      beginNativeStubTerminal(this, selector, opts)
+      opts = Object.freeze({ ...opts })
+    }
     if (opts.startupAgent && selector === undefined) {
       throw new Error(`startupAgent ${opts.startupAgent} requires a workspace selector.`)
     }
@@ -72,41 +78,29 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       })
       const releaseStablePaneCreate = createIdempotentCallback(claimedStablePaneCreate)
       const launchToken = agentLaunchTokenFor(launchOpts, dependencies.randomUUID)
+      if (launchOpts.preparedNativeStub) {
+        bindNativeStubSurface(launchOpts.preparedNativeStub, {
+          handle: preAllocatedHandle,
+          tabId,
+          leafId,
+          token: launchToken!
+        })
+      }
       const teamAllocation = terminalCreateTeamAllocation(this.claudeAgentTeams)
       let effectiveLaunchConfig = launchOpts.launchConfig
       let result!: Awaited<ReturnType<NonNullable<dependencies.RuntimePtyController['spawn']>>>
       const spawnFresh = async (operation: PaneSpawnOperation) => {
         const baseEnv = withAgentLaunchToken(launchOpts.env, launchToken)
-        const agentTeams = await teamAllocation
-          .prepare(
-            {
-              launchConfig: launchOpts.launchConfig,
-              command: launchOpts.command,
-              claudeAgentTeamsSourceCommand: launchOpts.claudeAgentTeamsSourceCommand,
-              claudeAgentTeamsMode: this.store?.getSettings?.().claudeAgentTeamsMode,
-              baseEnv: { ...process.env, ...baseEnv },
-              adoptedBeforeLaunch: null
-            },
-            preAllocatedHandle
-          )
-          .catch((error: unknown) => {
-            releaseStablePaneCreate()
-            throw error
-          })
-        const { plan: agentTeamsPlan, sequencedStartupCommand } = agentTeams
+        const agentTeams = await teamAllocation.prepareCreate({
+          opts: launchOpts,
+          baseEnv,
+          leaderHandle: preAllocatedHandle,
+          readMode: () => this.store?.getSettings?.().claudeAgentTeamsMode,
+          workspaceEnv: (base, team) => this.buildTerminalWorkspaceEnv(workspace, base, team),
+          releaseOnFailure: releaseStablePaneCreate
+        })
+        const { plan: agentTeamsPlan, sequencedStartupCommand, env } = agentTeams
         effectiveLaunchConfig = agentTeams.effectiveLaunchConfig
-        const env = this.buildTerminalWorkspaceEnv(
-          workspace,
-          {
-            ...baseEnv,
-            ...(sequencedStartupCommand
-              ? {
-                  [dependencies.SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: sequencedStartupCommand
-                }
-              : {})
-          },
-          agentTeamsPlan?.env
-        )
         const terminalColorQueryReplies = dependencies.getTerminalViewerColors()
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
@@ -116,6 +110,9 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
           result = await dependencies.spawnInAdmittedPane(this.store, ptyController, {
             ...initialSize,
+            ...(launchOpts.preparedNativeStub
+              ? { preparedNativeStub: launchOpts.preparedNativeStub }
+              : {}),
             cwd,
             command: sequencedStartupCommand
               ? launchOpts.command
@@ -178,29 +175,34 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       }
       try {
         // A pane moved from another host reopens where it last was, until a spawn commits.
-        cwd = (await hint.peekCwd(launchOpts.cwd)) ?? cwd
+        cwd = launchOpts.preparedNativeStub ? cwd : ((await hint.peekCwd(launchOpts.cwd)) ?? cwd)
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
-        const adoptedBeforeLaunch = await ptyController.adoptStablePane?.({
-          ...initialSize,
-          cwd,
-          connectionId: workspace.connectionId,
-          worktreeId: workspace.id,
-          preAllocatedHandle,
-          tabId,
-          leafId,
-          spawnFresh,
-          onOutcome: (outcome, operation) => {
-            claimedStablePaneCreate?.acceptOutcome?.(outcome, operation)
-            teamAllocation.acceptOutcome(outcome)
-          },
-          signal: launchOpts.signal
-        })
+        if (launchOpts.preparedNativeStub) {
+          requireNativeStubLaunch(launchOpts.preparedNativeStub, this)
+        }
+        const adoptedBeforeLaunch = launchOpts.preparedNativeStub
+          ? undefined
+          : await ptyController.adoptStablePane?.({
+              ...initialSize,
+              cwd,
+              connectionId: workspace.connectionId,
+              worktreeId: workspace.id,
+              preAllocatedHandle,
+              tabId,
+              leafId,
+              spawnFresh,
+              onOutcome: (outcome, operation) => {
+                claimedStablePaneCreate?.acceptOutcome?.(outcome, operation)
+                teamAllocation.acceptOutcome(outcome)
+              },
+              signal: launchOpts.signal
+            })
         if (adoptedBeforeLaunch) {
           result = dependencies.materializedStablePaneReply(adoptedBeforeLaunch, preAllocatedHandle)
           Object.assign(result, this.getTerminalLaunchResult(result.id))
-        } else if (!ptyController.adoptStablePane) {
+        } else if (launchOpts.preparedNativeStub || !ptyController.adoptStablePane) {
           result = await spawnFresh({ mustExist: false })
           teamAllocation.acceptFresh(result)
         }

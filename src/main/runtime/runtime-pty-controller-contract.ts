@@ -1,3 +1,4 @@
+import type { PreparedNativeStubLaunch } from './native-stub-session-test-host'
 import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
@@ -68,6 +69,7 @@ export type RuntimePtyController = {
     materialized?: true
   } | null>
   spawn?(opts: {
+    preparedNativeStub?: PreparedNativeStubLaunch
     resolvedWorkspace?: TerminalWorkspaceLaunchScope
     cols: number
     rows: number

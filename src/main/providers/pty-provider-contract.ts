@@ -1,3 +1,4 @@
+import type { PreparedNativeStubLaunch } from '../runtime/native-stub-session-test-host'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
@@ -49,6 +50,7 @@ export type PtyProviderBufferSnapshot = {
 }
 
 export type PtySpawnOptions = {
+  preparedNativeStub?: PreparedNativeStubLaunch
   cols: number
   rows: number
   cwd?: string

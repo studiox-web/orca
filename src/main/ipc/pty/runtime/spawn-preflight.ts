@@ -1,3 +1,4 @@
+import { assertNativeStubRuntimeSpawn } from '../../../runtime/native-stub-launch-options'
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/claude-profile-installed-router'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
@@ -29,6 +30,9 @@ export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
 ): Promise<PtySpawnResult | null> {
   const args = ctx.args
+  if (args.preparedNativeStub !== undefined) {
+    assertNativeStubRuntimeSpawn(args, ctx.deps.runtime)
+  }
   if (!ctx.preAdoptedStablePane) {
     const admission = ctx.deps.assertWorkspaceAcceptsNewPty(
       args.worktreeId,
@@ -42,69 +46,77 @@ export async function prepareRuntimePtySpawn(
       await admission
     }
   }
-  // SSH execution is rejected here; remaining preparation belongs to this machine.
-  ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
-  const freshSpawnRecovery = ctx.preAdoptedStablePane
-    ? undefined
-    : recoverFreshSpawnProviderRouting(ctx.provider, args.sessionId, args.isNewSession)
-  if (freshSpawnRecovery) {
-    await freshSpawnRecovery
+  if (args.preparedNativeStub !== undefined) {
+    assertNativeStubRuntimeSpawn(args, ctx.deps.runtime)
+    ctx.provider = getProvider(getConnectionExecutionHostId(null))
+    ctx.cwd = args.cwd
+    ctx.requestedCwd = args.cwd
+    ctx.env = args.env
+  } else {
+    // SSH execution is rejected here; remaining preparation belongs to this machine.
+    ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
+    const freshSpawnRecovery = ctx.preAdoptedStablePane
+      ? undefined
+      : recoverFreshSpawnProviderRouting(ctx.provider, args.sessionId, args.isNewSession)
+    if (freshSpawnRecovery) {
+      await freshSpawnRecovery
+    }
+    ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
+    ctx.isDaemonHostSpawn =
+      !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
+    ctx.callerRequestedSessionId = args.sessionId
+    ctx.requestedSessionId =
+      ctx.callerRequestedSessionId ??
+      (ctx.isDaemonHostSpawn && args.agentSessionCreateOperationId
+        ? ptySessionIdForAgentCreateOperation(args.worktreeId, args.agentSessionCreateOperationId)
+        : undefined)
+    ctx.sessionId =
+      ctx.requestedSessionId ??
+      (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
+    ctx.effectiveSessionAppId = ctx.sessionId
+    ctx.ownsNewIncarnation =
+      !ctx.preAdoptedStablePane &&
+      ctx.isDaemonHostSpawn &&
+      (ctx.callerRequestedSessionId === undefined || args.isNewSession === true)
+    // Runtime requests use planned command runtime, or project runtime plus explicit --shell; they have no renderer runtime.
+    const target = await resolvePtySpawnStartupTarget({
+      worktreeId: args.worktreeId,
+      cwd: args.cwd,
+      sessionId: ctx.sessionId,
+      shellOverride: args.shellOverride,
+      plannedPty: args.launchRuntime?.pty,
+      projectRuntimeSource: {
+        kind: 'store',
+        store: ctx.deps.store,
+        workspace: args.resolvedWorkspace,
+        connectionId: args.connectionId,
+        tabId: args.tabId
+      },
+      preAdopted: ctx.preAdoptedStablePane !== null,
+      getSettings: ctx.deps.getSettings,
+      resolveStartupCwd: (id, cwd, fallback) =>
+        ctx.deps.resolvePtySpawnStartupCwd(id, cwd, fallback, args.connectionId),
+      // The same verdict as spawn-options' `wslBackgroundStart`, held before the cwd probe and any provider.
+      ...(isRuntimeWslBackgroundStart(ctx)
+        ? { wslStartHold: { wslBackgroundStart: true, sessionId: ctx.sessionId } }
+        : {})
+    })
+    ctx.cwd = target.cwd
+    ctx.requestedCwd = target.requestedCwd
+    ctx.prevalidatedCwd = target.prevalidatedCwd
+    ctx.startupCwdFallback = target.startupCwdFallback
+    ctx.correctStartupCwd = target.correctStartupCwd
+    ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
+    ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
+    ctx.expectedWslDistro = target.expectedWslDistro
+    ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
+    ctx.codexSelectionTarget = target.codexSelectionTarget
+    args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
+    ctx.claudeAuth =
+      ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
+        ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
+        : null
   }
-  ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
-  ctx.isDaemonHostSpawn =
-    !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
-  ctx.callerRequestedSessionId = args.sessionId
-  ctx.requestedSessionId =
-    ctx.callerRequestedSessionId ??
-    (ctx.isDaemonHostSpawn && args.agentSessionCreateOperationId
-      ? ptySessionIdForAgentCreateOperation(args.worktreeId, args.agentSessionCreateOperationId)
-      : undefined)
-  ctx.sessionId =
-    ctx.requestedSessionId ??
-    (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
-  ctx.effectiveSessionAppId = ctx.sessionId
-  ctx.ownsNewIncarnation =
-    !ctx.preAdoptedStablePane &&
-    ctx.isDaemonHostSpawn &&
-    (ctx.callerRequestedSessionId === undefined || args.isNewSession === true)
-  // Runtime requests use planned command runtime, or project runtime plus explicit --shell; they have no renderer runtime.
-  const target = await resolvePtySpawnStartupTarget({
-    worktreeId: args.worktreeId,
-    cwd: args.cwd,
-    sessionId: ctx.sessionId,
-    shellOverride: args.shellOverride,
-    plannedPty: args.launchRuntime?.pty,
-    projectRuntimeSource: {
-      kind: 'store',
-      store: ctx.deps.store,
-      workspace: args.resolvedWorkspace,
-      connectionId: args.connectionId,
-      tabId: args.tabId
-    },
-    preAdopted: ctx.preAdoptedStablePane !== null,
-    getSettings: ctx.deps.getSettings,
-    resolveStartupCwd: (id, cwd, fallback) =>
-      ctx.deps.resolvePtySpawnStartupCwd(id, cwd, fallback, args.connectionId),
-    // The same verdict as spawn-options' `wslBackgroundStart`, held before the cwd probe and any provider.
-    ...(isRuntimeWslBackgroundStart(ctx)
-      ? { wslStartHold: { wslBackgroundStart: true, sessionId: ctx.sessionId } }
-      : {})
-  })
-  ctx.cwd = target.cwd
-  ctx.requestedCwd = target.requestedCwd
-  ctx.prevalidatedCwd = target.prevalidatedCwd
-  ctx.startupCwdFallback = target.startupCwdFallback
-  ctx.correctStartupCwd = target.correctStartupCwd
-  ctx.terminalRuntimeOptions = target.terminalRuntimeOptions
-  ctx.daemonShellOverride = ctx.terminalRuntimeOptions.shellOverride
-  ctx.expectedWslDistro = target.expectedWslDistro
-  ctx.wslHoldReadAnchor = target.wslHoldReadAnchor
-  ctx.codexSelectionTarget = target.codexSelectionTarget
-  args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
-  ctx.claudeAuth =
-    ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
-      : null
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
   if (ctx.shouldPersistHostSessionBinding) {
@@ -126,6 +138,9 @@ export async function prepareRuntimePtySpawn(
       ...(args.expectedSourceBinding ? { expectedSourceBinding: args.expectedSourceBinding } : {}),
       ...(args.placement ? { placement: args.placement } : {})
     }
+  }
+  if (args.preparedNativeStub !== undefined) {
+    return null
   }
   ctx.env = ctx.claudeAuth ? { ...args.env, ...ctx.claudeAuth.envPatch } : args.env
   ctx.requestedAgentTeamsPath = ctx.env?.ORCA_AGENT_TEAMS_TEAM_ID

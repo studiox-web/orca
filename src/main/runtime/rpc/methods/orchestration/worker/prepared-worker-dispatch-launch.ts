@@ -1,3 +1,4 @@
+import type { PreparedNativeStubLaunch } from '../../../../native-stub-session-test-host'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow } from '../../../../orchestration/types'
@@ -24,6 +25,7 @@ import { rebindReusedStructuredWorker } from '../../orchestration-structured-wor
 import { placedWorkerParty, type WorkerFollowUp } from './worker-follow-up-placement'
 
 type PreparedWorkerDispatchLaunch = {
+  preparedNativeStub?: PreparedNativeStubLaunch
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   params: WorkerStartInput
@@ -79,6 +81,7 @@ export async function launchPreparedWorkerDispatch(
   let result: unknown
   try {
     placed = await placeWorkerAgent({
+      preparedNativeStub: args.preparedNativeStub,
       runtime,
       db,
       dispatchId: started.dispatch.id,

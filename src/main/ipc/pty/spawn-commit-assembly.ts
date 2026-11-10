@@ -41,6 +41,7 @@ export type PtySpawnCommitState = {
   }
   args: Pick<
     RuntimePtySpawnArgs,
+    | 'preparedNativeStub'
     | 'cols'
     | 'rows'
     | 'connectionId'

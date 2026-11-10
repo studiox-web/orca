@@ -1,3 +1,4 @@
+import type { PreparedNativeStubLaunch } from '../../../../native-stub-session-test-host'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
@@ -60,6 +61,7 @@ export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHand
 }
 
 export async function createExistingWorktreeWorkerTerminal(args: {
+  preparedNativeStub?: PreparedNativeStubLaunch
   runtime: OrcaRuntimeService
   worktreeId: string
   agent: TuiAgent
@@ -70,6 +72,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
     // Resolve ids through agent config; cursor alone opens the desktop app, its CLI is cursor-agent.
     startupAgent: args.agent,
+    ...(args.preparedNativeStub ? { preparedNativeStub: args.preparedNativeStub } : {}),
     launchSource: 'orchestration',
     suppressStartupUpdatePrompt: true,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),

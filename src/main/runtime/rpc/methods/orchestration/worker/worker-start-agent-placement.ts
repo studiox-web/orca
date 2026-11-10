@@ -1,3 +1,7 @@
+import {
+  requireNativeStubLaunch,
+  type PreparedNativeStubLaunch
+} from '../../../../native-stub-session-test-host'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
@@ -44,6 +48,7 @@ export type WorkerAgentPlacement = {
 }
 
 type WorkerAgentPlacementArgs = {
+  preparedNativeStub?: PreparedNativeStubLaunch
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   dispatchId: string
@@ -78,6 +83,20 @@ export const EXISTING_WORKTREE_SETUP: WorkerSetupReceipt = {
 export async function placeWorkerAgent(
   args: WorkerAgentPlacementArgs
 ): Promise<WorkerAgentPlacement> {
+  if (args.preparedNativeStub !== undefined) {
+    const record = requireNativeStubLaunch(args.preparedNativeStub, args.runtime)
+    if (
+      args.creationTarget ||
+      args.followUp ||
+      args.params.terminal ||
+      args.mode.mode !== 'terminal' ||
+      args.agent !== 'codex' ||
+      args.launchPreferences ||
+      args.resolvedWorktree?.id !== record.workspace.id
+    ) {
+      throw new Error('native_stub_worker_placement_override')
+    }
+  }
   const existing = args.creationTarget ? undefined : requirePlacement(args.resolvedWorktree)
   if (existing && args.params.terminal) {
     args.effects.push({
@@ -246,6 +265,7 @@ function workerSurfaceFactory(
     createTerminalAgent: async ({ worktreeId }) => {
       recordSurfaceStage(worktreeId)
       const terminal = await createExistingWorktreeWorkerTerminal({
+        preparedNativeStub: args.preparedNativeStub,
         runtime: args.runtime,
         worktreeId,
         agent,

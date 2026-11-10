@@ -1,3 +1,4 @@
+import { assertNativeStubRuntimeSpawn } from '../../../runtime/native-stub-launch-options'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
@@ -21,9 +22,14 @@ export async function buildRuntimePtySpawnOptions(
   (PtySpawnResult & { stablePaneOwner?: { handle: string; tabId: string; leafId: string } }) | null
 > {
   const args = ctx.args
-  const settings = ctx.deps.getSettings?.()
+  if (args.preparedNativeStub !== undefined) {
+    assertNativeStubRuntimeSpawn(args, ctx.deps.runtime)
+  }
+  const settings = args.preparedNativeStub ? undefined : ctx.deps.getSettings?.()
   // Host history is sampled before preparation; the window samples it afterwards.
-  const historyIsolationEnabled = ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true
+  const historyIsolationEnabled = args.preparedNativeStub
+    ? false
+    : (ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true)
   let ptySpawnCommitReported = false
   ctx.reportPtySpawnCommitted = (): void => {
     if (ptySpawnCommitReported) {
@@ -32,26 +38,30 @@ export async function buildRuntimePtySpawnOptions(
     ptySpawnCommitReported = true
     args.onPtySpawnCommitted?.()
   }
-  const deletions = assemblePtySpawnEnvDeletions({
-    env: ctx.env,
-    callerEnvToDelete: args.envToDelete,
-    agentTeamsEnvToDelete: [],
-    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
-    connectionId: args.connectionId,
-    skipCodexHomeEnv: ctx.skipCodexHomeEnv,
-    stripInheritedOrcaCodexHome: ctx.stripInheritedOrcaCodexHome,
-    codexResumeHomeSelected: ctx.codexResumeHomeSelected,
-    settings
-  })
+  const deletions = args.preparedNativeStub
+    ? { env: ctx.env, envToDelete: undefined }
+    : assemblePtySpawnEnvDeletions({
+        env: ctx.env,
+        callerEnvToDelete: args.envToDelete,
+        agentTeamsEnvToDelete: [],
+        isDaemonHostSpawn: ctx.isDaemonHostSpawn,
+        connectionId: args.connectionId,
+        skipCodexHomeEnv: ctx.skipCodexHomeEnv,
+        stripInheritedOrcaCodexHome: ctx.stripInheritedOrcaCodexHome,
+        codexResumeHomeSelected: ctx.codexResumeHomeSelected,
+        settings
+      })
   ctx.env = deletions.env
-  await prepareAntigravityAccountForLaunch({
-    launchAgent: args.launchAgent,
-    command: ctx.launchCommand,
-    connectionId: args.connectionId,
-    isWsl: ctx.codexSelectionTarget.runtime === 'wsl',
-    env: ctx.env,
-    envToDelete: deletions.envToDelete
-  })
+  if (!args.preparedNativeStub) {
+    await prepareAntigravityAccountForLaunch({
+      launchAgent: args.launchAgent,
+      command: ctx.launchCommand,
+      connectionId: args.connectionId,
+      isWsl: ctx.codexSelectionTarget.runtime === 'wsl',
+      env: ctx.env,
+      envToDelete: deletions.envToDelete
+    })
+  }
   ctx.materializedPaneKey = ctx.hostSessionBinding
     ? makePaneKey(ctx.hostSessionBinding.tabId, ctx.hostSessionBinding.leafId)
     : null
@@ -65,29 +75,43 @@ export async function buildRuntimePtySpawnOptions(
       ? makePaneKey(args.tabId, ctx.metadataLeafId)
       : null
   ctx.spawnIdentityPaneKey = ctx.materializedPaneKey ?? ctx.metadataPaneKey
-  const launch = await assemblePtySpawnLaunchOptions({
-    args,
-    env: ctx.env,
-    envToDelete: deletions.envToDelete,
-    launchCommand: ctx.launchCommand,
-    cwd: ctx.cwd,
-    prevalidatedCwd: ctx.prevalidatedCwd,
-    isDaemonHostSpawn: ctx.isDaemonHostSpawn,
-    preAdoptedStablePane: ctx.preAdoptedStablePane !== null,
-    isNewSession: ctx.ownsNewIncarnation,
-    codexRuntime: ctx.codexSelectionTarget.runtime,
-    expectedWslDistro: ctx.expectedWslDistro,
-    requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
-    selectedCodexHomePath: ctx.selectedCodexHomePath,
-    shellOverride: ctx.daemonShellOverride,
-    paneKey: ctx.spawnIdentityPaneKey,
-    sessionId: ctx.sessionId,
-    spawnIntent: ctx.preAdoptedStablePane ? undefined : args.spawnIntent,
-    historyIsolationEnabled,
-    getSettings: ctx.deps.getSettings,
-    store: ctx.deps.store,
-    claudeAuth: ctx.claudeAuth
-  })
+  const launch = args.preparedNativeStub
+    ? {
+        spawnOptions: {
+          cols: args.cols,
+          rows: args.rows,
+          cwd: args.cwd,
+          env: args.env,
+          launchAgent: args.launchAgent,
+          worktreeId: args.worktreeId,
+          preparedNativeStub: args.preparedNativeStub
+        },
+        env: args.env,
+        launchCommand: undefined
+      }
+    : await assemblePtySpawnLaunchOptions({
+        args,
+        env: ctx.env,
+        envToDelete: deletions.envToDelete ?? [],
+        launchCommand: ctx.launchCommand,
+        cwd: ctx.cwd,
+        prevalidatedCwd: ctx.prevalidatedCwd,
+        isDaemonHostSpawn: ctx.isDaemonHostSpawn,
+        preAdoptedStablePane: ctx.preAdoptedStablePane !== null,
+        isNewSession: ctx.ownsNewIncarnation,
+        codexRuntime: ctx.codexSelectionTarget.runtime,
+        expectedWslDistro: ctx.expectedWslDistro,
+        requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
+        selectedCodexHomePath: ctx.selectedCodexHomePath,
+        shellOverride: ctx.daemonShellOverride,
+        paneKey: ctx.spawnIdentityPaneKey,
+        sessionId: ctx.sessionId,
+        spawnIntent: ctx.preAdoptedStablePane ? undefined : args.spawnIntent,
+        historyIsolationEnabled,
+        getSettings: ctx.deps.getSettings,
+        store: ctx.deps.store,
+        claudeAuth: ctx.claudeAuth
+      })
   ctx.spawnOptions = launch.spawnOptions
   ctx.env = launch.env
   ctx.launchCommand = launch.launchCommand
@@ -124,7 +148,7 @@ export async function buildRuntimePtySpawnOptions(
   if (args.signal) {
     ctx.spawnOptions.signal = args.signal
   }
-  if (isRuntimeWslBackgroundStart(ctx)) {
+  if (!args.preparedNativeStub && isRuntimeWslBackgroundStart(ctx)) {
     ctx.spawnOptions.wslBackgroundStart = true
   }
   if (ctx.wslHoldReadAnchor !== undefined) {

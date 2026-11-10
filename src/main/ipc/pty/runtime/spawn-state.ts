@@ -1,3 +1,4 @@
+import type { PreparedNativeStubLaunch } from '../../../runtime/native-stub-session-test-host'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn-outcome'
@@ -112,6 +113,7 @@ export type RuntimePtySpawnState = {
 }
 
 export type RuntimePtySpawnArgs = {
+  preparedNativeStub?: PreparedNativeStubLaunch
   resolvedWorkspace?: TerminalWorkspaceLaunchScope
   cols: number
   rows: number

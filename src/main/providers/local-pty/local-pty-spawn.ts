@@ -1,3 +1,7 @@
+import {
+  assertNativeStubProviderSpawn,
+  nativeStubSpawnEnvironment
+} from '../../runtime/native-stub-launch-options'
 import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
@@ -24,7 +28,7 @@ import {
   reattachLocalPty,
   reserveLocalPtySpawn
 } from './local-pty-spawn-state'
-import { loadLocalPtyRuntimeSpawn } from './local-pty-runtime-spawn'
+import { loadLocalPtyRuntimeSpawn, loadNativeStubRuntimeSpawn } from './local-pty-runtime-spawn'
 import { destroyPtyProcess } from './local-pty-termination'
 import { updateHistoryEnvForFallback } from '../../terminal-history'
 import type { PtySpawnOptions } from '../pty-provider-contract'
@@ -34,6 +38,9 @@ export async function spawnLocalPty(
   args: PtySpawnOptions,
   getOptions: () => LocalPtyProviderOptions
 ): Promise<PtySpawnResult> {
+  if (args.preparedNativeStub !== undefined) {
+    assertNativeStubProviderSpawn(args)
+  }
   const reattachId = normalizeLocalCallerSessionId(args.sessionId, args.attachOnly === true)
   if (reattachId) {
     const pendingShutdown = ptyShutdownOperations.get(reattachId)
@@ -82,24 +89,32 @@ export async function spawnLocalPty(
       }
       throwIfCanceled()
     }
-    const envResult = buildLocalPtySpawnEnvironment({
-      id,
-      spawn: args,
-      getOptions,
-      plan
-    })
+    const envResult = args.preparedNativeStub
+      ? { ...nativeStubSpawnEnvironment(args.preparedNativeStub) }
+      : buildLocalPtySpawnEnvironment({
+          id,
+          spawn: args,
+          getOptions,
+          plan
+        })
     const finalEnv = envResult instanceof Promise ? await envResult : envResult
     throwIfCanceled()
-    enforceLocalPtySpawnEnvironmentOverrides(args, finalEnv)
-    const historyResult = finalizeLocalPtySpawnEnvironment({
-      spawn: args,
-      getOptions,
-      plan,
-      env: finalEnv
-    })
+    if (!args.preparedNativeStub) {
+      enforceLocalPtySpawnEnvironmentOverrides(args, finalEnv)
+    }
+    const historyResult = args.preparedNativeStub
+      ? undefined
+      : finalizeLocalPtySpawnEnvironment({
+          spawn: args,
+          getOptions,
+          plan,
+          env: finalEnv
+        })
 
     const fallbackHistory = historyResult?.historyDir ? historyResult : undefined
-    const [spawn] = await Promise.all([loadLocalPtyRuntimeSpawn(), prepareMacosTccLoginShell()])
+    const [spawn] = args.preparedNativeStub
+      ? [await loadNativeStubRuntimeSpawn(args.preparedNativeStub)]
+      : await Promise.all([loadLocalPtyRuntimeSpawn(), prepareMacosTccLoginShell()])
     return reserveLocalPtySpawn(id, async () => {
       const checkCanceled = (): void => {
         throwIfCanceled()
@@ -141,7 +156,9 @@ export async function spawnLocalPty(
         }
         throw error
       }
-      args.onPtySpawnCommitted?.()
+      if (!args.preparedNativeStub) {
+        args.onPtySpawnCommitted?.()
+      }
       plan.shellPath = spawnResult.shellPath
       // The winning Windows fallback may embed startup in argv; its flag prevents duplicate stdin delivery.
       if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
@@ -151,7 +168,7 @@ export async function spawnLocalPty(
         plan.shellReadyLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
       }
 
-      if (process.platform !== 'win32') {
+      if (!args.preparedNativeStub && process.platform !== 'win32') {
         finalEnv.SHELL = plan.shellPath
       }
 
@@ -164,7 +181,7 @@ export async function spawnLocalPty(
         : process.platform === 'win32'
           ? null
           : undefined
-      return activateLocalPtySession({
+      const result = activateLocalPtySession({
         id,
         incarnationId,
         spawn: args,
@@ -175,6 +192,18 @@ export async function spawnLocalPty(
         reportsChildExitStatus: spawnResult.reportsChildExitStatus !== false,
         spawnedWslDistro
       })
+      if (args.preparedNativeStub) {
+        try {
+          args.onPtySpawnCommitted?.()
+        } catch (cause) {
+          throw Object.assign(new Error('native_stub_spawn_acknowledgement_unknown', { cause }), {
+            code: 'operation_unknown',
+            ptyId: result.id,
+            incarnationId: result.incarnationId
+          })
+        }
+      }
+      return result
     })
   })
 }
