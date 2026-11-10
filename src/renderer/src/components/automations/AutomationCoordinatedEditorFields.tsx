@@ -6,8 +6,6 @@ import { Textarea } from '@/components/ui/textarea'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationWorkersSection } from './AutomationWorkersSection'
 
-const FIELD_LABEL_CLASS = 'font-semibold text-2xs uppercase tracking-wider text-muted-foreground'
-
 type AutomationCoordinatedEditorFieldsProps = {
   draft: AutomationDraft
   isEditing: boolean
@@ -42,7 +40,7 @@ export function AutomationCoordinatedEditorFields({
       ) : null}
 
       <div className="space-y-1.5">
-        <Label htmlFor="automation-coordinated-name" className={FIELD_LABEL_CLASS}>
+        <Label htmlFor="automation-coordinated-name" variant="settings">
           {translate(
             'auto.components.automations.AutomationEditorDialogHeader.58f56b73d9',
             'Automation name'
@@ -63,7 +61,7 @@ export function AutomationCoordinatedEditorFields({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="automation-outcome-statement" className={FIELD_LABEL_CLASS}>
+        <Label htmlFor="automation-outcome-statement" variant="settings">
           Outcome statement
         </Label>
         <Textarea
@@ -91,7 +89,7 @@ export function AutomationCoordinatedEditorFields({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="automation-coordinated-brief" className={FIELD_LABEL_CLASS}>
+        <Label htmlFor="automation-coordinated-brief" variant="settings">
           Coordinator brief
         </Label>
         <Textarea

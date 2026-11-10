@@ -48,6 +48,7 @@ const STAGE_STATUS_META: Record<
     icon: React.ComponentType<{ className?: string }>
   }
 > = {
+  unknown: { label: 'Unobserved', variant: 'outline', icon: Clock },
   ready: {
     label: 'Ready',
     variant: 'outline',
@@ -60,7 +61,7 @@ const STAGE_STATUS_META: Record<
   },
   active: {
     label: 'Active',
-    variant: 'default',
+    variant: 'secondary',
     icon: Sparkles
   },
   waiting_for_approval: {
@@ -138,7 +139,7 @@ export function AutomationCoordinatedRunStageCard({
     >
       {/* Top Row: Status, Role, Frozen Name, Drift Badge, and Primary Navigation */}
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-48 flex-1 space-y-1">
+        <div className="min-w-0 flex-1 basis-48 space-y-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant={statusMeta.variant}>
               <StatusIcon className="size-3 shrink-0" />
@@ -146,18 +147,26 @@ export function AutomationCoordinatedRunStageCard({
             </Badge>
             <Badge variant="secondary">{stage.role}</Badge>
             <span className="text-xs font-semibold text-foreground">{stage.name}</span>
-            <span className="font-mono text-[11px] text-muted-foreground">
+            <span className="break-all font-mono text-2xs text-muted-foreground">
               ({stage.childDefinitionId})
             </span>
 
             {stage.definitionDrift === 'renamed' && stage.currentDefinitionName ? (
-              <Badge variant="outline" data-testid={`stage-drift-badge-${stage.childDefinitionId}`}>
+              <Badge
+                variant="outline"
+                className="max-w-full whitespace-normal break-words"
+                data-testid={`stage-drift-badge-${stage.childDefinitionId}`}
+              >
                 Renamed in current definition: {stage.currentDefinitionName}
               </Badge>
             ) : null}
 
             {stage.definitionDrift === 'tombstoned' ? (
-              <Badge variant="outline" data-testid={`stage-drift-badge-${stage.childDefinitionId}`}>
+              <Badge
+                variant="outline"
+                className="max-w-full whitespace-normal break-words"
+                data-testid={`stage-drift-badge-${stage.childDefinitionId}`}
+              >
                 Removed in Rev {stage.tombstonedInRevision ?? 'later'} — preserved in snapshot
               </Badge>
             ) : null}
@@ -187,6 +196,12 @@ export function AutomationCoordinatedRunStageCard({
               variant="outline"
               size="xs"
               onClick={() => onInspectChildDefinition?.(stage.childDefinitionId)}
+              disabled={!onInspectChildDefinition}
+              title={
+                !onInspectChildDefinition
+                  ? 'Definition navigation is unavailable in this view.'
+                  : undefined
+              }
               aria-label={`View definition for ${stage.name}`}
             >
               <FileSearch className="size-3" />

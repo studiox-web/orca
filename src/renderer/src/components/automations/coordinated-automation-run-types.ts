@@ -31,6 +31,7 @@ import type {
 } from '../../../../shared/orchestration-crew'
 
 export type CoordinatedStageExecutionStatus =
+  | 'unknown'
   | 'ready'
   | 'queued'
   | 'active'

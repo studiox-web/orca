@@ -284,6 +284,7 @@ export const remote_folder_snapshot = defineFixture({
         <AutomationCoordinatedRunPanel
           automation={sampleCoordinatedArticleAutomation}
           run={sampleRemoteFolderHistoricalRun}
+          defaultViewMode="snapshot"
           hostLabel="SSH: prod-editorial"
           workspaceLabel="/srv/editorial/weekly-digest"
           isFolderWorkspace
@@ -302,6 +303,7 @@ export const remote_folder_snapshot_mobile = defineFixture({
         <AutomationCoordinatedRunPanel
           automation={sampleCoordinatedArticleAutomation}
           run={sampleRemoteFolderHistoricalRun}
+          defaultViewMode="snapshot"
           hostLabel="SSH: prod-editorial"
           workspaceLabel="/srv/editorial/weekly-digest"
           isFolderWorkspace

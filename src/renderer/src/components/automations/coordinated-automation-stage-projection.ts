@@ -38,39 +38,32 @@ export function projectCoordinatedStage(input: {
   const driftInfo = detectDefinitionDrift(source, automation, input.runRevision)
   const latestAcceptance =
     (observation?.stageAcceptances ?? []).findLast(
-      (s) => s.childDefinitionId === source.childDefinitionId
+      (s) =>
+        s.childDefinitionId === source.childDefinitionId &&
+        s.automationRunId === run.id &&
+        s.orchestrationRunId === run.orchestrationRunId &&
+        s.taskId === mappedTaskId &&
+        s.dispatchId === mappedDispatchId
     ) ?? null
 
   const rawAttempts = (observation?.attempts ?? []).filter(
     (a) =>
-      a.childDefinitionId === source.childDefinitionId ||
-      (mappedTaskId !== null && a.taskId === mappedTaskId)
+      a.childDefinitionId === source.childDefinitionId &&
+      (mappedTaskId === null || a.taskId === mappedTaskId)
   )
-  const synthesizedAttempts: CoordinatedDispatchAttemptObservation[] =
-    rawAttempts.length > 0
-      ? [...rawAttempts]
-      : mappedTaskId && mappedDispatchId
-        ? [
-            {
-              dispatchId: mappedDispatchId,
-              taskId: mappedTaskId,
-              childDefinitionId: source.childDefinitionId,
-              attemptNumber: 1,
-              technicalStatus:
-                run.status === 'completed'
-                  ? 'completed'
-                  : run.status === 'dispatch_failed'
-                    ? 'failed'
-                    : 'working',
-              workerReportOutcome:
-                run.completionReceipt !== null
-                  ? 'succeeded'
-                  : run.status === 'dispatch_failed'
-                    ? 'failed'
-                    : null
-            }
-          ]
-        : []
+  const synthesizedAttempts: CoordinatedDispatchAttemptObservation[] = [...rawAttempts]
+  if (
+    mappedTaskId &&
+    mappedDispatchId &&
+    !rawAttempts.some((a) => a.dispatchId === mappedDispatchId)
+  ) {
+    synthesizedAttempts.push({
+      dispatchId: mappedDispatchId,
+      taskId: mappedTaskId,
+      childDefinitionId: source.childDefinitionId,
+      technicalStatus: 'outcome_unknown'
+    })
+  }
 
   const fallbackAgent = source.launchConfig.agentId ?? automation.agentId
   const projectedAttempts = synthesizedAttempts.map((obs, index) =>

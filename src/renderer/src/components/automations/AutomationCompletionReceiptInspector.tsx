@@ -91,7 +91,7 @@ export function AutomationCompletionReceiptInspector({
           className
         )}
       >
-        <div className="flex items-start gap-2">
+        <div className="flex min-w-0 items-start gap-2">
           <ShieldAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
           <div className="space-y-1">
             <div className="font-semibold text-destructive">
@@ -166,15 +166,17 @@ export function AutomationCompletionReceiptInspector({
     >
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex items-start gap-2">
+        <div className="flex min-w-0 max-w-full items-start gap-2">
           <StateIcon className="mt-0.5 size-4 shrink-0" />
-          <div>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-semibold text-foreground">Semantic Completion Receipt</span>
               <Badge variant={stateMeta.variant}>{stateMeta.label}</Badge>
               <Badge variant="outline">Rev {receipt.identityChain.definitionRevision}</Badge>
               {receipt.selectedOutcomeItemIdentity ? (
-                <Badge variant="secondary">Item: {receipt.selectedOutcomeItemIdentity}</Badge>
+                <Badge variant="secondary" className="max-w-full whitespace-normal break-all">
+                  Item: {receipt.selectedOutcomeItemIdentity}
+                </Badge>
               ) : null}
             </div>
             <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
@@ -185,7 +187,7 @@ export function AutomationCompletionReceiptInspector({
           </div>
         </div>
 
-        <Badge variant="secondary">
+        <Badge variant="secondary" className="max-w-full whitespace-normal break-all">
           <ShieldCheck className="size-3" />
           {trust ? `Host-verified (${trust.authorIdentity})` : 'Receipt persisted'}
         </Badge>
@@ -266,7 +268,7 @@ export function AutomationCompletionReceiptInspector({
             {receipt.approvals.map((app) => (
               <div
                 key={app.approvalId}
-                className="flex items-center justify-between gap-2 rounded border border-border/50 bg-card px-2 py-1 text-[11px]"
+                className="flex flex-wrap items-center justify-between gap-2 rounded border border-border/50 bg-card px-2 py-1 text-2xs"
               >
                 <div>
                   <span className="font-medium text-foreground">{app.role}</span>{' '}
@@ -280,13 +282,13 @@ export function AutomationCompletionReceiptInspector({
             {receipt.effectReceipts.map((eff) => (
               <div
                 key={`${eff.namespace ?? 'default'}:${eff.kind}:${eff.receipt}`}
-                className="flex items-center justify-between gap-2 rounded border border-border/50 bg-card px-2 py-1 text-[11px]"
+                className="flex flex-wrap items-center justify-between gap-2 rounded border border-border/50 bg-card px-2 py-1 text-2xs"
               >
                 <span className="font-mono text-foreground">
                   {eff.namespace ? `${eff.namespace}:` : ''}
                   {eff.kind}
                 </span>
-                <Badge variant="outline">
+                <Badge variant="outline" className="max-w-full whitespace-normal break-all">
                   {eff.status}: {eff.receipt}
                 </Badge>
               </div>

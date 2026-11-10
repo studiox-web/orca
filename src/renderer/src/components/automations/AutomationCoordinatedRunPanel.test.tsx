@@ -176,7 +176,7 @@ describe('AutomationCoordinatedRunPanel', () => {
     })
   })
 
-  it('supports keyboard navigation in Run Graph view and switches to Receipt and Frozen Snapshot views', async () => {
+  it('selects graph stages with native buttons and switches to Receipt and Frozen Snapshot views', async () => {
     const container = await renderPanel({
       automation: sampleCoordinatedArticleAutomation,
       run: sampleCompletedVerifiedRun,
@@ -190,13 +190,12 @@ describe('AutomationCoordinatedRunPanel', () => {
     })
     expect(container.querySelector('[data-testid="coordinated-run-stages-graph"]')).not.toBeNull()
 
-    // Select child-writer node via keyboard Enter
     const writerNode = container.querySelector(
-      '[data-testid="coordinated-run-graph-node-child-writer"]'
+      'button[aria-label="Select stage Article Writer (child-writer)"]'
     )
     expect(writerNode).not.toBeNull()
     await act(async () => {
-      writerNode?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      clickElement(writerNode)
     })
     expect(writerNode?.getAttribute('aria-pressed')).toBe('true')
 

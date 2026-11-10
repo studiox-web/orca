@@ -35,8 +35,9 @@ function findCrewRowForAttempt(
     const matched = allRows.find(
       (row) =>
         row.partyKey === attempt.dispatchId ||
-        row.partyKey === attempt.taskId ||
-        (row.openTarget?.kind === 'dispatch' && row.openTarget.address === attempt.dispatchId)
+        row.sendAddress === `dispatch:${attempt.dispatchId}` ||
+        (row.openTarget?.kind === 'dispatch' &&
+          row.openTarget.address === `dispatch:${attempt.dispatchId}`)
     )
     if (matched) {
       return matched
@@ -233,6 +234,12 @@ export function deriveStageExecutionStatus(input: {
   }
   if (input.activeAttempt?.technicalStatus === 'queued') {
     return 'queued'
+  }
+  if (
+    input.activeAttempt?.technicalStatus === 'outcome_unknown' ||
+    input.activeAttempt?.technicalStatus === 'finished_unverified'
+  ) {
+    return 'unknown'
   }
   return input.upstreamSatisfied ? 'ready' : 'queued'
 }

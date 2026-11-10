@@ -45,6 +45,7 @@ const STATUS_BADGE_STYLES: Record<
     icon: React.ComponentType<{ className?: string }>
   }
 > = {
+  unknown: { label: 'Unobserved', variant: 'outline', icon: Clock },
   ready: {
     label: 'Ready',
     variant: 'outline',
@@ -57,7 +58,7 @@ const STATUS_BADGE_STYLES: Record<
   },
   active: {
     label: 'Active',
-    variant: 'default',
+    variant: 'secondary',
     icon: Sparkles
   },
   waiting_for_approval: {
@@ -178,18 +179,10 @@ export function AutomationCoordinatedRunStagesGraph({
                   return (
                     <div
                       key={stage.childDefinitionId}
-                      role="button"
-                      tabIndex={0}
+                      role="group"
                       data-testid={`coordinated-run-graph-node-${stage.childDefinitionId}`}
-                      aria-pressed={isSelected}
+                      data-current={isSelected}
                       aria-label={`Stage ${stage.name}, status ${statusMeta.label}, technical ${stage.technicalStatusLabel}, acceptance ${stage.semanticAcceptanceStatus}`}
-                      onClick={() => onSelectStage(stage.childDefinitionId)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          onSelectStage(stage.childDefinitionId)
-                        }
-                      }}
                       className={cn(
                         'w-64 rounded-lg border bg-card p-3 text-left transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                         isSelected
@@ -205,9 +198,17 @@ export function AutomationCoordinatedRunStagesGraph({
                         <Badge variant="secondary">{stage.role}</Badge>
                       </div>
 
-                      <div className="mt-1.5 truncate text-xs font-semibold text-foreground">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className="mt-1.5 max-w-full justify-start text-left whitespace-normal"
+                        aria-label={`Select stage ${stage.name} (${stage.childDefinitionId})`}
+                        aria-pressed={isSelected}
+                        onClick={() => onSelectStage(stage.childDefinitionId)}
+                      >
                         {stage.name}
-                      </div>
+                      </Button>
                       <div className="truncate font-mono text-[10px] text-muted-foreground">
                         {stage.taskId ?? 'unmapped'} · {stage.activeDispatchId ?? 'no-dispatch'}
                       </div>
@@ -276,6 +277,16 @@ export function AutomationCoordinatedRunStagesGraph({
                           type="button"
                           variant="ghost"
                           size="xs"
+                          disabled={
+                            stage.definitionDrift === 'tombstoned'
+                              ? !onInspectFrozenSnapshot
+                              : !onInspectChildDefinition
+                          }
+                          title={
+                            stage.definitionDrift !== 'tombstoned' && !onInspectChildDefinition
+                              ? 'Definition navigation is unavailable in this view.'
+                              : undefined
+                          }
                           onClick={() => {
                             if (stage.definitionDrift === 'tombstoned') {
                               onInspectFrozenSnapshot?.(stage.childDefinitionId)

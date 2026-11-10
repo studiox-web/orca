@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { translate } from '@/i18n/i18n'
 import type {
   ProjectedCoordinatedRun,
@@ -87,7 +88,7 @@ export function AutomationRunControlImpactDialog({
 
   return (
     <Dialog open={request !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent surface="security" className="max-w-lg">
+      <DialogContent surface="security" scrollable className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center">
             {request?.kind === 'stop' ? (
@@ -223,25 +224,27 @@ export function AutomationRunControlImpactDialog({
 
                   <div className="space-y-2">
                     <Label>Decision</Label>
-                    <div
-                      className="flex flex-wrap gap-1.5"
-                      role="radiogroup"
+                    <RadioGroup
+                      className="flex flex-wrap"
                       aria-label="Gate decision"
+                      value={gateDecision}
+                      onValueChange={(value) => {
+                        if (value === 'approve' || value === 'reject' || value === 'escalate') {
+                          setGateDecision(value)
+                        }
+                      }}
                     >
                       {(['approve', 'reject', 'escalate'] as const).map((opt) => (
-                        <Button
-                          key={opt}
-                          type="button"
-                          role="radio"
-                          aria-checked={gateDecision === opt}
-                          variant={gateDecision === opt ? 'secondary' : 'outline'}
-                          size="xs"
-                          onClick={() => setGateDecision(opt)}
-                        >
-                          {opt}
-                        </Button>
+                        <div key={opt} className="flex items-center gap-2 rounded-md border p-2">
+                          <RadioGroupItem
+                            id={`gate-decision-${opt}`}
+                            value={opt}
+                            aria-label={opt}
+                          />
+                          <Label htmlFor={`gate-decision-${opt}`}>{opt}</Label>
+                        </div>
                       ))}
-                    </div>
+                    </RadioGroup>
                   </div>
 
                   <div className="space-y-1.5">

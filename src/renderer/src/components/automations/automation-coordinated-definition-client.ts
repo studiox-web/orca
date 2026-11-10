@@ -52,17 +52,16 @@ export type CoordinatedDefinitionDraftFields = Required<
     'inheritedDefaults' | 'globalCeilings' | 'publicationPolicy' | 'retentionPolicy'
   >
 
-function definedOnly<T extends Record<string, unknown>>(value: T): Partial<T> {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, entry]) => entry !== undefined)
-  ) as Partial<T>
+function definedOnly(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined))
 }
 
 /** Refuses before any write unless the local desktop host advertises the gate. */
 export async function assertCoordinatedDefinitionWritesSupported(
-  authority: AutomationAuthorityRef
+  authority: AutomationAuthorityRef,
+  selector: AutomationOwnerPrecondition['selector'] = { kind: 'self' }
 ): Promise<void> {
-  if (authority.kind !== 'desktop') {
+  if (authority.kind !== 'desktop' || selector.kind !== 'self') {
     throw new AutomationHostScopeUnsupportedError(COORDINATED_DEFINITION_REMOTE_UNSUPPORTED_MESSAGE)
   }
   // Why uncached: the gate follows a live setting and must be re-read per write.
@@ -81,7 +80,7 @@ export async function createCoordinatedAutomationAtDestination(
   destination: AutomationDestination
 ): Promise<AutomationDispatchResult<Automation>> {
   try {
-    await assertCoordinatedDefinitionWritesSupported(authority)
+    await assertCoordinatedDefinitionWritesSupported(authority, destination.selector)
     const prepared = await prepareAutomationLaunchSetup(authority, input)
     // Why: definitions stay disabled until a separate activation gate exists.
     const { enabled: _enabled, ...wire } = toRuntimeAutomationCreateInput(prepared)
@@ -112,7 +111,10 @@ async function updateCoordinatedFenced(
   expectedOwner: AutomationOwnerPrecondition,
   destination: AutomationDestination | undefined
 ): Promise<Automation> {
-  await assertCoordinatedDefinitionWritesSupported(authority)
+  await assertCoordinatedDefinitionWritesSupported(authority, expectedOwner.selector)
+  if (destination && destination.selector.kind !== 'self') {
+    throw new AutomationHostScopeUnsupportedError(COORDINATED_DEFINITION_REMOTE_UNSUPPORTED_MESSAGE)
+  }
   const prepared = await prepareAutomationLaunchSetup(authority, updates)
   const { enabled: _enabled, ...wire } = toRuntimeAutomationUpdateInput(prepared)
   const result = await callRuntimeRpc<{ automation: Automation }>(

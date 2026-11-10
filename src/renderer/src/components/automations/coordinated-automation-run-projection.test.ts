@@ -14,6 +14,18 @@ import {
 import { projectCoordinatedAutomationRun } from './coordinated-automation-run-projection'
 
 describe('projectCoordinatedAutomationRun', () => {
+  it('does not infer worker liveness or success from a parent run when observations are unavailable', () => {
+    const projected = projectCoordinatedAutomationRun({
+      automation: sampleCoordinatedArticleAutomation,
+      run: { ...sampleActiveCoordinatedRun, status: 'completed', completionReceipt: undefined }
+    })
+    const writer = projected.stages.find((stage) => stage.childDefinitionId === 'child-writer')!
+    expect(writer.activeAttempt?.technicalStatus).toBe('outcome_unknown')
+    expect(writer.activeAttempt?.workerReportOutcome).toBeNull()
+    expect(writer.stageExecutionStatus).toBe('unknown')
+    expect(writer.semanticAcceptanceStatus).not.toBe('accepted')
+    expect(writer.activeAttempt?.canOpenWorker).toBe(false)
+  })
   it('separates technical status, semantic acceptance, parent outcome, lifecycle, and schedule', () => {
     const projected = projectCoordinatedAutomationRun({
       automation: sampleCoordinatedArticleAutomation,
