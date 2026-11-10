@@ -16,6 +16,16 @@ import {
   type CoordinatedRunBinding,
   type CoordinatedRunRequests
 } from './coordinated-run-api-client'
+import {
+  submitCoordinatedRunOperatorAction,
+  type CoordinatedRunOperatorAction,
+  type CoordinatedRunOperatorOutcome
+} from './coordinated-run-operator-client'
+
+type RunOperation =
+  | { kind: 'start' }
+  | { kind: 'reconcile' }
+  | { kind: 'operator'; action: CoordinatedRunOperatorAction }
 
 type ReadState = {
   key: string
@@ -67,6 +77,11 @@ export function useCoordinatedRunApi(input: {
   currentKey.current = key
   const [read, setRead] = useState<ReadState>({ key: '', view: null, notice: null, ready: false })
   const [busy, setBusy] = useState(false)
+  const scopeKey = JSON.stringify([parentKey, selectedRunId])
+  const [operator, setOperator] = useState<{
+    scope: string
+    outcome: CoordinatedRunOperatorOutcome
+  } | null>(null)
   const mounted = useRef(true)
   const operation = useRef(false)
   const bindingRef = useRef(binding)
@@ -133,26 +148,40 @@ export function useCoordinatedRunApi(input: {
   const view = unavailable ? null : (currentRead?.view ?? null)
   const notice = unavailable ?? currentRead?.notice ?? null
   const pendingStart = requests.get(parentKey)?.start
-  const perform = async (kind: 'start' | 'reconcile'): Promise<void> => {
+  const perform = async (request: RunOperation): Promise<void> => {
+    const { kind } = request
+    // Why: one in-flight operation per panel; a second submit must never reach the host.
     if (!binding || unavailable || operation.current || !currentRead?.ready) {
       return
     }
-    if (kind === 'reconcile' && !selectedRunId) {
+    if (kind !== 'start' && !selectedRun) {
       return
     }
     operation.current = true
     setBusy(true)
+    setOperator(null)
     setRead({ key, view: null, notice: null, ready: false })
     const requestKey = kind === 'start' ? parentKey : JSON.stringify([parentKey, selectedRunId])
-    const request = requests.get(requestKey) ?? {}
-    requests.set(requestKey, request)
+    const retained = requests.get(requestKey) ?? {}
+    if (kind !== 'operator') {
+      requests.set(requestKey, retained)
+    }
     try {
+      const outcome =
+        request.kind === 'operator'
+          ? await submitCoordinatedRunOperatorAction(binding, selectedRun!, request.action)
+          : null
       const result =
-        kind === 'start'
-          ? await startCoordinatedTestRun(binding, request)
-          : await reconcileCoordinatedTestRun(binding, request, selectedRunId!, revision)
+        outcome?.view ??
+        (kind === 'start'
+          ? await startCoordinatedTestRun(binding, retained)
+          : await reconcileCoordinatedTestRun(binding, retained, selectedRunId!, revision))
+      // Why: a reply that outlived its selection, owner, or revision must not paint the new one.
       if (!mounted.current || currentKey.current !== key) {
         return
+      }
+      if (outcome) {
+        setOperator({ scope: scopeKey, outcome })
       }
       setSelection({ parent: parentKey, runId: result.inspection.automationRunId })
       setRead({ key, view: result, notice: null, ready: true })
@@ -172,7 +201,10 @@ export function useCoordinatedRunApi(input: {
       setRead({
         key,
         view: null,
-        notice: `${detail} Submitted request identities are retained. Refresh, then retry to inspect the original operation before replay.`,
+        notice:
+          kind === 'operator'
+            ? `${detail} The host did not confirm this request, so no outcome change is claimed. Refresh to inspect the exact run before submitting again.`
+            : `${detail} Submitted request identities are retained. Refresh, then retry to inspect the original operation before replay.`,
         ready: false
       })
     } finally {
@@ -192,7 +224,10 @@ export function useCoordinatedRunApi(input: {
     pendingStart,
     selectRun: (runId: string) => setSelection({ parent: parentKey, runId }),
     refresh: () => setReload((value) => value + 1),
-    start: () => perform('start'),
-    reconcile: () => perform('reconcile')
+    selectedRun,
+    operatorOutcome: !unavailable && operator?.scope === scopeKey ? operator.outcome : null,
+    start: () => perform({ kind: 'start' }),
+    reconcile: () => perform({ kind: 'reconcile' }),
+    operate: (action: CoordinatedRunOperatorAction) => perform({ kind: 'operator', action })
   }
 }

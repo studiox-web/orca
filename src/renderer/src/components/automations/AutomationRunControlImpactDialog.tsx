@@ -19,27 +19,61 @@ import type {
   ProjectedCoordinatedStage
 } from './coordinated-automation-run-projection'
 
-export type RunControlActionRequest =
-  | { kind: 'stop' }
-  | { kind: 'retry'; stage: ProjectedCoordinatedStage }
-  | { kind: 'resolve_gate'; stage: ProjectedCoordinatedStage; gateId: string }
+type ControlEligibility = { canResolve: boolean; reason: string | null }
 
-type AutomationRunControlImpactDialogProps = {
-  request: RunControlActionRequest | null
-  projectedRun: ProjectedCoordinatedRun
+/** The frozen run scope an impact preview names; satisfied by both the projection and host views. */
+export type RunControlImpactRun = Pick<
+  ProjectedCoordinatedRun,
+  | 'targetExecutionAuthority'
+  | 'automationRunId'
+  | 'orchestrationRunId'
+  | 'definitionRevision'
+  | 'currentAutomationRevision'
+  | 'workspaceLabel'
+  | 'hostLabel'
+  | 'stopEligibility'
+>
+
+export type RunControlImpactStage = {
+  name: string
+  childDefinitionId: string
+  taskId: string | null
+  /** Omitted when the host, not the renderer, binds the decision to the stage's Dispatch. */
+  activeDispatchId?: string | null
+  retryEligibility: { canRetry: boolean; reason: string | null; retryOfDispatchId: string | null }
+  gateResolutionEligibility: ControlEligibility
+}
+
+export type RunControlActionRequest<S extends RunControlImpactStage = ProjectedCoordinatedStage> =
+  | { kind: 'stop' }
+  | { kind: 'retry'; stage: S }
+  | { kind: 'resolve_gate'; stage: S; gateId: string }
+  /** A parent-outcome approval or run-level escalation that names no stage scope. */
+  | {
+      kind: 'resolve_run_gate'
+      gateId: string
+      scopeLabel: string
+      eligibility: ControlEligibility
+    }
+
+type AutomationRunControlImpactDialogProps<S extends RunControlImpactStage> = {
+  request: RunControlActionRequest<S> | null
+  projectedRun: RunControlImpactRun
   isPending?: boolean
   onClose: () => void
   onConfirmStop: () => void
-  onConfirmRetry: (stage: ProjectedCoordinatedStage) => void
+  onConfirmRetry: (stage: S) => void
   onConfirmResolveGate: (
-    stage: ProjectedCoordinatedStage,
+    stage: S | null,
     gateId: string,
     decision: 'approve' | 'reject' | 'escalate',
     note: string
   ) => void
 }
 
-export function AutomationRunControlImpactDialog({
+export function AutomationRunControlImpactDialog<
+  S extends RunControlImpactStage = ProjectedCoordinatedStage
+>({
   request,
   projectedRun,
   isPending = false,
@@ -47,27 +81,30 @@ export function AutomationRunControlImpactDialog({
   onConfirmStop,
   onConfirmRetry,
   onConfirmResolveGate
-}: AutomationRunControlImpactDialogProps): React.JSX.Element {
+}: AutomationRunControlImpactDialogProps<S>): React.JSX.Element {
   const [gateDecision, setGateDecision] = useState<'approve' | 'reject' | 'escalate'>('approve')
   const [gateNote, setGateNote] = useState('')
+
+  const gateEligibility =
+    request?.kind === 'resolve_gate'
+      ? request.stage.gateResolutionEligibility
+      : request?.kind === 'resolve_run_gate'
+        ? request.eligibility
+        : null
 
   const canExecute =
     request?.kind === 'stop'
       ? projectedRun.stopEligibility.canStop
       : request?.kind === 'retry'
         ? request.stage.retryEligibility.canRetry
-        : request?.kind === 'resolve_gate'
-          ? request.stage.gateResolutionEligibility.canResolve
-          : false
+        : (gateEligibility?.canResolve ?? false)
 
   const unavailableReason =
     request?.kind === 'stop'
       ? projectedRun.stopEligibility.reason
       : request?.kind === 'retry'
         ? request.stage.retryEligibility.reason
-        : request?.kind === 'resolve_gate'
-          ? request.stage.gateResolutionEligibility.reason
-          : null
+        : (gateEligibility?.reason ?? null)
 
   const handleConfirm = (): void => {
     if (!request || !canExecute || isPending) {
@@ -83,7 +120,12 @@ export function AutomationRunControlImpactDialog({
       onClose()
       return
     }
-    onConfirmResolveGate(request.stage, request.gateId, gateDecision, gateNote.trim())
+    onConfirmResolveGate(
+      request.kind === 'resolve_gate' ? request.stage : null,
+      request.gateId,
+      gateDecision,
+      gateNote.trim()
+    )
     setGateNote('')
     onClose()
   }
@@ -117,10 +159,12 @@ export function AutomationRunControlImpactDialog({
               <>
                 <ShieldCheck className="mr-2 size-4 text-foreground" aria-hidden="true" />
                 <span>
-                  {translate(
-                    'auto.components.automations.runPanel.resolveGateImpactTitle',
-                    'Resolve Stage Gate — Impact Preview'
-                  )}
+                  {request?.kind === 'resolve_run_gate'
+                    ? 'Resolve Run Decision — Impact Preview'
+                    : translate(
+                        'auto.components.automations.runPanel.resolveGateImpactTitle',
+                        'Resolve Stage Gate — Impact Preview'
+                      )}
                 </span>
               </>
             )}
@@ -167,9 +211,14 @@ export function AutomationRunControlImpactDialog({
               {request?.kind === 'stop' ? (
                 <div className="space-y-1.5 text-xs text-foreground">
                   <p>
-                    Stopping this run halts active and queued Task dispatches for{' '}
+                    Records a stop request for{' '}
                     <span className="font-mono">{projectedRun.automationRunId}</span> on{' '}
-                    <span className="font-mono">{projectedRun.hostLabel}</span>.
+                    <span className="font-mono">{projectedRun.hostLabel}</span>. The host starts no
+                    further Dispatches and asks running workers to cancel.
+                  </p>
+                  <p>
+                    A stop request is not proof that a worker exited. The run stays uncertain until
+                    the host has exit evidence, and effects already in flight are not undone.
                   </p>
                   <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">
                     Definition isolation: Parent schedule, enablement, and reusable child worker
@@ -208,7 +257,7 @@ export function AutomationRunControlImpactDialog({
                 </div>
               ) : null}
 
-              {request?.kind === 'resolve_gate' ? (
+              {request?.kind === 'resolve_gate' || request?.kind === 'resolve_run_gate' ? (
                 <div className="space-y-3 text-xs text-foreground">
                   <div className="space-y-1 rounded border border-border/50 bg-background p-2.5 text-2xs">
                     <div>
@@ -216,14 +265,26 @@ export function AutomationRunControlImpactDialog({
                       <span className="font-mono font-medium">{request.gateId}</span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Stage Scope: </span>
+                      <span className="text-muted-foreground">
+                        {request.kind === 'resolve_gate' ? 'Stage Scope: ' : 'Scope: '}
+                      </span>
                       <span className="font-mono">
-                        {request.stage.childDefinitionId} / {request.stage.taskId ?? 'no-task'} /{' '}
-                        {request.stage.activeDispatchId ?? 'no-dispatch'}
+                        {request.kind === 'resolve_run_gate'
+                          ? request.scopeLabel
+                          : `${request.stage.childDefinitionId} / ${request.stage.taskId ?? 'no-task'} / ${
+                              request.stage.activeDispatchId === undefined
+                                ? 'Dispatch bound by host'
+                                : (request.stage.activeDispatchId ?? 'no-dispatch')
+                            }`}
                       </span>
                     </div>
                   </div>
 
+                  <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">
+                    Approve records an operator approval that the host’s acceptance checks read.
+                    Reject closes this gate against the stage or run. Escalate records the decision
+                    and leaves the gate pending. Definitions and run history are not edited.
+                  </p>
                   <div className="space-y-2">
                     <Label>Decision</Label>
                     <RadioGroup

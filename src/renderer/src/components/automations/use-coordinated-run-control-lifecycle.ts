@@ -115,7 +115,7 @@ export function useCoordinatedRunControlLifecycle(input: {
   }
 
   const handleConfirmResolveGate = (
-    stage: ProjectedCoordinatedStage,
+    stage: ProjectedCoordinatedStage | null,
     gateId: string,
     decision: 'approve' | 'reject' | 'escalate',
     note: string
@@ -126,7 +126,7 @@ export function useCoordinatedRunControlLifecycle(input: {
       !projection ||
       !onResolveGate ||
       !orchestrationRunId ||
-      !stage.gateResolutionEligibility.canResolve
+      !stage?.gateResolutionEligibility.canResolve
     ) {
       return
     }

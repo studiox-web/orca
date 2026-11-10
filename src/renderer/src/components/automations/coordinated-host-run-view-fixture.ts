@@ -116,7 +116,17 @@ export function coordinatedHostViewFixture(
             }
           ]
         },
-        sessionTarget: { kind: 'unavailable', reason: 'Isolated workers have no live session.' }
+        sessionTarget: { kind: 'unavailable', reason: 'Isolated workers have no live session.' },
+        retryEligibility: {
+          canRetry: false,
+          reason: 'This stage is already accepted.',
+          retryOfDispatchId: null
+        },
+        gateResolutionEligibility: {
+          canResolve: false,
+          reason: 'The run is already settled.',
+          pendingGateId: null
+        }
       })),
       progress: {
         kind: 'available',
@@ -135,19 +145,23 @@ export function coordinatedHostViewFixture(
         },
         trust: null
       },
+      approvals: { stage: [], parent: [] },
+      operatorStop: null,
       humanResolution: {
         available: false,
-        reason: 'No reviewed human resolution operation is available.'
+        reason: 'No pending human decisions.',
+        pendingDecisionKeys: []
       }
     },
     actions: {
       start: { available: true },
       reconcile: { available: true },
-      stop: { available: false, reason: 'No reviewed stop operation is available.' },
-      retry: { available: false, reason: 'No reviewed retry operation is available.' },
+      stop: { available: false, state: 'refused', reason: 'The run is already settled.' },
+      retry: { available: false, state: 'refused', reason: 'This stage is already accepted.' },
       humanResolution: {
         available: false,
-        reason: 'No reviewed human resolution operation is available.'
+        state: 'refused',
+        reason: 'No pending human decisions.'
       }
     },
     findings: {

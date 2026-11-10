@@ -1,9 +1,22 @@
-import React from 'react'
+import React, { useState } from 'react'
 import type { CoordinatedRunView } from '../../../../shared/coordinated-automation-run-view'
 import { Button } from '@/components/ui/button'
 import { AutomationCompletionReceiptInspector } from './AutomationCompletionReceiptInspector'
+import {
+  CoordinatedHostRunControls,
+  CoordinatedHostStageActions,
+  operatorOutcomeMessage,
+  type CoordinatedHostRunControlBindings,
+  type HostRunControlRequest
+} from './AutomationCoordinatedHostRunControls'
 import { AutomationHistoricalSnapshotViewer } from './AutomationHistoricalSnapshotViewer'
+import { AutomationRunControlImpactDialog } from './AutomationRunControlImpactDialog'
+import { classifyPendingGates, matchingFrozenSnapshot } from './coordinated-run-operator-client'
+import { openCoordinatedStageSession } from './coordinated-stage-session-open'
 import { useCoordinatedRunApi } from './use-coordinated-run-api'
+
+const SCOPE_UNAVAILABLE =
+  'The frozen run scope is unavailable until matching run history is refreshed.'
 
 export function AutomationCoordinatedHostRunPanel(
   props: Parameters<typeof useCoordinatedRunApi>[0]
@@ -13,8 +26,28 @@ export function AutomationCoordinatedHostRunPanel(
   const runIds = [
     ...new Set([...props.runs.map((run) => run.id), ...(selectedRunId ? [selectedRunId] : [])])
   ]
-  const run = props.runs.find((candidate) => candidate.id === selectedRunId)
-  const snapshot = run?.resolvedSnapshot
+  const run = state.selectedRun
+  const snapshot = view ? matchingFrozenSnapshot(view, run) : null
+  const [pending, setPending] = useState<{ runId: string; request: HostRunControlRequest } | null>(
+    null
+  )
+  // Why: a confirmation opened for one run must never submit against a newly selected run.
+  const request =
+    view && pending?.runId === view.inspection.automationRunId ? pending.request : null
+  const owner = props.capturedOwner?.owner
+  const controls: CoordinatedHostRunControlBindings | null = view
+    ? {
+        busy: state.busy || !state.ready,
+        scopeUnavailable: snapshot ? null : SCOPE_UNAVAILABLE,
+        pendingGates: classifyPendingGates(view, snapshot),
+        onRequest: (next) => setPending({ runId: view.inspection.automationRunId, request: next }),
+        onOpenSession: (stage) => {
+          if (owner) {
+            void openCoordinatedStageSession(stage, owner, props.hostEntry?.label)
+          }
+        }
+      }
+    : null
   const startReason = props.automation.enabled
     ? 'Test runs require a disabled definition.'
     : view && !view.actions.start.available
@@ -92,25 +125,66 @@ export function AutomationCoordinatedHostRunPanel(
           Checking host availability…
         </p>
       ) : null}
-      {view ? <CoordinatedHostRunEvidence view={view} /> : null}
-      {view &&
-      snapshot &&
-      snapshot.canonicalDigest === view.inspection.canonicalDigest &&
-      snapshot.definitionRevision === view.inspection.definitionRevision ? (
+      {state.operatorOutcome ? (
+        <p role="status" className="text-xs text-muted-foreground break-words">
+          {operatorOutcomeMessage(state.operatorOutcome)}
+        </p>
+      ) : null}
+      {view && controls ? <CoordinatedHostRunEvidence view={view} controls={controls} /> : null}
+      {view && snapshot ? (
         <AutomationHistoricalSnapshotViewer snapshot={snapshot} />
       ) : view ? (
         <p className="text-xs text-muted-foreground">
           Frozen definition details are unavailable until matching run history is refreshed.
         </p>
       ) : null}
+      {view && controls ? (
+        <AutomationRunControlImpactDialog
+          request={request}
+          projectedRun={{
+            targetExecutionAuthority: snapshot
+              ? `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}`
+              : 'Authority unavailable',
+            automationRunId: view.inspection.automationRunId,
+            orchestrationRunId: view.inspection.orchestrationRunId,
+            definitionRevision: view.inspection.definitionRevision,
+            currentAutomationRevision:
+              props.automation.definitionRevision ?? view.inspection.definitionRevision,
+            workspaceLabel: run?.workspaceDisplayName ?? run?.workspaceId ?? 'Not recorded',
+            hostLabel: props.hostEntry?.label ?? 'the owning host',
+            stopEligibility: {
+              canStop: view.actions.stop.available && snapshot !== null,
+              reason: !view.actions.stop.available ? view.actions.stop.reason : SCOPE_UNAVAILABLE
+            }
+          }}
+          isPending={controls.busy}
+          onClose={() => setPending(null)}
+          onConfirmStop={() => void state.operate({ kind: 'stop' })}
+          onConfirmRetry={(stage) => {
+            const retryOfDispatchId = stage.retryEligibility.retryOfDispatchId
+            if (retryOfDispatchId) {
+              void state.operate({
+                kind: 'retry',
+                childDefinitionId: stage.childDefinitionId,
+                retryOfDispatchId
+              })
+            }
+          }}
+          onConfirmResolveGate={(_stage, gateId, decision, note) =>
+            void state.operate({ kind: 'gate', gateId, decision, ...(note ? { note } : {}) })
+          }
+        />
+      ) : null}
     </section>
   )
 }
 
 export function CoordinatedHostRunEvidence({
-  view
+  view,
+  controls
 }: {
   view: CoordinatedRunView
+  controls: CoordinatedHostRunControlBindings
 }): React.JSX.Element {
   const { inspection } = view
   return (
@@ -198,9 +272,11 @@ export function CoordinatedHostRunEvidence({
                 </ol>
               </>
             ) : null}
-            <p className="text-muted-foreground">
-              Worker session unavailable: {stage.sessionTarget.reason}
-            </p>
+            <CoordinatedHostStageActions
+              stage={stage}
+              retryAvailable={view.actions.retry.available}
+              controls={controls}
+            />
           </li>
         ))}
       </ul>
@@ -236,13 +312,11 @@ export function CoordinatedHostRunEvidence({
         <p>Findings unavailable: {view.findings.reason}</p>
         <p>Limits unavailable: {view.limits.reason}</p>
         <p>
-          Spend, elapsed time, worker reports, live questions and pending approval details are not
-          supplied by this API.
+          Spend, elapsed time, worker reports, artifacts and live questions are not supplied by this
+          API.
         </p>
-        <p>Stop unavailable: {view.actions.stop.reason}</p>
-        <p>Stage retry unavailable: {view.actions.retry.reason}</p>
-        <p>Human resolution unavailable: {view.actions.humanResolution.reason}</p>
       </div>
+      <CoordinatedHostRunControls view={view} controls={controls} />
       {inspection.receipt.kind === 'available' ? (
         <AutomationCompletionReceiptInspector
           receipt={inspection.receipt.receipt}
