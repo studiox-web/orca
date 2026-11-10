@@ -172,7 +172,7 @@ describe('AutomationCoordinatedRunPanel', () => {
     expect(openSpy).toHaveBeenCalledTimes(4)
     expect(openSpy.mock.calls[3]?.[0].openTarget).toEqual({
       kind: 'dispatch',
-      address: 'dispatch:task_rev_3:ctx_rev_1'
+      address: 'dispatch:ctx_rev_1'
     })
   })
 
@@ -310,5 +310,151 @@ describe('AutomationCoordinatedRunPanel', () => {
     expect(remoteFolderContainer.textContent).toContain('[Remote]')
     expect(remoteFolderContainer.textContent).toContain('(Folder workspace)')
     expect(remoteFolderContainer.textContent).toContain('Unaccepted technical completion')
+  })
+
+  it('protects duplicate submits and reports an honest pending/result lifecycle for stop', async () => {
+    let resolveStop: (() => void) | undefined
+    const onStopRun = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveStop = resolve
+        })
+    )
+
+    const container = await renderPanel({
+      automation: sampleCoordinatedArticleAutomation,
+      run: sampleActiveCoordinatedRun,
+      observation: sampleActiveRunObservation,
+      operatorActions: {
+        stopRun: { availability: { supported: true, reason: null }, onStopRun }
+      }
+    })
+
+    await act(async () => {
+      clickElement(container.querySelector('[data-testid="stop-coordinated-run-btn"]'))
+    })
+    await act(async () => {
+      clickElement(document.body.querySelector('[data-testid="confirm-run-control-action"]'))
+    })
+    expect(onStopRun).toHaveBeenCalledTimes(1)
+
+    // Pending state is visible and every control entry point is disabled
+    expect(container.querySelector('[data-testid="run-control-pending"]')?.textContent).toContain(
+      'Submitting stop run request'
+    )
+    const stopBtn = container.querySelector(
+      '[data-testid="stop-coordinated-run-btn"]'
+    ) as HTMLButtonElement
+    expect(stopBtn.disabled).toBe(true)
+    const retryBtn = container.querySelector(
+      '[data-testid="retry-stage-btn-child-writer"]'
+    ) as HTMLButtonElement
+    expect(retryBtn.disabled).toBe(true)
+    const gateBtn = container.querySelector(
+      '[data-testid="resolve-gate-btn-child-reviewer"]'
+    ) as HTMLButtonElement
+    expect(gateBtn.disabled).toBe(true)
+
+    // A second entry-point click cannot reopen the dialog or resubmit
+    await act(async () => {
+      clickElement(stopBtn)
+    })
+    expect(document.body.querySelector('[data-testid="confirm-run-control-action"]')).toBeNull()
+    expect(onStopRun).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveStop?.()
+    })
+    expect(onStopRun).toHaveBeenCalledTimes(1)
+    const result = container.querySelector('[data-testid="run-control-result"]')?.textContent ?? ''
+    expect(result).toContain('Stop run request submitted')
+    expect(result).toContain('The owning host settles the outcome')
+    expect(result).not.toContain('stopped')
+    expect(
+      (container.querySelector('[data-testid="stop-coordinated-run-btn"]') as HTMLButtonElement)
+        .disabled
+    ).toBe(false)
+  })
+
+  it('surfaces a host-refused control without claiming success and re-enables entry points', async () => {
+    const onStopRun = vi.fn(async () => {
+      throw new Error('automation_owner_changed: the owning host changed')
+    })
+
+    const container = await renderPanel({
+      automation: sampleCoordinatedArticleAutomation,
+      run: sampleActiveCoordinatedRun,
+      observation: sampleActiveRunObservation,
+      operatorActions: {
+        stopRun: { availability: { supported: true, reason: null }, onStopRun }
+      }
+    })
+
+    await act(async () => {
+      clickElement(container.querySelector('[data-testid="stop-coordinated-run-btn"]'))
+    })
+    await act(async () => {
+      clickElement(document.body.querySelector('[data-testid="confirm-run-control-action"]'))
+    })
+    expect(onStopRun).toHaveBeenCalledTimes(1)
+
+    const error = container.querySelector('[data-testid="run-control-error"]')
+    expect(error?.textContent).toContain('did not confirm the stop run request')
+    expect(error?.textContent).toContain('the owning host changed')
+    expect(container.querySelector('[data-testid="run-control-result"]')).toBeNull()
+    expect(
+      (container.querySelector('[data-testid="stop-coordinated-run-btn"]') as HTMLButtonElement)
+        .disabled
+    ).toBe(false)
+    expect(
+      (container.querySelector('[data-testid="retry-stage-btn-child-writer"]') as HTMLButtonElement)
+        .disabled
+    ).toBe(false)
+  })
+
+  it('clears the impact dialog and fences result notices when the selected run changes', async () => {
+    const onStopRun = vi.fn(async () => {})
+
+    const container = await renderPanel({
+      automation: sampleCoordinatedArticleAutomation,
+      runs: [sampleActiveCoordinatedRun, sampleCompletedVerifiedRun],
+      observation: sampleActiveRunObservation,
+      operatorActions: {
+        stopRun: { availability: { supported: true, reason: null }, onStopRun }
+      }
+    })
+
+    const runSwitchButtons = () =>
+      Array.from(
+        container.querySelectorAll('[role="group"][aria-label="Select coordinated run"] button')
+      ) as HTMLButtonElement[]
+    expect(runSwitchButtons()).toHaveLength(2)
+
+    // Submit a stop on the first run; its result notice is visible
+    await act(async () => {
+      clickElement(container.querySelector('[data-testid="stop-coordinated-run-btn"]'))
+    })
+    await act(async () => {
+      clickElement(document.body.querySelector('[data-testid="confirm-run-control-action"]'))
+    })
+    expect(onStopRun).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('[data-testid="run-control-result"]')).not.toBeNull()
+
+    // Switching runs fences the old run's notice away
+    await act(async () => {
+      clickElement(runSwitchButtons()[1])
+    })
+    expect(container.querySelector('[data-testid="run-control-result"]')).toBeNull()
+
+    // An open impact dialog is closed by the switch rather than confirming against the new run
+    await act(async () => {
+      clickElement(container.querySelector('[data-testid="stop-coordinated-run-btn"]'))
+    })
+    expect(document.body.querySelector('[data-testid="confirm-run-control-action"]')).not.toBeNull()
+    await act(async () => {
+      clickElement(runSwitchButtons()[0])
+    })
+    expect(document.body.querySelector('[data-testid="confirm-run-control-action"]')).toBeNull()
+    expect(onStopRun).toHaveBeenCalledTimes(1)
   })
 })

@@ -114,7 +114,7 @@ export const sampleActiveRunObservation: CoordinatedRunLiveObservation = {
       reviewIteration: 2,
       crewRow: makeCrewRowFixture('crew_rev_1', 'Editorial Quality Reviewer', {
         kind: 'dispatch',
-        address: 'dispatch:task_rev_3:ctx_rev_1'
+        address: 'dispatch:ctx_rev_1'
       }),
       structuredResult: {
         schemaVersion: 1,
