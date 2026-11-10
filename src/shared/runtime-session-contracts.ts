@@ -1,3 +1,4 @@
+import type { CoordinatedRunActionAvailability } from './coordinated-automation-run-view'
 import type { MobileProjectSectionCatalog } from './mobile-project-sections-contract'
 import type { AgentStatusOrchestrationContext } from './agent-status-types'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
@@ -77,6 +78,7 @@ export type RuntimeStatus = {
   runtimeProtocolVersion?: number
   minCompatibleRuntimeClientVersion?: number
   capabilities?: RuntimeCapability[]
+  coordinatedFakeRuns?: CoordinatedRunActionAvailability
   /** Optional policy for clients that negotiated worktree.create-idempotency.v1. */
   worktreeCreateIdempotency?: {
     dedupeTtlMs: number

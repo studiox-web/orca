@@ -1,5 +1,8 @@
 import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
-import { COORDINATED_AUTOMATION_DEFINITIONS_RUNTIME_CAPABILITY } from '../../shared/automation-runtime-capabilities'
+import {
+  COORDINATED_AUTOMATION_DEFINITIONS_RUNTIME_CAPABILITY,
+  COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY
+} from '../../shared/automation-runtime-capabilities'
 import { OrcaRuntimeWithPtyController } from './orca-runtime-pty-controller'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
@@ -131,6 +134,10 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyControl
     if (!this.servesHeadlessGraph && this.automation.coordinatedDefinitionCapabilities()) {
       capabilities.push(COORDINATED_AUTOMATION_DEFINITIONS_RUNTIME_CAPABILITY)
     }
+    const coordinatedFakeRuns = this.automation.coordinatedRuns.availability()
+    if (!this.servesHeadlessGraph && coordinatedFakeRuns.available) {
+      capabilities.push(COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY)
+    }
     // Dev/serve installs may lack out/mobile-web; never advertise downloads this install cannot produce.
     if (loadBundledMobileWebBundle()) {
       capabilities.push(MOBILE_WEB_BUNDLE_CAPABILITY)
@@ -163,6 +170,7 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyControl
       runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
       minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
       capabilities,
+      coordinatedFakeRuns,
       ...(degradations.length > 0 ? { degradations } : {}),
       worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_RESULT_TTL_MS },
       ...(windowsProcessStartTimeAvailable ? { windowsProcessStartTimeAvailable } : {}),

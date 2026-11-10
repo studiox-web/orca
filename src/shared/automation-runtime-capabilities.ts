@@ -22,6 +22,9 @@ export const AUTOMATION_SURFACE_RUNTIME_CAPABILITY = 'automations.surface.v1' as
 export const COORDINATED_AUTOMATION_DEFINITIONS_RUNTIME_CAPABILITY =
   'automation.coordinated-definitions.v1' as const
 
+export const COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY =
+  'automation.coordinated-fake-runs.v1' as const
+
 export const AUTOMATION_RUNTIME_CAPABILITIES = [
   AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,

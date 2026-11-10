@@ -22,6 +22,7 @@ import {
 } from '../../shared/rpc-contract/coordinated-automation-params'
 import { runAutomationNowFenced } from '../automations/refused-manual-run'
 import { paginateAutomationRuns } from '../../shared/automation-run-cursor'
+import { RuntimeCoordinatedRunController } from './runtime-coordinated-run-controller'
 import { RuntimeAutomationDefinitionWriter } from './runtime-automation-definition-writer'
 import type {
   RuntimeAutomationTargetResolvers,
@@ -36,6 +37,7 @@ export type {
 
 export class RuntimeAutomationController {
   private service: AutomationService | null = null
+  readonly coordinatedRuns: RuntimeCoordinatedRunController
   private readonly coordinatedDefinitions: CoordinatedDefinitionWriteGate
   private readonly definitions: RuntimeAutomationDefinitionWriter
 
@@ -51,6 +53,11 @@ export class RuntimeAutomationController {
       isLocalAuthority
     )
     this.definitions = new RuntimeAutomationDefinitionWriter(store, resolvers)
+    this.coordinatedRuns = new RuntimeCoordinatedRunController(
+      store,
+      () => this.coordinatedDefinitionCapabilities() !== null,
+      () => this.service?.coordinatedRuns ?? null
+    )
   }
 
   coordinatedDefinitionCapabilities() {

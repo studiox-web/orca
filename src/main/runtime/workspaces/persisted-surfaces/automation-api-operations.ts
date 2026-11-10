@@ -1,3 +1,7 @@
+import type {
+  CoordinatedFakeRunStartInput,
+  CoordinatedRunSelectionInput
+} from '../../../../shared/rpc-contract/coordinated-automation-run-params'
 import type { AutomationsChangedPayload } from '../../../../shared/runtime-client-events'
 import type {
   AutomationOwnerPrecondition,
@@ -54,6 +58,28 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
         this.publishAutomationDefinitionChange(source, this.automationChangeSelector(automation.id))
         return automation
       })
+    })
+  }
+
+  startCoordinatedFakeRun(input: CoordinatedFakeRunStartInput) {
+    return this.automation.withExternalProbePriority(async () => {
+      const result = await this.automation.coordinatedRuns.start(input, this.getRuntimeId())
+      this.notifyAutomationsChanged({ reason: 'run', selector: { kind: 'self' } })
+      return result
+    })
+  }
+
+  inspectCoordinatedRun(input: CoordinatedRunSelectionInput) {
+    return this.automation.withExternalProbePriority(() =>
+      this.automation.coordinatedRuns.inspect(input, this.getRuntimeId())
+    )
+  }
+
+  reconcileCoordinatedFakeRun(input: CoordinatedRunSelectionInput) {
+    return this.automation.withExternalProbePriority(async () => {
+      const result = await this.automation.coordinatedRuns.reconcile(input, this.getRuntimeId())
+      this.notifyAutomationsChanged({ reason: 'run', selector: { kind: 'self' } })
+      return result
     })
   }
 
