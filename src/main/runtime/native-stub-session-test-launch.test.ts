@@ -26,6 +26,12 @@ import type { RuntimePtySpawnArgs } from '../ipc/pty/runtime/spawn-state'
 import * as launchHooks from '../ipc/pty/spawn-agent-launch-plugin-hook'
 import * as trust from '../agent-workspace-trust-spawn'
 import * as directories from '../providers/working-directory-validation'
+import {
+  ptyDisposables,
+  ptyExitDisposables,
+  ptyPhysicalExits,
+  startupIngressByPty
+} from '../providers/local-pty/local-pty-provider-state'
 import { getAppEnvironment } from '../../shared/app-environment'
 import * as invalidators from '../ipc/worktree-change-invalidators'
 import { _resetTerminalModelQueryAuthorityForTest } from './terminal-model-query-authority'
@@ -42,6 +48,7 @@ let root = ''
 const disposers: (() => void)[] = []
 let exitCallback: LocalPtyExitCallback | undefined
 beforeEach(() => {
+  exitCallback = undefined
   native.spawn.mockReset()
   native.spawn.mockImplementation(() =>
     createLocalPtyMockProcess({
@@ -408,3 +415,156 @@ it('rejects revocation by the dispatch observer before writing a pane', async ()
   expect(admission).not.toHaveBeenCalled()
   expect(native.spawn).not.toHaveBeenCalled()
 })
+
+it.each(['onSpawned', 'onData', 'onExit', 'post-spawn cancellation'])(
+  'retains exact uncertain identity after %s fails during activation',
+  async (boundary) => {
+    const f = await setup()
+    const abort = new AbortController()
+    const register = vi.spyOn(f.runtime, 'registerPty')
+    const proc = createLocalPtyMockProcess({
+      get: () => exitCallback,
+      set: (callback) => {
+        exitCallback = callback
+      }
+    })
+    const callbackIdentity: { id?: string; incarnationId?: string } = {}
+    f.provider.configure({
+      buildSpawnEnv: f.buildSpawnEnv,
+      onSpawned: (id, incarnationId) => {
+        Object.assign(callbackIdentity, { id, incarnationId })
+        if (boundary === 'onSpawned') {
+          throw new Error('activation observer failed')
+        }
+      }
+    })
+    if (boundary === 'onData' || boundary === 'onExit') {
+      proc[boundary].mockImplementationOnce(() => {
+        throw new Error('activation registration failed')
+      })
+    }
+    native.spawn.mockImplementationOnce(() => {
+      if (boundary === 'post-spawn cancellation') {
+        abort.abort()
+      }
+      return proc
+    })
+    const error = await f.runtime
+      .createTerminal(f.selector, { ...f.options, signal: abort.signal })
+      .catch((error) => error)
+    expect(error).toMatchObject({
+      code: 'operation_unknown',
+      ptyId: expect.any(String),
+      incarnationId: expect.any(String)
+    })
+    expect(f.provider.getPtyProcess(error.ptyId)).toBe(proc)
+    const processes = await f.provider.listProcesses()
+    expect(processes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: error.ptyId,
+          incarnationId: error.incarnationId,
+          terminalHandle: native.spawn.mock.calls[0][2].env.ORCA_TERMINAL_HANDLE
+        })
+      ])
+    )
+    if (callbackIdentity.id) {
+      expect(error).toMatchObject({
+        ptyId: callbackIdentity.id,
+        incarnationId: callbackIdentity.incarnationId
+      })
+    }
+    await expect(f.runtime.createTerminal(f.selector, f.options)).rejects.toThrow(
+      /already_dispatched/
+    )
+    expect(await f.provider.listProcesses()).toEqual(processes)
+    expect(register).not.toHaveBeenCalled()
+    expect(native.spawn).toHaveBeenCalledTimes(1)
+    expect(proc.kill).not.toHaveBeenCalled()
+    for (const effect of [
+      f.account,
+      f.hook,
+      f.trustWrite,
+      f.buildSpawnEnv,
+      f.deps.prepareClaudeAuth,
+      f.deps.prepareCodexResumeHome,
+      f.deps.options?.onCodexHomePtySpawned
+    ]) {
+      expect(effect).not.toHaveBeenCalled()
+    }
+    const physicalExit = ptyPhysicalExits.get(error.ptyId)
+    expect(physicalExit).toBeDefined()
+    let observedExit = false
+    void physicalExit!.exitedPromise.then(() => {
+      observedExit = true
+    })
+    await Promise.resolve()
+    expect(observedExit).toBe(false)
+    if (boundary === 'onExit') {
+      expect(exitCallback).toBeUndefined()
+    } else {
+      expect(exitCallback).toBeDefined()
+      exitCallback!({ exitCode: 0 })
+      await physicalExit!.exitedPromise
+      expect(f.provider.hasPty(error.ptyId)).toBe(false)
+      expect(await f.provider.listProcesses()).toEqual([])
+    }
+  }
+)
+
+it.each(['onExit', 'onData'])(
+  'retires exact native state when exit is observed during %s registration',
+  async (boundary) => {
+    const f = await setup()
+    const disposeData = vi.fn()
+    const disposeExit = vi.fn()
+    const proc = createLocalPtyMockProcess({
+      get: () => exitCallback,
+      set: (callback) => {
+        exitCallback = callback
+      }
+    })
+    proc.onExit.mockImplementation((callback) => {
+      exitCallback = callback
+      if (boundary === 'onExit') {
+        callback({ exitCode: 0 })
+      }
+      return { dispose: disposeExit }
+    })
+    proc.onData.mockImplementation(() => {
+      if (boundary === 'onData') {
+        exitCallback!({ exitCode: 0 })
+      }
+      return { dispose: disposeData }
+    })
+    native.spawn.mockReturnValueOnce(proc)
+    const error = await f.runtime
+      .createTerminal(f.selector, {
+        ...f.options,
+        onPtySpawnCommitted: () => {
+          throw new Error('lost acknowledgement after exit')
+        }
+      })
+      .catch((error) => error)
+    expect(error).toMatchObject({
+      code: 'operation_unknown',
+      ptyId: expect.any(String),
+      incarnationId: expect.any(String)
+    })
+    expect(f.provider.hasPty(error.ptyId)).toBe(false)
+    expect(await f.provider.listProcesses()).toEqual([])
+    for (const map of [ptyDisposables, ptyExitDisposables, ptyPhysicalExits, startupIngressByPty]) {
+      expect(map.has(error.ptyId)).toBe(false)
+    }
+    expect(disposeExit).toHaveBeenCalledOnce()
+    if (boundary === 'onData') {
+      expect(disposeData).toHaveBeenCalledOnce()
+    } else {
+      expect(proc.onData).not.toHaveBeenCalled()
+    }
+    await expect(f.runtime.createTerminal(f.selector, f.options)).rejects.toThrow(
+      /already_dispatched/
+    )
+    expect(native.spawn).toHaveBeenCalledOnce()
+  }
+)

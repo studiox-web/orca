@@ -48,7 +48,7 @@ import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-start
 import type { PtySpawnOptions } from '../pty-provider-contract'
 import type { PtySpawnResult } from '../pty-spawn-result'
 
-export function activateLocalPtySession(args: {
+export type LocalPtySessionActivation = {
   id: string
   incarnationId: string
   spawn: PtySpawnOptions
@@ -58,8 +58,10 @@ export function activateLocalPtySession(args: {
   proc: pty.IPty
   reportsChildExitStatus: boolean
   spawnedWslDistro: string | null | undefined
-}): PtySpawnResult {
-  const { id, incarnationId, spawn, getOptions, plan, env, proc, spawnedWslDistro } = args
+}
+
+export function recordLocalPtySpawnIdentity(args: LocalPtySessionActivation): void {
+  const { id, incarnationId, spawn, plan, env, proc, spawnedWslDistro } = args
   createPtyPhysicalExit(id)
   ptyReportsChildExitStatus.set(id, args.reportsChildExitStatus)
   ptyProcesses.set(id, proc)
@@ -78,13 +80,20 @@ export function activateLocalPtySession(args: {
   if (spawn.worktreeId) {
     ptyWorktreeId.set(id, spawn.worktreeId)
   }
+  ptyLoadGeneration.set(id, getLoadGeneration())
+  ptyIncarnations.set(id, incarnationId)
   ptyAgentForegroundContextPaths.set(
     id,
     getAgentForegroundContextPaths({ cwd: spawn.cwd, worktreeId: spawn.worktreeId })
   )
-  ptyLoadGeneration.set(id, getLoadGeneration())
-  ptyIncarnations.set(id, incarnationId)
-  getOptions().onSpawned?.(id, incarnationId)
+}
+
+export function activateLocalPtySession(args: LocalPtySessionActivation): PtySpawnResult {
+  const { id, incarnationId, spawn, getOptions, plan, env, proc, spawnedWslDistro } = args
+  if (!spawn.preparedNativeStub) {
+    recordLocalPtySpawnIdentity(args)
+    getOptions().onSpawned?.(id, incarnationId)
+  }
 
   const emitIngressData = (emission: PtyIngressEmission): void => {
     const sequenceChars = emission.rawEndSeq - emission.rawStartSeq
@@ -133,62 +142,77 @@ export function activateLocalPtySession(args: {
     proc,
     startupIngress
   })
-  const disposables: { dispose: () => void }[] = []
-  const observeGuestRoot = spawnedWslDistro
-    ? createWslGuestRootObserver((root) => ptyWslGuestRootById.set(id, root))
-    : undefined
-  const onDataDisposable = proc.onData((rawData) => {
-    initialOutput?.observe(rawData)
-    observeGuestRoot?.(rawData)
-    readiness.acceptData(rawData)
-  })
-  if (onDataDisposable) {
-    disposables.push(onDataDisposable)
-  }
-  ptyDisposables.set(id, disposables)
-
   let exitedBeforeSpawnReply = false
   let exitCause: TerminalExitCause | undefined
   let staging: StartupCommandStaging | undefined
-  const onExitDisposable = proc.onExit(({ exitCode, signal }) => {
-    exitedBeforeSpawnReply = true
-    discardStagedStartupCommand(staging)
-    // node-pty may pair exitCode 0 with a fatal signal; classify while signal and spawn provenance are available.
-    let cause = resolveProcessExitCause({
-      exitCode,
-      signal,
-      hostReportsChildExitStatus: ptyReportsChildExitStatus.get(id)
+  const registerExit = () => {
+    const onExitDisposable = proc.onExit(({ exitCode, signal }) => {
+      exitedBeforeSpawnReply = true
+      discardStagedStartupCommand(staging)
+      // node-pty may pair exitCode 0 with a fatal signal; classify while signal and spawn provenance are available.
+      let cause = resolveProcessExitCause({
+        exitCode,
+        signal,
+        hostReportsChildExitStatus: ptyReportsChildExitStatus.get(id)
+      })
+      const wasTerminationRequested = ptyTerminationMode.has(id)
+      ptyPhysicalExits.get(id)?.markExited()
+      // Why: neutralize proc.kill before destroy — node-pty SIGHUPs on socket 'close', which can race here and signal a reaped/recycled pid.
+      if (process.platform !== 'win32') {
+        ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+      }
+      readiness.prepareForExit()
+      clearPtyState(id)
+      startupIngress.drainAndClose()
+      cause = withInitialOutputDiagnostic(
+        wasTerminationRequested ? { kind: 'operator_close' } : cause,
+        initialOutput?.detected() === true
+      )
+      exitCause = cause
+      startupIngressByPty.delete(id)
+      // Release the natural-exit ptmx fd now instead of waiting for GC (docs/fix-pty-fd-leak.md).
+      destroyPtyProcess(proc, { alreadyKilled: wasTerminationRequested })
+      ptyReportsChildExitStatus.delete(id)
+      const { onExit } = getOptions()
+      onExit?.(id, exitCode, incarnationId, cause)
+      for (const cb of exitListeners) {
+        cb({ id, code: exitCode, incarnationId, cause, runtimeFed: onExit ? true : undefined })
+      }
     })
-    const wasTerminationRequested = ptyTerminationMode.has(id)
-    ptyPhysicalExits.get(id)?.markExited()
-    // Why: neutralize proc.kill before destroy — node-pty SIGHUPs on socket 'close', which can race here and signal a reaped/recycled pid.
-    if (process.platform !== 'win32') {
-      ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+    if (onExitDisposable) {
+      if (exitedBeforeSpawnReply) {
+        onExitDisposable.dispose()
+      } else {
+        ptyExitDisposables.set(id, onExitDisposable)
+      }
     }
-    readiness.prepareForExit()
-    clearPtyState(id)
-    startupIngress.drainAndClose()
-    cause = withInitialOutputDiagnostic(
-      wasTerminationRequested ? { kind: 'operator_close' } : cause,
-      initialOutput?.detected() === true
-    )
-    exitCause = cause
-    startupIngressByPty.delete(id)
-    // Release the natural-exit ptmx fd now instead of waiting for GC (docs/fix-pty-fd-leak.md).
-    destroyPtyProcess(proc, { alreadyKilled: wasTerminationRequested })
-    ptyReportsChildExitStatus.delete(id)
-    const { onExit } = getOptions()
-    onExit?.(id, exitCode, incarnationId, cause)
-    for (const cb of exitListeners) {
-      cb({ id, code: exitCode, incarnationId, cause, runtimeFed: onExit ? true : undefined })
-    }
-  })
-  if (onExitDisposable) {
+  }
+  if (spawn.preparedNativeStub) {
+    registerExit()
+    getOptions().onSpawned?.(id, incarnationId)
+  }
+  if (!exitedBeforeSpawnReply) {
+    const disposables: { dispose: () => void }[] = []
+    const observeGuestRoot = spawnedWslDistro
+      ? createWslGuestRootObserver((root) => ptyWslGuestRootById.set(id, root))
+      : undefined
+    const onDataDisposable = proc.onData((rawData) => {
+      initialOutput?.observe(rawData)
+      observeGuestRoot?.(rawData)
+      readiness.acceptData(rawData)
+    })
     if (exitedBeforeSpawnReply) {
-      onExitDisposable.dispose()
+      onDataDisposable?.dispose()
     } else {
-      ptyExitDisposables.set(id, onExitDisposable)
+      if (onDataDisposable) {
+        disposables.push(onDataDisposable)
+      }
+      ptyDisposables.set(id, disposables)
     }
+  }
+
+  if (!spawn.preparedNativeStub) {
+    registerExit()
   }
 
   const startupCommandDeliveredByWrapper =

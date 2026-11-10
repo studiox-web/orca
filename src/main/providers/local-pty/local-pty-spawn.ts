@@ -18,7 +18,10 @@ import {
   WorkingDirectoryValidationAbortedError
 } from '../working-directory-validation'
 import { allocatePtyId, ptyShutdownOperations } from './local-pty-provider-state'
-import { activateLocalPtySession } from './local-pty-session-activation'
+import {
+  activateLocalPtySession,
+  recordLocalPtySpawnIdentity
+} from './local-pty-session-activation'
 import {
   buildLocalPtySpawnEnvironment,
   enforceLocalPtySpawnEnvironmentOverrides
@@ -147,63 +150,82 @@ export async function spawnLocalPty(
       })
       const spawnResult = pendingSpawn instanceof Promise ? await pendingSpawn : pendingSpawn
       try {
-        checkCanceled()
-      } catch (error) {
-        try {
-          spawnResult.process.kill('SIGKILL')
-        } finally {
-          destroyPtyProcess(spawnResult.process)
-        }
-        throw error
-      }
-      if (!args.preparedNativeStub) {
-        args.onPtySpawnCommitted?.()
-      }
-      plan.shellPath = spawnResult.shellPath
-      // The winning Windows fallback may embed startup in argv; its flag prevents duplicate stdin delivery.
-      if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
-        plan.startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
-      }
-      if (args.command && plan.getFallbackShellReadyConfig) {
-        plan.shellReadyLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
-      }
-
-      if (!args.preparedNativeStub && process.platform !== 'win32') {
-        finalEnv.SHELL = plan.shellPath
-      }
-
-      const proc = spawnResult.process
-      const spawnedShellIsWsl =
-        process.platform === 'win32' &&
-        pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe'
-      const spawnedWslDistro = spawnedShellIsWsl
-        ? (plan.launchWslDistro ?? undefined)
-        : process.platform === 'win32'
-          ? null
-          : undefined
-      const result = activateLocalPtySession({
-        id,
-        incarnationId,
-        spawn: args,
-        getOptions,
-        plan,
-        env: finalEnv,
-        proc,
-        reportsChildExitStatus: spawnResult.reportsChildExitStatus !== false,
-        spawnedWslDistro
-      })
-      if (args.preparedNativeStub) {
-        try {
-          args.onPtySpawnCommitted?.()
-        } catch (cause) {
-          throw Object.assign(new Error('native_stub_spawn_acknowledgement_unknown', { cause }), {
-            code: 'operation_unknown',
-            ptyId: result.id,
-            incarnationId: result.incarnationId
+        if (args.preparedNativeStub) {
+          recordLocalPtySpawnIdentity({
+            id,
+            incarnationId,
+            spawn: args,
+            getOptions,
+            plan,
+            env: finalEnv,
+            proc: spawnResult.process,
+            reportsChildExitStatus: spawnResult.reportsChildExitStatus !== false,
+            spawnedWslDistro: process.platform === 'win32' ? null : undefined
           })
+        } else {
+          try {
+            checkCanceled()
+          } catch (error) {
+            try {
+              spawnResult.process.kill('SIGKILL')
+            } finally {
+              destroyPtyProcess(spawnResult.process)
+            }
+            throw error
+          }
         }
+        if (!args.preparedNativeStub) {
+          args.onPtySpawnCommitted?.()
+        }
+        plan.shellPath = spawnResult.shellPath
+        // The winning Windows fallback may embed startup in argv; its flag prevents duplicate stdin delivery.
+        if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
+          plan.startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs
+        }
+        if (args.command && plan.getFallbackShellReadyConfig) {
+          plan.shellReadyLaunch = plan.getFallbackShellReadyConfig(plan.shellPath)
+        }
+
+        if (!args.preparedNativeStub && process.platform !== 'win32') {
+          finalEnv.SHELL = plan.shellPath
+        }
+
+        const proc = spawnResult.process
+        const spawnedShellIsWsl =
+          process.platform === 'win32' &&
+          pathWin32.basename(plan.shellPath).toLowerCase() === 'wsl.exe'
+        const spawnedWslDistro = spawnedShellIsWsl
+          ? (plan.launchWslDistro ?? undefined)
+          : process.platform === 'win32'
+            ? null
+            : undefined
+        const result = activateLocalPtySession({
+          id,
+          incarnationId,
+          spawn: args,
+          getOptions,
+          plan,
+          env: finalEnv,
+          proc,
+          reportsChildExitStatus: spawnResult.reportsChildExitStatus !== false,
+          spawnedWslDistro
+        })
+        if (args.preparedNativeStub) {
+          checkCanceled()
+          args.onPtySpawnCommitted?.()
+        }
+        return result
+      } catch (cause) {
+        if (!args.preparedNativeStub) {
+          throw cause
+        }
+        // Physical spawn is proven; failed activation or acknowledgement does not prove exit.
+        throw Object.assign(new Error('native_stub_post_spawn_outcome_unknown', { cause }), {
+          code: 'operation_unknown',
+          ptyId: id,
+          incarnationId
+        })
       }
-      return result
     })
   })
 }
