@@ -189,7 +189,9 @@ export function activateLocalPtySession(args: LocalPtySessionActivation): PtySpa
   }
   if (spawn.preparedNativeStub) {
     registerExit()
-    getOptions().onSpawned?.(id, incarnationId)
+    if (!exitedBeforeSpawnReply) {
+      getOptions().onSpawned?.(id, incarnationId)
+    }
   }
   if (!exitedBeforeSpawnReply) {
     const disposables: { dispose: () => void }[] = []

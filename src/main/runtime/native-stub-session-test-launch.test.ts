@@ -512,12 +512,39 @@ it.each(['onSpawned', 'onData', 'onExit', 'post-spawn cancellation'])(
   }
 )
 
-it.each(['onExit', 'onData'])(
-  'retires exact native state when exit is observed during %s registration',
-  async (boundary) => {
+it.each([
+  { boundary: 'onExit', throwingObserver: 'acknowledgement' },
+  { boundary: 'onData', throwingObserver: 'acknowledgement' },
+  { boundary: 'onExit', throwingObserver: 'exit' },
+  { boundary: 'onData', throwingObserver: 'exit' }
+])(
+  'preserves runtime exit during $boundary registration with throwing $throwingObserver observer',
+  async ({ boundary, throwingObserver }) => {
     const f = await setup()
     const disposeData = vi.fn()
     const disposeExit = vi.fn()
+    const lifecycle: string[] = []
+    const exitSettlements: (void | Promise<void>)[] = []
+    const register = vi.spyOn(f.runtime, 'registerPty')
+    f.provider.configure({
+      buildSpawnEnv: f.buildSpawnEnv,
+      onSpawned: (id, incarnationId) => {
+        lifecycle.push('spawn')
+        f.runtime.onPtySpawned(id, incarnationId)
+      },
+      onExit: (id, code, incarnationId, cause) => {
+        lifecycle.push('exit')
+        exitSettlements.push(
+          f.runtime.onPtyExit(id, code, incarnationId, {
+            providerExitObserved: true,
+            cause
+          })
+        )
+        if (throwingObserver === 'exit') {
+          throw new Error('exit observer failed after settlement')
+        }
+      }
+    })
     const proc = createLocalPtyMockProcess({
       get: () => exitCallback,
       set: (callback) => {
@@ -551,20 +578,47 @@ it.each(['onExit', 'onData'])(
       ptyId: expect.any(String),
       incarnationId: expect.any(String)
     })
+    await Promise.all(exitSettlements)
+    expect.soft(lifecycle).toEqual(boundary === 'onExit' ? ['exit'] : ['spawn', 'exit'])
+    expect.soft(f.runtime.getPtyLivenessVerdict(error.ptyId)).toMatchObject({
+      status: 'exited',
+      incarnationId: error.incarnationId,
+      cause: { kind: 'exited', exitCode: 0 }
+    })
+    const pending = f.runtime['pendingPtyRegistrationIncarnations'].get(error.ptyId)
+    if (boundary === 'onExit') {
+      expect.soft(pending).toBeUndefined()
+    } else {
+      expect(pending?.exitedIncarnations.has(error.incarnationId)).toBe(true)
+      expect(() =>
+        f.runtime.assertPtyRegistrationAllowed(error.ptyId, error.incarnationId)
+      ).toThrow('agent_session_exited_during_start')
+    }
+    expect(f.runtime['ptysById'].get(error.ptyId)?.connected).not.toBe(true)
+    expect((await f.runtime.listTerminals(f.selector)).terminals).toEqual([])
+    expect(
+      f.runtime.getTerminalProcessIncarnation(
+        native.spawn.mock.calls[0][2].env.ORCA_TERMINAL_HANDLE
+      )
+    ).toBeNull()
+    expect(register).not.toHaveBeenCalled()
     expect(f.provider.hasPty(error.ptyId)).toBe(false)
     expect(await f.provider.listProcesses()).toEqual([])
     for (const map of [ptyDisposables, ptyExitDisposables, ptyPhysicalExits, startupIngressByPty]) {
       expect(map.has(error.ptyId)).toBe(false)
     }
-    expect(disposeExit).toHaveBeenCalledOnce()
-    if (boundary === 'onData') {
+    if (boundary === 'onData' || throwingObserver === 'acknowledgement') {
+      expect(disposeExit).toHaveBeenCalledOnce()
+    }
+    if (boundary === 'onData' && throwingObserver === 'acknowledgement') {
       expect(disposeData).toHaveBeenCalledOnce()
-    } else {
+    } else if (boundary === 'onExit') {
       expect(proc.onData).not.toHaveBeenCalled()
     }
     await expect(f.runtime.createTerminal(f.selector, f.options)).rejects.toThrow(
       /already_dispatched/
     )
     expect(native.spawn).toHaveBeenCalledOnce()
+    expect(f.runtime.getPtyLivenessVerdict(error.ptyId)?.status).toBe('exited')
   }
 )
