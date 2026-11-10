@@ -705,10 +705,13 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
             role: 'editor',
             approverIdentity: 'alice@orca.test',
             approvedAt: 1000,
+            automationId: automation.id,
+            definitionRevision: run!.resolvedSnapshot!.definitionRevision,
             automationRunId: run!.id,
             orchestrationRunId: critFail.orchestrationRunId!,
             scope: 'stage',
-            childDefinitionId: 'step_approval'
+            childDefinitionId: 'step_approval',
+            taskId: task.id
           }
         ]
       })

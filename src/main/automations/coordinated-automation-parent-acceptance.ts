@@ -153,6 +153,8 @@ export function evaluateParentOutcomeAcceptance(input: {
     snapshot.outcomeContract.requiredApprovals,
     input.hostApprovals,
     {
+      automationId: snapshot.automationId,
+      definitionRevision: snapshot.definitionRevision,
       automationRunId: run.id,
       orchestrationRunId,
       trustedAuthorIdentity: authorIdentity

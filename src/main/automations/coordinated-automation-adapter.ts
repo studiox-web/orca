@@ -12,7 +12,11 @@ import type {
   HeadlessAutomationDispatchLaunch
 } from './headless-dispatch'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
-import type { CoordinatedHostApproval } from './coordinated-automation-approval-validation'
+import type {
+  CoordinatedHostApproval,
+  CoordinatedParentHostApproval,
+  CoordinatedStageHostApproval
+} from './coordinated-automation-approval-validation'
 import {
   CoordinatedAutomationLaunchRefusedError,
   materializeCoordinatedRun,
@@ -30,6 +34,8 @@ import {
 
 export {
   type CoordinatedHostApproval,
+  type CoordinatedParentHostApproval,
+  type CoordinatedStageHostApproval,
   CoordinatedAutomationLaunchRefusedError,
   orchestrationRecordProbe
 }

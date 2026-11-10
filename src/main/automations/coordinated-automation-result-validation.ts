@@ -205,6 +205,8 @@ export function validateStructuredWorkerResult(
     context.child.stageAcceptance?.requiredApprovals,
     context.hostApprovals,
     {
+      automationId: context.snapshot.automationId,
+      definitionRevision: context.definitionRevision,
       automationRunId: context.automationRunId,
       orchestrationRunId: context.orchestrationRunId,
       childDefinitionId: context.child.childDefinitionId,

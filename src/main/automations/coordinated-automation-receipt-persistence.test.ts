@@ -20,6 +20,9 @@ import {
 import { OrchestrationDb } from '../runtime/orchestration/db'
 import {
   CoordinatedAutomationAdapter,
+  type CoordinatedHostApproval,
+  type CoordinatedParentHostApproval,
+  type CoordinatedStageHostApproval,
   CoordinatedAutomationLaunchRefusedError,
   type CoordinatedWorkerIdentity,
   type CoordinatedWorkerProvider
@@ -405,114 +408,88 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       'Required stage approval "stage_appr_1" (role "reviewer") missing'
     )
 
-    // 2. Stage wrong-ID / same-role
-    const wrongIdStageAdapter = new CoordinatedAutomationAdapter({
-      store,
-      orchestrationDb: db,
-      workerProvider,
-      hostApprovals: [
-        {
-          approvalId: 'wrong_stage_id',
-          role: 'reviewer',
-          approverIdentity: 'rev@orca.test',
-          approvedAt: 1000,
-          automationRunId: run!.id,
-          orchestrationRunId: orchRunId,
-          scope: 'stage',
-          childDefinitionId: 'step_1'
-        }
-      ]
-    })
-    await wrongIdStageAdapter.retryTask({
-      automationRunId: run!.id,
-      taskId: task.id,
-      retryOfDispatchId: db.getDispatchContext(task.id)!.id
-    })
-    task = db.getTask(task.id)!
-    expect(task.result).toContain(
-      'Required stage approval "stage_appr_1" (role "reviewer") missing'
-    )
-
-    // 3. Stage wrong-scope (parent scope or wrong childDefinitionId)
-    const wrongScopeStageAdapter = new CoordinatedAutomationAdapter({
-      store,
-      orchestrationDb: db,
-      workerProvider,
-      hostApprovals: [
-        {
-          approvalId: 'stage_appr_1',
-          role: 'reviewer',
-          approverIdentity: 'rev@orca.test',
-          approvedAt: 1000,
-          automationRunId: run!.id,
-          orchestrationRunId: orchRunId,
-          scope: 'parent',
-          childDefinitionId: 'step_1'
-        }
-      ]
-    })
-    await wrongScopeStageAdapter.retryTask({
-      automationRunId: run!.id,
-      taskId: task.id,
-      retryOfDispatchId: db.getDispatchContext(task.id)!.id
-    })
-    task = db.getTask(task.id)!
-    expect(task.result).toContain('Stage approval "stage_appr_1" has wrong scope')
-
-    // 4. Stage foreign-run
-    const foreignRunStageAdapter = new CoordinatedAutomationAdapter({
-      store,
-      orchestrationDb: db,
-      workerProvider,
-      hostApprovals: [
-        {
-          approvalId: 'stage_appr_1',
-          role: 'reviewer',
-          approverIdentity: 'rev@orca.test',
-          approvedAt: 1000,
-          automationRunId: 'run_foreign_999',
-          orchestrationRunId: orchRunId,
-          scope: 'stage',
-          childDefinitionId: 'step_1'
-        }
-      ]
-    })
-    await foreignRunStageAdapter.retryTask({
-      automationRunId: run!.id,
-      taskId: task.id,
-      retryOfDispatchId: db.getDispatchContext(task.id)!.id
-    })
-    task = db.getTask(task.id)!
-    expect(task.result).toContain(
-      'Stage approval "stage_appr_1" belongs to foreign or missing automationRunId'
-    )
-
-    // 5. Stage duplicate approvalId
-    const validStageApproval = {
+    const validStageApproval: CoordinatedStageHostApproval = {
       approvalId: 'stage_appr_1',
       role: 'reviewer',
       approverIdentity: 'rev@orca.test',
       approvedAt: 1000,
+      automationId: automation.id,
+      definitionRevision: run!.resolvedSnapshot!.definitionRevision,
       automationRunId: run!.id,
       orchestrationRunId: orchRunId,
-      scope: 'stage' as const,
-      childDefinitionId: 'step_1'
+      scope: 'stage',
+      childDefinitionId: 'step_1',
+      taskId: task.id
     }
-    const duplicateStageAdapter = new CoordinatedAutomationAdapter({
-      store,
-      orchestrationDb: db,
-      workerProvider,
-      hostApprovals: [
-        validStageApproval,
-        { ...validStageApproval, approverIdentity: 'rev2@orca.test' }
-      ]
-    })
-    await duplicateStageAdapter.retryTask({
-      automationRunId: run!.id,
-      taskId: task.id,
-      retryOfDispatchId: db.getDispatchContext(task.id)!.id
-    })
-    task = db.getTask(task.id)!
+
+    const retryStageWith = async (approvals: readonly CoordinatedHostApproval[]) => {
+      const a = new CoordinatedAutomationAdapter({
+        store,
+        orchestrationDb: db,
+        workerProvider,
+        hostApprovals: approvals
+      })
+      await a.retryTask({
+        automationRunId: run!.id,
+        taskId: task.id,
+        retryOfDispatchId: db.getDispatchContext(task.id)!.id
+      })
+      return db.getTask(task.id)!
+    }
+
+    // 2. Stage wrong-ID / same-role
+    task = await retryStageWith([{ ...validStageApproval, approvalId: 'wrong_stage_id' }])
+    expect(task.result).toContain(
+      'Required stage approval "stage_appr_1" (role "reviewer") missing'
+    )
+
+    // 3. Stage wrong-scope (parent scope) and omitted scope
+    task = await retryStageWith([
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: testing runtime rejection of invalid scope
+      { ...validStageApproval, scope: 'parent' } as unknown as CoordinatedHostApproval
+    ])
+    expect(task.result).toContain('Stage approval "stage_appr_1" has wrong scope "parent"')
+
+    task = await retryStageWith([
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: testing runtime rejection of omitted scope
+      { ...validStageApproval, scope: undefined } as unknown as CoordinatedHostApproval
+    ])
+    expect(task.result).toContain('Stage approval "stage_appr_1" is missing required scope')
+
+    // 4. Stage omitted orchestrationRunId and foreign-run / wrong worker scope
+    task = await retryStageWith([
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: testing runtime rejection of omitted orchestrationRunId
+      { ...validStageApproval, orchestrationRunId: undefined } as unknown as CoordinatedHostApproval
+    ])
+    expect(task.result).toContain(
+      'Stage approval "stage_appr_1" belongs to foreign or missing orchestrationRunId'
+    )
+
+    task = await retryStageWith([{ ...validStageApproval, automationRunId: 'run_foreign_999' }])
+    expect(task.result).toContain(
+      'Stage approval "stage_appr_1" belongs to foreign or missing automationRunId'
+    )
+
+    task = await retryStageWith([{ ...validStageApproval, automationId: 'auto_foreign' }])
+    expect(task.result).toContain(
+      'Stage approval "stage_appr_1" belongs to foreign or missing automationId'
+    )
+
+    task = await retryStageWith([{ ...validStageApproval, definitionRevision: 99 }])
+    expect(task.result).toContain(
+      'Stage approval "stage_appr_1" belongs to foreign or missing definitionRevision'
+    )
+
+    task = await retryStageWith([{ ...validStageApproval, taskId: 'task_wrong_worker' }])
+    expect(task.result).toContain(
+      'Stage approval "stage_appr_1" has wrong or incomplete stage worker scope'
+    )
+
+    // 5. Stage duplicate approvalId
+    task = await retryStageWith([
+      validStageApproval,
+      { ...validStageApproval, approverIdentity: 'rev2@orca.test' }
+    ])
     expect(task.result).toContain('Duplicate host approval for stage requirement "stage_appr_1"')
 
     // 6. Stage positive + Parent missing approval
@@ -534,114 +511,109 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       'Required approval "parent_appr_1" (role "publisher") is missing from host approvals'
     )
 
+    const validParentApproval: CoordinatedParentHostApproval = {
+      approvalId: 'parent_appr_1',
+      role: 'publisher',
+      approverIdentity: 'pub@orca.test',
+      approvedAt: 2000,
+      automationId: automation.id,
+      definitionRevision: run!.resolvedSnapshot!.definitionRevision,
+      automationRunId: run!.id,
+      orchestrationRunId: orchRunId,
+      scope: 'parent',
+      targetChildId: 'step_1'
+    }
+
+    const settleParentWith = async (approvals: readonly CoordinatedHostApproval[]) => {
+      const a = new CoordinatedAutomationAdapter({
+        store,
+        orchestrationDb: db,
+        workerProvider,
+        hostApprovals: approvals
+      })
+      return a.runUntilSettled(run!.id)
+    }
+
     // 7. Parent wrong-ID / same-role
-    const parentWrongIdAdapter = new CoordinatedAutomationAdapter({
-      store,
-      orchestrationDb: db,
-      workerProvider,
-      hostApprovals: [
-        validStageApproval,
-        {
-          approvalId: 'wrong_parent_id',
-          role: 'publisher',
-          approverIdentity: 'pub@orca.test',
-          approvedAt: 2000,
-          automationRunId: run!.id,
-          orchestrationRunId: orchRunId,
-          scope: 'parent',
-          targetChildId: 'step_1'
-        }
-      ]
-    })
-    parentCheck = await parentWrongIdAdapter.runUntilSettled(run!.id)
+    parentCheck = await settleParentWith([
+      validStageApproval,
+      { ...validParentApproval, approvalId: 'wrong_parent_id' }
+    ])
     expect(parentCheck.status).toBe('dispatch_failed')
     expect(parentCheck.error).toContain(
       'Required approval "parent_appr_1" (role "publisher") is missing from host approvals'
     )
 
-    // 8. Parent wrong-scope (wrong targetChildId or stage scope)
-    const parentWrongScopeAdapter = new CoordinatedAutomationAdapter({
-      store,
-      orchestrationDb: db,
-      workerProvider,
-      hostApprovals: [
-        validStageApproval,
-        {
-          approvalId: 'parent_appr_1',
-          role: 'publisher',
-          approverIdentity: 'pub@orca.test',
-          approvedAt: 2000,
-          automationRunId: run!.id,
-          orchestrationRunId: orchRunId,
-          scope: 'parent',
-          targetChildId: 'other_child'
-        }
-      ]
-    })
-    parentCheck = await parentWrongScopeAdapter.runUntilSettled(run!.id)
+    // 8. Parent wrong-scope and omitted scope
+    parentCheck = await settleParentWith([
+      validStageApproval,
+      { ...validParentApproval, targetChildId: 'other_child' }
+    ])
     expect(parentCheck.status).toBe('dispatch_failed')
     expect(parentCheck.error).toContain(
-      'Parent approval "parent_appr_1" has wrong targetChildId scope'
+      'Parent approval "parent_appr_1" has wrong or missing targetChildId scope'
     )
 
-    // 9. Parent foreign-run
-    const parentForeignRunAdapter = new CoordinatedAutomationAdapter({
-      store,
-      orchestrationDb: db,
-      workerProvider,
-      hostApprovals: [
-        validStageApproval,
-        {
-          approvalId: 'parent_appr_1',
-          role: 'publisher',
-          approverIdentity: 'pub@orca.test',
-          approvedAt: 2000,
-          automationRunId: 'run_foreign_parent',
-          orchestrationRunId: orchRunId,
-          scope: 'parent',
-          targetChildId: 'step_1'
-        }
-      ]
-    })
-    parentCheck = await parentForeignRunAdapter.runUntilSettled(run!.id)
+    parentCheck = await settleParentWith([
+      validStageApproval,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: testing runtime rejection of omitted scope
+      { ...validParentApproval, scope: undefined } as unknown as CoordinatedHostApproval
+    ])
+    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.error).toContain('Parent approval "parent_appr_1" is missing required scope')
+
+    // 9. Parent omitted orchestrationRunId and foreign-run / wrong automationId / wrong revision
+    parentCheck = await settleParentWith([
+      validStageApproval,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: testing runtime rejection of omitted orchestrationRunId
+      {
+        ...validParentApproval,
+        orchestrationRunId: undefined
+      } as unknown as CoordinatedHostApproval
+    ])
+    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.error).toContain(
+      'Parent approval "parent_appr_1" belongs to foreign or missing orchestrationRunId'
+    )
+
+    parentCheck = await settleParentWith([
+      validStageApproval,
+      { ...validParentApproval, automationRunId: 'run_foreign_parent' }
+    ])
     expect(parentCheck.status).toBe('dispatch_failed')
     expect(parentCheck.error).toContain(
       'Parent approval "parent_appr_1" belongs to foreign or missing automationRunId'
     )
 
+    parentCheck = await settleParentWith([
+      validStageApproval,
+      { ...validParentApproval, automationId: 'auto_foreign_parent' }
+    ])
+    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.error).toContain(
+      'Parent approval "parent_appr_1" belongs to foreign or missing automationId'
+    )
+
+    parentCheck = await settleParentWith([
+      validStageApproval,
+      { ...validParentApproval, definitionRevision: 77 }
+    ])
+    expect(parentCheck.status).toBe('dispatch_failed')
+    expect(parentCheck.error).toContain(
+      'Parent approval "parent_appr_1" belongs to foreign or missing definitionRevision'
+    )
+
     // 10. Parent duplicate
-    const validParentApproval = {
-      approvalId: 'parent_appr_1',
-      role: 'publisher',
-      approverIdentity: 'pub@orca.test',
-      approvedAt: 2000,
-      automationRunId: run!.id,
-      orchestrationRunId: orchRunId,
-      scope: 'parent' as const,
-      targetChildId: 'step_1'
-    }
-    const parentDuplicateAdapter = new CoordinatedAutomationAdapter({
-      store,
-      orchestrationDb: db,
-      workerProvider,
-      hostApprovals: [
-        validStageApproval,
-        validParentApproval,
-        { ...validParentApproval, approverIdentity: 'pub2@orca.test' }
-      ]
-    })
-    parentCheck = await parentDuplicateAdapter.runUntilSettled(run!.id)
+    parentCheck = await settleParentWith([
+      validStageApproval,
+      validParentApproval,
+      { ...validParentApproval, approverIdentity: 'pub2@orca.test' }
+    ])
     expect(parentCheck.status).toBe('dispatch_failed')
     expect(parentCheck.error).toContain('Duplicate host approval for requirement "parent_appr_1"')
 
-    // 11. Parent positive
-    const validAdapter = new CoordinatedAutomationAdapter({
-      store,
-      orchestrationDb: db,
-      workerProvider,
-      hostApprovals: [validStageApproval, validParentApproval]
-    })
-    parentCheck = await validAdapter.runUntilSettled(run!.id)
+    // 11. Parent positive exact-match
+    parentCheck = await settleParentWith([validStageApproval, validParentApproval])
     expect(parentCheck.status).toBe('completed')
     expect(parentCheck.completionReceipt?.approvals).toEqual([
       {
