@@ -266,6 +266,9 @@ describe('selected host run operator controls', () => {
       [
         {
           kind: 'gate',
+          candidate: expect.objectContaining({
+            base: expect.objectContaining({ automationRunId: sampleCompletedVerifiedRun.id })
+          }),
           gateId: 'gate-editorial-signoff',
           scope: 'parent',
           childDefinitionId: null,
@@ -273,6 +276,9 @@ describe('selected host run operator controls', () => {
         },
         {
           kind: 'gate',
+          candidate: expect.objectContaining({
+            base: expect.objectContaining({ automationRunId: sampleCompletedVerifiedRun.id })
+          }),
           gateId: 'escalation:uncertain-effect',
           scope: 'escalation',
           childDefinitionId: null,
@@ -281,7 +287,7 @@ describe('selected host run operator controls', () => {
       ]
     )
   })
-  it('blocks a stage approve until an attempt exists and names the attempt it would bind', async () => {
+  it('blocks an ineligible held report and names the captured attempt', async () => {
     await render()
     const first = () => container.querySelector('[aria-label="Pending decisions"] li')!
     await click('Resolve', first())
@@ -294,9 +300,7 @@ describe('selected host run operator controls', () => {
     await click('Refresh test runs')
     await click('Resolve', first())
     expect(button('Confirm Gate Decision').disabled).toBe(true)
-    expect(document.body.textContent).toContain(
-      'Approve is refused until this stage has an attempt'
-    )
+    expect(document.body.textContent).toContain('held report is not eligible')
     await act(async () => document.getElementById('gate-decision-reject')?.click())
     expect(button('Confirm Gate Decision').disabled).toBe(false)
   })

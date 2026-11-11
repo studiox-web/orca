@@ -6,6 +6,7 @@ import { sampleCompletedVerifiedRun } from './AutomationCoordinatedRunPanel.fixt
 import { coordinatedHostActiveViewFixture } from './coordinated-host-active-run-view-fixture'
 import { sampleCoordinatedArticleAutomation } from './coordinated-automation-run-fixture-data'
 
+import { captureCoordinatedGateCandidate } from './coordinated-run-gate-candidate'
 import {
   CoordinatedOperatorUnconfirmedError,
   describePendingGates,
@@ -33,13 +34,19 @@ const scope = {
 let inspected: CoordinatedRunView
 let answered: CoordinatedRunView
 let disposition: string | undefined
-const stageGate = {
+const stageGateScope = {
   kind: 'gate' as const,
   gateId: 'gate-editorial-signoff',
   scope: 'stage' as const,
   childDefinitionId: 'child-reviewer'
 }
 
+function stageGate() {
+  return {
+    ...stageGateScope,
+    candidate: captureCoordinatedGateCandidate(binding, inspected, stageGateScope)
+  }
+}
 function actionCalls(): [string, unknown][] {
   return vi
     .mocked(callRuntimeRpc)
@@ -153,13 +160,18 @@ describe('coordinated run operator client', () => {
 
   it('keeps a shared gate id bound to the exact scope the operator chose', async () => {
     await submitCoordinatedRunOperatorAction(binding, run, {
-      ...stageGate,
+      ...stageGate(),
       decision: 'approve',
       note: 'Reviewed draft 4'
     })
     await submitCoordinatedRunOperatorAction(binding, run, {
       kind: 'gate',
       gateId: 'gate-editorial-signoff',
+      candidate: captureCoordinatedGateCandidate(binding, inspected, {
+        scope: 'parent',
+        gateId: stageGateScope.gateId,
+        childDefinitionId: null
+      }),
       scope: 'parent',
       childDefinitionId: null,
       decision: 'reject'
@@ -174,7 +186,9 @@ describe('coordinated run operator client', () => {
           decision: 'approve',
           note: 'Reviewed draft 4',
           childDefinitionId: 'child-reviewer',
-          taskId: 'task_rev_3'
+          taskId: 'task_rev_3',
+          dispatchId: 'ctx_rev_1',
+          expectedReportDigest: inspected.inspection.stages[2].pendingApproval!.reportDigest
         }
       ],
       [
@@ -184,24 +198,22 @@ describe('coordinated run operator client', () => {
     ])
   })
 
-  it('refuses a stage approve before an attempt exists but still submits a reject', async () => {
+  it('refuses an ineligible held report but still submits a reject', async () => {
     inspected.inspection.stages[2].gateResolutionEligibility.approvableDispatchId = null
     await expect(
-      submitCoordinatedRunOperatorAction(binding, run, { ...stageGate, decision: 'approve' })
-    ).rejects.toThrow('Approve is refused until this stage has an attempt')
+      submitCoordinatedRunOperatorAction(binding, run, { ...stageGate(), decision: 'approve' })
+    ).rejects.toThrow('held report is not eligible')
     expect(actionCalls()).toEqual([])
-    await submitCoordinatedRunOperatorAction(binding, run, { ...stageGate, decision: 'reject' })
+    await submitCoordinatedRunOperatorAction(binding, run, { ...stageGate(), decision: 'reject' })
     expect(actionCalls()).toHaveLength(1)
   })
 
   it('refuses a decision the host does not report pending in that exact scope', async () => {
-    await expect(
-      submitCoordinatedRunOperatorAction(binding, run, {
-        ...stageGate,
-        childDefinitionId: 'child-writer',
-        decision: 'reject'
-      })
-    ).rejects.toThrow('no longer reports this decision as pending in this scope')
+    const action = { ...stageGate(), decision: 'reject' as const }
+    inspected.inspection.humanResolution.pendingDecisions = []
+    await expect(submitCoordinatedRunOperatorAction(binding, run, action)).rejects.toThrow(
+      'no longer reports this decision as pending in this scope'
+    )
     expect(actionCalls()).toEqual([])
   })
 

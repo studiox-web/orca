@@ -40,15 +40,15 @@ function gateScopeLabel(gate: CoordinatedPendingGate, view: CoordinatedRunView):
   const stage = view.inspection.stages.find(
     (entry) => entry.childDefinitionId === gate.childDefinitionId
   )
-  const dispatchId = stage?.gateResolutionEligibility.approvableDispatchId
+  const dispatchId = stage?.pendingApproval?.dispatchId
   return `${gate.childDefinitionId} / ${stage?.taskId ?? 'no-task'} / ${
-    dispatchId ? `approve binds ${dispatchId}` : 'no attempt to approve yet'
+    dispatchId ? `approve binds ${dispatchId}` : 'no held report to approve'
   }`
 }
 
 const GATE_IMPACT = {
   stage:
-    'The host binds an approval to the stage’s latest attempt. Approving a superseded attempt leaves the gate pending.',
+    'Approval applies only to the held report shown here. A changed report or attempt requires a new decision; this does not reopen the completed worker.',
   parent: 'This decision applies to the parent outcome, not to any one stage.',
   escalation:
     'An escalation decision records your acknowledgement only. It does not clear the halt or approve a requirement.'

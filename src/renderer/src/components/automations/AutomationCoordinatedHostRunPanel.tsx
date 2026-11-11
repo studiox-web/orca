@@ -1,17 +1,18 @@
 import React, { useState } from 'react'
-import type { CoordinatedRunView } from '../../../../shared/coordinated-automation-run-view'
 import { Button } from '@/components/ui/button'
-import { AutomationCompletionReceiptInspector } from './AutomationCompletionReceiptInspector'
 import {
-  CoordinatedHostRunControls,
-  CoordinatedHostStageActions,
   operatorOutcomeMessage,
   type CoordinatedHostRunControlBindings,
   type HostRunControlRequest
 } from './AutomationCoordinatedHostRunControls'
 import { AutomationHistoricalSnapshotViewer } from './AutomationHistoricalSnapshotViewer'
 import { AutomationRunControlImpactDialog } from './AutomationRunControlImpactDialog'
-import { CoordinatedHostStageEvidence } from './AutomationCoordinatedHostStageEvidence'
+import { CoordinatedHeldReport } from './AutomationCoordinatedHostStageEvidence'
+import { CoordinatedHostRunEvidence } from './AutomationCoordinatedHostRunEvidence'
+import {
+  captureCoordinatedGateCandidate,
+  type CoordinatedGateCandidate
+} from './coordinated-run-gate-candidate'
 import {
   describePendingGates,
   matchingFrozenSnapshot,
@@ -37,6 +38,7 @@ export function AutomationCoordinatedHostRunPanel(
     runId: string
     request: HostRunControlRequest
     gate?: CoordinatedPendingGate
+    candidate?: CoordinatedGateCandidate
   } | null>(null)
   const scopeRefusal = view ? operatorScopeRefusal(view, snapshot) : null
   // Why: a confirmation opened for one run must never submit against a newly selected run.
@@ -48,8 +50,13 @@ export function AutomationCoordinatedHostRunPanel(
         busy: state.busy || !state.ready,
         scopeUnavailable: scopeRefusal,
         pendingGates: describePendingGates(view, snapshot),
-        onRequest: (next, gate) =>
-          setPending({ runId: view.inspection.automationRunId, request: next, gate }),
+        onRequest: (next, gate) => {
+          const candidate =
+            gate && owner
+              ? captureCoordinatedGateCandidate({ automation: props.automation, owner }, view, gate)
+              : undefined
+          setPending({ runId: view.inspection.automationRunId, request: next, gate, candidate })
+        },
         onOpenSession: (stage) => {
           if (owner) {
             void openCoordinatedStageSession(stage, owner, props.hostEntry?.label)
@@ -178,13 +185,30 @@ export function AutomationCoordinatedHostRunPanel(
       ) : null}
       {view && controls ? (
         <AutomationRunControlImpactDialog
-          request={request}
+          request={
+            request?.kind === 'resolve_run_gate' && pending?.candidate
+              ? {
+                  ...request,
+                  evidence: pending.candidate.heldReport ? (
+                    <CoordinatedHeldReport
+                      name="Report under review"
+                      held={pending.candidate.heldReport}
+                    />
+                  ) : undefined
+                }
+              : request
+          }
           projectedRun={{
             targetExecutionAuthority:
-              view.inspection.targetExecutionAuthority ?? 'Authority unavailable',
-            automationRunId: view.inspection.automationRunId,
-            orchestrationRunId: view.inspection.orchestrationRunId,
-            definitionRevision: view.inspection.definitionRevision,
+              pending?.candidate?.base.targetExecutionAuthority ??
+              view.inspection.targetExecutionAuthority ??
+              'Authority unavailable',
+            automationRunId:
+              pending?.candidate?.base.automationRunId ?? view.inspection.automationRunId,
+            orchestrationRunId:
+              pending?.candidate?.base.orchestrationRunId ?? view.inspection.orchestrationRunId,
+            definitionRevision:
+              pending?.candidate?.base.definitionRevision ?? view.inspection.definitionRevision,
             currentAutomationRevision:
               props.automation.definitionRevision ?? view.inspection.definitionRevision,
             workspaceLabel: run?.workspaceDisplayName ?? run?.workspaceId ?? 'Not recorded',
@@ -210,9 +234,10 @@ export function AutomationCoordinatedHostRunPanel(
           onConfirmResolveGate={(_stage, _gateId, decision, note) => {
             // Why: the decision keeps the exact host scope and child it was opened for, never a bare id.
             const gate = pending?.gate
-            if (gate) {
+            if (gate && pending.candidate) {
               void state.operate({
                 kind: 'gate',
+                candidate: pending.candidate,
                 gateId: gate.gateId,
                 scope: gate.scope,
                 childDefinitionId: gate.childDefinitionId,
@@ -227,153 +252,4 @@ export function AutomationCoordinatedHostRunPanel(
   )
 }
 
-export function CoordinatedHostRunEvidence({
-  view,
-  controls
-}: {
-  view: CoordinatedRunView
-  controls: CoordinatedHostRunControlBindings
-}): React.JSX.Element {
-  const { inspection } = view
-  return (
-    <div className="space-y-3 min-w-0">
-      <dl className="grid gap-1 text-xs break-all">
-        <div>
-          <dt className="inline text-muted-foreground">Runtime: </dt>
-          <dd className="inline">{view.runtimeId}</dd>
-        </div>
-        <div>
-          <dt className="inline text-muted-foreground">Parent run: </dt>
-          <dd className="inline">{inspection.automationRunId}</dd>
-        </div>
-        <div>
-          <dt className="inline text-muted-foreground">Orchestration run: </dt>
-          <dd className="inline">{inspection.orchestrationRunId ?? 'Unavailable'}</dd>
-        </div>
-        <div>
-          <dt className="inline text-muted-foreground">Frozen revision: </dt>
-          <dd className="inline">{inspection.definitionRevision}</dd>
-        </div>
-        <div>
-          <dt className="inline text-muted-foreground">Technical run status: </dt>
-          <dd className="inline">{inspection.runStatus}</dd>
-        </div>
-        <div>
-          <dt className="inline text-muted-foreground">Semantic receipt: </dt>
-          <dd className="inline">
-            {inspection.receipt.kind === 'available'
-              ? inspection.receipt.receipt.finalState
-              : `${inspection.receipt.kind}: ${inspection.receipt.reason}`}
-          </dd>
-        </div>
-      </dl>
-      {inspection.runError ? (
-        <p className="text-xs text-status-warning">{inspection.runError}</p>
-      ) : null}
-      <ul className="space-y-2" aria-label="Host-observed stages">
-        {inspection.stages.map((stage) => (
-          <li
-            key={stage.childDefinitionId}
-            className="space-y-1 rounded-md border border-border p-3 text-xs break-words"
-          >
-            <h4 className="font-medium">
-              {stage.name} · {stage.role}
-              {inspection.activeStageIds.includes(stage.childDefinitionId) ? ' · attempt open' : ''}
-            </h4>
-            <p className="break-all">
-              Child {stage.childDefinitionId} · Task {stage.taskId ?? 'not materialized'} · Mapped
-              Dispatch {stage.mappedDispatchId ?? 'not materialized'}
-            </p>
-            <p>
-              Technical:{' '}
-              {stage.native.kind === 'available'
-                ? `${stage.native.taskStatus} · ${stage.native.latestDispatchStatus ?? 'No Dispatch status'}`
-                : `${stage.native.kind}: ${stage.native.reason}`}
-            </p>
-            {stage.native.kind === 'available' ? (
-              <p className="break-all">
-                Latest native Dispatch: {stage.native.latestDispatchId ?? 'None'}
-              </p>
-            ) : null}
-            <p>
-              Semantic acceptance:{' '}
-              {stage.semantic.kind === 'available'
-                ? stage.semantic.status
-                : `${stage.semantic.kind}: ${stage.semantic.reason}`}
-            </p>
-            {stage.semantic.kind === 'available' ? (
-              <>
-                <p className="break-all">
-                  Latest launched Dispatch: {stage.semantic.activeDispatchId ?? 'None'} · Accepted
-                  Dispatch: {stage.semantic.acceptedDispatchId ?? 'None recorded'} · Admitted
-                  attempts: {stage.semantic.attempts}
-                </p>
-                {stage.semantic.lastError ? (
-                  <p className="text-status-warning">{stage.semantic.lastError}</p>
-                ) : null}
-                <ol aria-label={`${stage.name} attempts`} className="space-y-1">
-                  {stage.semantic.lineage.map((attempt) => (
-                    <li key={attempt.attemptNumber} className="break-all">
-                      Attempt {attempt.attemptNumber} · {attempt.kind} · {attempt.status} · Dispatch{' '}
-                      {attempt.dispatchId ?? 'not bound'}
-                      {attempt.retryOfDispatchId ? ` · retry of ${attempt.retryOfDispatchId}` : ''}
-                    </li>
-                  ))}
-                </ol>
-              </>
-            ) : null}
-            <CoordinatedHostStageEvidence stage={stage} />
-            <CoordinatedHostStageActions
-              stage={stage}
-              retryAvailable={view.actions.retry.available}
-              controls={controls}
-            />
-          </li>
-        ))}
-      </ul>
-      {inspection.progress.kind === 'available' ? (
-        <div className="space-y-1 text-xs">
-          <p>
-            Observed generation {inspection.progress.generation}, sequence{' '}
-            {inspection.progress.sequence}; reports {inspection.progress.reportCount}.
-          </p>
-          {inspection.progress.halt ? (
-            <p className="text-status-warning">
-              {inspection.progress.halt.state}: {inspection.progress.halt.reason}
-            </p>
-          ) : null}
-          {inspection.progress.escalations.map((item) => (
-            <p key={item.key} className="text-status-warning">
-              {item.code}: {item.detail}
-              {item.requiresHumanDecision ? ' · Human decision required' : ''}
-            </p>
-          ))}
-          {inspection.progress.effects.map((effect) => (
-            <p key={effect.effectId}>
-              {effect.kind}: {effect.status} · {effect.receipt ?? 'No effect receipt'}
-            </p>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Progress {inspection.progress.kind}: {inspection.progress.reason}
-        </p>
-      )}
-      <div className="space-y-1 text-xs text-muted-foreground">
-        <p>Findings unavailable: {view.findings.reason}</p>
-        <p>Limits unavailable: {view.limits.reason}</p>
-        <p>Spend, elapsed time and live questions are not supplied by this API.</p>
-      </div>
-      <CoordinatedHostRunControls view={view} controls={controls} />
-      {inspection.receipt.kind === 'available' ? (
-        <AutomationCompletionReceiptInspector
-          receipt={inspection.receipt.receipt}
-          trust={inspection.receipt.trust}
-          retainedEvidence={null}
-          quarantine={null}
-          technicalRunStatus={inspection.runStatus}
-        />
-      ) : null}
-    </div>
-  )
-}
+export { CoordinatedHostRunEvidence } from './AutomationCoordinatedHostRunEvidence'

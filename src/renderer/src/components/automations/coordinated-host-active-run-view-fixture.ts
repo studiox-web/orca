@@ -98,6 +98,20 @@ export function coordinatedHostActiveViewFixture(runId?: string): CoordinatedRun
     if (stage.childDefinitionId === 'child-reviewer') {
       return {
         ...pending,
+        semantic: {
+          ...pending.semantic,
+          attempts: 0,
+          lineage: pending.semantic.lineage.map((attempt) => ({
+            ...attempt,
+            status: 'active' as const
+          }))
+        },
+        native: {
+          kind: 'available',
+          taskStatus: 'completed',
+          latestDispatchId: 'ctx_rev_1',
+          latestDispatchStatus: 'completed'
+        },
         gateResolutionEligibility: {
           canResolve: true,
           reason: null,
@@ -105,17 +119,20 @@ export function coordinatedHostActiveViewFixture(runId?: string): CoordinatedRun
           pendingGateIds: ['gate-editorial-signoff'],
           approvableDispatchId: 'ctx_rev_1'
         },
-        evidence: {
-          kind: 'available',
+        evidence: { kind: 'absent', reason: 'This report has not been semantically admitted.' },
+        pendingApproval: {
           dispatchId: 'ctx_rev_1',
           reportDigest: 'sha256:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9',
-          disposition: 'accepted',
-          dispositionReason: null,
-          outcome: 'succeeded',
-          summary: 'Review complete; awaiting editorial sign-off.',
-          artifacts: [],
-          checks: [{ id: 'style-guide', outcome: 'passed' }],
-          blockers: []
+          gateIds: ['gate-editorial-signoff'],
+          since: 1762712000000,
+          report: {
+            kind: 'available',
+            outcome: 'succeeded',
+            summary: 'Review complete; awaiting editorial sign-off.',
+            artifacts: [{ kind: 'review', uri: 'file:///workspace/review.md', sha256: null }],
+            checks: [{ id: 'style-guide', outcome: 'passed' }],
+            blockers: []
+          }
         }
       }
     }

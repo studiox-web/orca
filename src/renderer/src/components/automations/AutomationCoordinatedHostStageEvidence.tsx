@@ -1,5 +1,9 @@
 import React from 'react'
-import type { CoordinatedStageInspection } from '../../../../shared/coordinated-automation-run-inspection'
+import type {
+  CoordinatedStageInspection,
+  CoordinatedStagePendingApprovalView,
+  CoordinatedStageReportEvidence
+} from '../../../../shared/coordinated-automation-run-inspection'
 import { Badge } from '@/components/ui/badge'
 
 const DISPOSITION_COPY = {
@@ -18,6 +22,9 @@ export function CoordinatedHostStageEvidence({
 }: {
   stage: CoordinatedStageInspection
 }): React.JSX.Element {
+  if (stage.pendingApproval) {
+    return <CoordinatedHeldReport name={stage.name} held={stage.pendingApproval} />
+  }
   const { evidence } = stage
   if (evidence.kind !== 'available') {
     return (
@@ -55,9 +62,60 @@ export function CoordinatedHostStageEvidence({
       <p className="break-all text-muted-foreground">
         Report Dispatch {evidence.dispatchId} · digest {evidence.reportDigest}
       </p>
+      <CoordinatedReportContent name={stage.name} evidence={evidence} />
+    </section>
+  )
+}
+
+export function CoordinatedHeldReport({
+  name,
+  held
+}: {
+  name: string
+  held: CoordinatedStagePendingApprovalView
+}): React.JSX.Element {
+  return (
+    <section
+      aria-label={`${name} held report`}
+      className="space-y-1 border-t border-border pt-2 min-w-0"
+    >
+      <Badge variant="outline">Waiting for human approval</Badge>
+      <p className="text-muted-foreground break-words">
+        This report is held for semantic approval. No dependent stage is released by this hold.
+      </p>
+      {held.report.kind === 'available' ? (
+        <>
+          <p>Worker reported: {held.report.outcome}</p>
+          <CoordinatedReportContent name={name} evidence={held.report} />
+        </>
+      ) : (
+        <p className="text-status-warning break-words">
+          Held report {held.report.kind}: {held.report.reason} Approval is unavailable.
+        </p>
+      )}
+      <details className="break-all text-muted-foreground">
+        <summary>Approval evidence details</summary>
+        <p>
+          Dispatch {held.dispatchId} · digest {held.reportDigest}
+        </p>
+        <p>Required gates: {held.gateIds.join(', ')}</p>
+      </details>
+    </section>
+  )
+}
+
+function CoordinatedReportContent({
+  name,
+  evidence
+}: {
+  name: string
+  evidence: Pick<CoordinatedStageReportEvidence, 'summary' | 'artifacts' | 'checks' | 'blockers'>
+}): React.JSX.Element {
+  return (
+    <>
       <p className="whitespace-pre-wrap break-words">{evidence.summary}</p>
       {evidence.artifacts.length ? (
-        <ul aria-label={`${stage.name} artifacts`} className="space-y-0.5">
+        <ul aria-label={`${name} artifacts`} className="space-y-0.5">
           {evidence.artifacts.map((artifact) => (
             <li key={`${artifact.kind}:${artifact.uri}`} className="break-all">
               {artifact.kind} · <span className="font-mono">{artifact.uri}</span> ·{' '}
@@ -73,7 +131,7 @@ export function CoordinatedHostStageEvidence({
         <p className="text-muted-foreground">The report lists no artifacts.</p>
       )}
       {evidence.checks.length ? (
-        <ul aria-label={`${stage.name} checks`} className="space-y-0.5">
+        <ul aria-label={`${name} checks`} className="space-y-0.5">
           {evidence.checks.map((check) => (
             <li key={`${check.namespace ?? ''}:${check.id}`} className="break-words">
               Check <span className="font-mono break-all">{check.id}</span> · {check.outcome}
@@ -83,7 +141,7 @@ export function CoordinatedHostStageEvidence({
         </ul>
       ) : null}
       {evidence.blockers.length ? (
-        <ul aria-label={`${stage.name} blockers`} className="space-y-0.5 text-status-warning">
+        <ul aria-label={`${name} blockers`} className="space-y-0.5 text-status-warning">
           {evidence.blockers.map((blocker) => (
             <li key={`${blocker.code}:${blocker.message}`} className="break-words">
               Blocker {blocker.code}: {blocker.message}
@@ -92,6 +150,6 @@ export function CoordinatedHostStageEvidence({
           ))}
         </ul>
       ) : null}
-    </section>
+    </>
   )
 }

@@ -97,3 +97,25 @@ export const host_pinned_route_mobile = defineFixture({
   setup: () => installReadOnlyHost(coordinatedHostActiveViewFixture()),
   render: () => renderPanel(true)
 })
+
+function openHeldApproval(frame: HTMLElement): void {
+  const button = frame.querySelector<HTMLButtonElement>(
+    '[aria-label="Resolve stage gate gate-editorial-signoff"]'
+  )
+  if (!button) {
+    throw new Error('Held approval control has not rendered')
+  }
+  button.click()
+}
+export const held_approval = defineFixture({
+  width: 1280,
+  setup: () => installReadOnlyHost(coordinatedHostActiveViewFixture()),
+  render: () => renderPanel(),
+  interact: openHeldApproval
+})
+export const held_approval_mobile = defineFixture({
+  width: 375,
+  setup: () => installReadOnlyHost(coordinatedHostActiveViewFixture()),
+  render: () => renderPanel(true),
+  interact: openHeldApproval
+})

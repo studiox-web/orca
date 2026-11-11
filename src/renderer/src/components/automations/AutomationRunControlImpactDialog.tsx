@@ -10,9 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { AutomationRunGateDecisionFields } from './AutomationRunGateDecisionFields'
 import { translate } from '@/i18n/i18n'
 import type {
   ProjectedCoordinatedRun,
@@ -38,7 +36,7 @@ export type RunControlImpactStage = {
   name: string
   childDefinitionId: string
   taskId: string | null
-  /** Omitted when the host, not the renderer, binds the decision to the stage's Dispatch. */
+  /** Optional on non-stage decision previews. */
   activeDispatchId?: string | null
   retryEligibility: { canRetry: boolean; reason: string | null; retryOfDispatchId: string | null }
   gateResolutionEligibility: ControlEligibility
@@ -48,7 +46,7 @@ export type RunControlActionRequest<S extends RunControlImpactStage = ProjectedC
   | { kind: 'stop' }
   | { kind: 'retry'; stage: S }
   | { kind: 'resolve_gate'; stage: S; gateId: string }
-  /** A parent-outcome approval or run-level escalation that names no stage scope. */
+  /** An exact host-scoped stage, parent, or escalation decision. */
   | {
       kind: 'resolve_run_gate'
       gateId: string
@@ -58,6 +56,7 @@ export type RunControlActionRequest<S extends RunControlImpactStage = ProjectedC
       approveUnavailableReason?: string | null
       /** What a decision in this scope does and does not change. */
       impactNote?: string
+      evidence?: React.ReactNode
     }
 
 type AutomationRunControlImpactDialogProps<S extends RunControlImpactStage> = {
@@ -267,73 +266,13 @@ export function AutomationRunControlImpactDialog<
               ) : null}
 
               {request?.kind === 'resolve_gate' || request?.kind === 'resolve_run_gate' ? (
-                <div className="space-y-3 text-xs text-foreground">
-                  <div className="space-y-1 rounded border border-border/50 bg-background p-2.5 text-2xs">
-                    <div>
-                      <span className="text-muted-foreground">Gate ID: </span>
-                      <span className="font-mono font-medium">{request.gateId}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">
-                        {request.kind === 'resolve_gate' ? 'Stage Scope: ' : 'Scope: '}
-                      </span>
-                      <span className="font-mono">
-                        {request.kind === 'resolve_run_gate'
-                          ? request.scopeLabel
-                          : `${request.stage.childDefinitionId} / ${request.stage.taskId ?? 'no-task'} / ${
-                              request.stage.activeDispatchId === undefined
-                                ? 'Dispatch bound by host'
-                                : (request.stage.activeDispatchId ?? 'no-dispatch')
-                            }`}
-                      </span>
-                    </div>
-                  </div>
-
-                  <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">
-                    Approve records an operator approval that the host’s acceptance checks read.
-                    Reject closes this gate against the stage or run. Escalate records the decision
-                    and leaves the gate pending. Definitions and run history are not edited.
-                  </p>
-                  {request.kind === 'resolve_run_gate' && request.impactNote ? (
-                    <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">
-                      {request.impactNote}
-                    </p>
-                  ) : null}
-                  <div className="space-y-2">
-                    <Label>Decision</Label>
-                    <RadioGroup
-                      className="flex flex-wrap"
-                      aria-label="Gate decision"
-                      value={gateDecision}
-                      onValueChange={(value) => {
-                        if (value === 'approve' || value === 'reject' || value === 'escalate') {
-                          setGateDecision(value)
-                        }
-                      }}
-                    >
-                      {(['approve', 'reject', 'escalate'] as const).map((opt) => (
-                        <div key={opt} className="flex items-center gap-2 rounded-md border p-2">
-                          <RadioGroupItem
-                            id={`gate-decision-${opt}`}
-                            value={opt}
-                            aria-label={opt}
-                          />
-                          <Label htmlFor={`gate-decision-${opt}`}>{opt}</Label>
-                        </div>
-                      ))}
-                    </RadioGroup>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="gate-resolution-note">Audit note / evidence reference</Label>
-                    <Input
-                      id="gate-resolution-note"
-                      value={gateNote}
-                      onChange={(e) => setGateNote(e.target.value)}
-                      placeholder="Optional audit note or receipt reference"
-                    />
-                  </div>
-                </div>
+                <AutomationRunGateDecisionFields
+                  request={request}
+                  decision={gateDecision}
+                  note={gateNote}
+                  onDecision={setGateDecision}
+                  onNote={setGateNote}
+                />
               ) : null}
 
               {!canExecute && unavailableReason ? (
