@@ -9,9 +9,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { getIntlLocale } from '@/i18n/i18n'
 import type { RunControlActionRequest } from './AutomationRunControlImpactDialog'
-import type {
-  CoordinatedPendingGate,
-  CoordinatedRunOperatorOutcome
+import {
+  approveRefusal,
+  type CoordinatedPendingGate,
+  type CoordinatedRunOperatorOutcome
 } from './coordinated-run-operator-client'
 import { stageSessionOpenRefusal } from './coordinated-stage-session-open'
 
@@ -19,10 +20,10 @@ export type HostRunControlRequest = RunControlActionRequest<CoordinatedStageInsp
 
 export type CoordinatedHostRunControlBindings = {
   busy: boolean
-  /** Null until matching frozen history proves the run's execution authority. */
+  /** Why the frozen operator scope cannot be named; null when the host supplies it. */
   scopeUnavailable: string | null
   pendingGates: readonly CoordinatedPendingGate[]
-  onRequest: (request: HostRunControlRequest) => void
+  onRequest: (request: HostRunControlRequest, gate?: CoordinatedPendingGate) => void
   onOpenSession: (stage: CoordinatedStageInspection) => void
 }
 
@@ -30,29 +31,43 @@ function gateScopeLabel(gate: CoordinatedPendingGate, view: CoordinatedRunView):
   if (gate.scope === 'parent') {
     return 'Parent outcome (no stage scope)'
   }
-  const childId = gate.scope === 'unclassified' ? null : gate.childDefinitionId
-  if (!childId) {
+  if (!gate.childDefinitionId) {
     return 'Run-level escalation (no stage scope)'
   }
-  const taskId = view.inspection.stages.find((stage) => stage.childDefinitionId === childId)?.taskId
-  return gate.scope === 'stage'
-    ? `${childId} / ${taskId ?? 'no-task'} / Dispatch bound by host`
-    : `${childId} (escalation)`
+  if (gate.scope === 'escalation') {
+    return `${gate.childDefinitionId} (escalation)`
+  }
+  const stage = view.inspection.stages.find(
+    (entry) => entry.childDefinitionId === gate.childDefinitionId
+  )
+  const dispatchId = stage?.gateResolutionEligibility.approvableDispatchId
+  return `${gate.childDefinitionId} / ${stage?.taskId ?? 'no-task'} / ${
+    dispatchId ? `approve binds ${dispatchId}` : 'no attempt to approve yet'
+  }`
 }
 
+const GATE_IMPACT = {
+  stage:
+    'The host binds an approval to the stage’s latest attempt. Approving a superseded attempt leaves the gate pending.',
+  parent: 'This decision applies to the parent outcome, not to any one stage.',
+  escalation:
+    'An escalation decision records your acknowledgement only. It does not clear the halt or approve a requirement.'
+} as const
+
 export function operatorOutcomeMessage(outcome: CoordinatedRunOperatorOutcome): string {
-  const { action, view } = outcome
+  const { action, disposition } = outcome
   const subject =
     action.kind === 'stop'
-      ? `the stop request. ${
-          view.inspection.operatorStop
-            ? 'A stop is recorded; worker exit is not proven until the run settles.'
-            : 'It reports no recorded stop.'
-        }`
+      ? 'stop request'
       : action.kind === 'retry'
-        ? `the retry request for stage ${action.childDefinitionId}.`
-        : `the ${action.decision} decision for ${action.gateId}.`
-  return `The host answered ${subject} Reported run state: ${outcome.state}${
+        ? `retry of stage ${action.childDefinitionId}`
+        : `${action.decision} decision for ${action.scope} gate ${action.gateId}`
+  const recorded =
+    disposition === 'already_recorded'
+      ? `The host had already recorded this ${subject}; this request wrote nothing.`
+      : `The host recorded the ${subject}.`
+  const caveat = action.kind === 'stop' ? ' Worker exit is not proven until the run settles.' : ''
+  return `${recorded}${caveat} Reported run state: ${outcome.state}${
     outcome.reason ? ` (${outcome.reason})` : ''
   }.`
 }
@@ -141,24 +156,31 @@ export function CoordinatedHostRunControls({
         <ul aria-label="Pending decisions" className="space-y-1.5">
           {controls.pendingGates.map((gate) => (
             <li
-              key={gate.gateId}
+              key={gate.key}
               className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2"
             >
               <span className="min-w-0 break-words">
-                <span className="font-mono break-all">{gate.gateId}</span> · {gate.label}
+                <span className="font-mono break-all">{gate.gateId}</span> · {gate.scope} ·{' '}
+                {gate.label}
               </span>
               <Button
                 type="button"
                 size="xs"
                 variant="outline"
-                disabled={controls.busy || decisionReason !== null || gate.scope === 'unclassified'}
+                aria-label={`Resolve ${gate.scope} gate ${gate.gateId}`}
+                disabled={controls.busy || decisionReason !== null}
                 onClick={() =>
-                  controls.onRequest({
-                    kind: 'resolve_run_gate',
-                    gateId: gate.gateId,
-                    scopeLabel: gateScopeLabel(gate, view),
-                    eligibility: { canResolve: decisionReason === null, reason: decisionReason }
-                  })
+                  controls.onRequest(
+                    {
+                      kind: 'resolve_run_gate',
+                      gateId: gate.gateId,
+                      scopeLabel: gateScopeLabel(gate, view),
+                      eligibility: { canResolve: decisionReason === null, reason: decisionReason },
+                      approveUnavailableReason: approveRefusal(view, gate),
+                      impactNote: GATE_IMPACT[gate.scope]
+                    },
+                    gate
+                  )
                 }
               >
                 <ShieldCheck aria-hidden="true" />
@@ -222,9 +244,9 @@ export function CoordinatedHostStageActions({
           <RotateCcw aria-hidden="true" />
           Retry stage
         </Button>
-        {gate.pendingGateId ? (
+        {gate.pendingGateIds.length ? (
           <Badge variant="outline" className="max-w-full break-all whitespace-normal">
-            Awaiting decision: {gate.pendingGateId}
+            Awaiting decision: {gate.pendingGateIds.join(', ')}
           </Badge>
         ) : null}
       </div>

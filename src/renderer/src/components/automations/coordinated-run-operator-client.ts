@@ -1,7 +1,12 @@
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import type {
-  CoordinatedFakeRunReconcileResponse,
+  CoordinatedGateScope,
+  CoordinatedOperatorActionDisposition,
+  CoordinatedPendingDecision
+} from '../../../../shared/coordinated-automation-run-inspection'
+import type {
+  CoordinatedOperatorActionResponse,
   CoordinatedRunView
 } from '../../../../shared/coordinated-automation-run-view'
 import type {
@@ -19,14 +24,24 @@ import {
 
 export type CoordinatedGateDecision = ResolveCoordinatedGateInput['decision']
 
+/** One operator request, identified by the host's natural key: no renderer request id exists. */
 export type CoordinatedRunOperatorAction =
   | { kind: 'stop' }
   | { kind: 'retry'; childDefinitionId: string; retryOfDispatchId: string }
-  | { kind: 'gate'; gateId: string; decision: CoordinatedGateDecision; note?: string }
+  | {
+      kind: 'gate'
+      gateId: string
+      scope: CoordinatedGateScope
+      childDefinitionId: string | null
+      decision: CoordinatedGateDecision
+      note?: string
+    }
 
 export type CoordinatedRunOperatorOutcome = {
   action: CoordinatedRunOperatorAction
-  state: CoordinatedFakeRunReconcileResponse['state']
+  /** `already_recorded`: an identical earlier request took effect and this one wrote nothing. */
+  disposition: CoordinatedOperatorActionDisposition
+  state: CoordinatedOperatorActionResponse['state']
   reason: string | null
   view: CoordinatedRunView
 }
@@ -39,15 +54,15 @@ export function operatorActionLabel(action: CoordinatedRunOperatorAction): strin
     ? 'stop request'
     : action.kind === 'retry'
       ? `retry of stage ${action.childDefinitionId}`
-      : `${action.decision} decision for ${action.gateId}`
+      : `${action.decision} decision for ${action.scope} gate ${action.gateId}`
 }
 
-/** Where one pending decision key binds; derived only from the frozen snapshot and host escalations. */
-export type CoordinatedPendingGate =
-  | { gateId: string; scope: 'stage'; childDefinitionId: string; label: string }
-  | { gateId: string; scope: 'parent'; label: string }
-  | { gateId: string; scope: 'escalation'; childDefinitionId: string | null; label: string }
-  | { gateId: string; scope: 'unclassified'; label: string }
+/** One host-reported pending decision; the same gate id may appear once per scope. */
+export type CoordinatedPendingGate = CoordinatedPendingDecision & { key: string; label: string }
+
+export function pendingGateKey(gate: CoordinatedPendingDecision): string {
+  return JSON.stringify([gate.scope, gate.childDefinitionId, gate.gateId])
+}
 
 type FrozenSnapshot = NonNullable<AutomationRun['resolvedSnapshot']>
 
@@ -65,54 +80,77 @@ export function matchingFrozenSnapshot(
     : null
 }
 
-/** Mirrors the host's gate lookup order: stage requirement, parent requirement, then escalation. */
-export function classifyPendingGates(
+/**
+ * Why operator scope cannot be named, or null. The host field is the authority; matching frozen
+ * history may only confirm it, never replace it.
+ */
+export function operatorScopeRefusal(
+  view: CoordinatedRunView,
+  snapshot: FrozenSnapshot | null
+): string | null {
+  const authority = view.inspection.targetExecutionAuthority
+  if (!authority) {
+    return 'The host reports no frozen execution authority for this run. Controls are unavailable.'
+  }
+  if (snapshot && `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}` !== authority) {
+    return 'Run history names a different execution authority than the host. Controls are unavailable.'
+  }
+  return null
+}
+
+/** Host-scoped pending decisions; frozen history and escalations only add a readable label. */
+export function describePendingGates(
   view: CoordinatedRunView,
   snapshot: FrozenSnapshot | null
 ): CoordinatedPendingGate[] {
   const escalations =
     view.inspection.progress.kind === 'available' ? view.inspection.progress.escalations : []
-  return [...new Set(view.inspection.humanResolution.pendingDecisionKeys)].map((gateId) => {
-    for (const child of snapshot?.resolvedChildren ?? []) {
-      const requirement = child.stageAcceptance?.requiredApprovals?.find(
-        (entry) => entry.id === gateId
-      )
-      if (requirement) {
-        return {
-          gateId,
-          scope: 'stage',
-          childDefinitionId: child.childDefinitionId,
-          label: `${child.name} · ${requirement.role} approval`
-        }
-      }
+  return view.inspection.humanResolution.pendingDecisions.map((gate) => {
+    const stageName =
+      view.inspection.stages.find((stage) => stage.childDefinitionId === gate.childDefinitionId)
+        ?.name ?? gate.childDefinitionId
+    let label: string
+    if (gate.scope === 'stage') {
+      const role = snapshot?.resolvedChildren
+        .find((child) => child.childDefinitionId === gate.childDefinitionId)
+        ?.stageAcceptance?.requiredApprovals?.find((entry) => entry.id === gate.gateId)?.role
+      label = `${stageName ?? 'Stage'} · ${role ? `${role} approval` : 'stage approval'}`
+    } else if (gate.scope === 'parent') {
+      const role = snapshot?.outcomeContract.requiredApprovals.find(
+        (entry) => entry.id === gate.gateId
+      )?.role
+      label = `Parent outcome · ${role ? `${role} approval` : 'approval'}`
+    } else {
+      const escalation = escalations.find((entry) => entry.key === gate.gateId)
+      label = escalation
+        ? `${escalation.code}: ${escalation.detail}`
+        : `Escalation${stageName ? ` · ${stageName}` : ''}`
     }
-    const parent = snapshot?.outcomeContract.requiredApprovals.find((entry) => entry.id === gateId)
-    if (parent) {
-      return { gateId, scope: 'parent', label: `Parent outcome · ${parent.role} approval` }
-    }
-    const escalation = escalations.find(
-      (entry) => entry.key === gateId && entry.requiresHumanDecision
-    )
-    if (escalation) {
-      return {
-        gateId,
-        scope: 'escalation',
-        childDefinitionId: escalation.childDefinitionId ?? null,
-        label: `${escalation.code}: ${escalation.detail}`
-      }
-    }
-    return {
-      gateId,
-      scope: 'unclassified',
-      label: 'Scope unavailable until matching run history is refreshed.'
-    }
+    return { ...gate, key: pendingGateKey(gate), label }
   })
+}
+
+/** Why `approve` cannot be submitted for this decision, or null. Reject and escalate need no attempt. */
+export function approveRefusal(
+  view: CoordinatedRunView,
+  gate: CoordinatedPendingDecision
+): string | null {
+  if (gate.scope !== 'stage') {
+    return null
+  }
+  const stage = view.inspection.stages.find(
+    (entry) => entry.childDefinitionId === gate.childDefinitionId
+  )
+  return stage?.gateResolutionEligibility.approvableDispatchId
+    ? null
+    : 'Approve is refused until this stage has an attempt to bind. Reject and escalate need none.'
 }
 
 function operatorParams(
   view: CoordinatedRunView,
-  snapshot: FrozenSnapshot,
-  action: CoordinatedRunOperatorAction
+  action: CoordinatedRunOperatorAction,
+  authority: string,
+  replay: boolean
 ): {
   method: string
   params: StopCoordinatedRunInput | RetryCoordinatedStageInput | ResolveCoordinatedGateInput
@@ -125,28 +163,34 @@ function operatorParams(
     expectedOwner: { selector: { kind: 'self' } },
     orchestrationRunId: inspection.orchestrationRunId,
     definitionRevision: inspection.definitionRevision,
-    targetExecutionAuthority: `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}`
+    targetExecutionAuthority: authority
   }
   if (action.kind === 'stop') {
-    if (!view.actions.stop.available) {
+    if (!replay && !view.actions.stop.available) {
       throw new Error(view.actions.stop.reason)
     }
     return { method: 'automation.stopCoordinatedRun', params: base }
   }
+  const stage = inspection.stages.find(
+    (entry) => entry.childDefinitionId === action.childDefinitionId
+  )
   if (action.kind === 'retry') {
-    if (!view.actions.retry.available) {
-      throw new Error(view.actions.retry.reason)
+    if (!stage?.taskId) {
+      throw new Error('The host no longer reports this stage with a Task. Nothing was submitted.')
     }
-    const stage = inspection.stages.find(
-      (entry) => entry.childDefinitionId === action.childDefinitionId
-    )
-    if (!stage?.retryEligibility.canRetry || !stage.taskId) {
-      throw new Error(stage?.retryEligibility.reason ?? 'The host no longer admits this retry.')
-    }
-    if (stage.retryEligibility.retryOfDispatchId !== action.retryOfDispatchId) {
-      throw new Error(
-        'The stage has a newer attempt than the one confirmed. Nothing was submitted; review the current attempt first.'
-      )
+    // Why: a replay of the identical natural key is answered by the host; a fresh retry must still be host-eligible.
+    if (!replay) {
+      if (!view.actions.retry.available) {
+        throw new Error(view.actions.retry.reason)
+      }
+      if (!stage.retryEligibility.canRetry) {
+        throw new Error(stage.retryEligibility.reason ?? 'The host no longer admits this retry.')
+      }
+      if (stage.retryEligibility.retryOfDispatchId !== action.retryOfDispatchId) {
+        throw new Error(
+          'The stage has a newer attempt than the one confirmed. Nothing was submitted; review the current attempt first.'
+        )
+      }
     }
     return {
       method: 'automation.retryCoordinatedStage',
@@ -158,64 +202,87 @@ function operatorParams(
       }
     }
   }
-  if (!view.actions.humanResolution.available) {
-    throw new Error(view.actions.humanResolution.reason)
+  if (!replay) {
+    if (!view.actions.humanResolution.available) {
+      throw new Error(view.actions.humanResolution.reason)
+    }
+    const pending = inspection.humanResolution.pendingDecisions.some(
+      (entry) => pendingGateKey(entry) === pendingGateKey(action)
+    )
+    if (!pending) {
+      throw new Error(
+        'The host no longer reports this decision as pending in this scope. Nothing was submitted.'
+      )
+    }
+    const refusal = action.decision === 'approve' ? approveRefusal(view, action) : null
+    if (refusal) {
+      throw new Error(`${refusal} Nothing was submitted.`)
+    }
   }
-  const gate = classifyPendingGates(view, snapshot).find((entry) => entry.gateId === action.gateId)
-  if (!gate || gate.scope === 'unclassified') {
-    throw new Error('The host no longer reports this decision as pending. Nothing was submitted.')
+  if (action.scope === 'stage' && !stage) {
+    throw new Error(
+      'The host no longer reports the stage this gate belongs to. Nothing was submitted.'
+    )
   }
-  const childDefinitionId = gate.scope === 'parent' ? null : gate.childDefinitionId
-  const taskId =
-    gate.scope === 'stage'
-      ? inspection.stages.find((entry) => entry.childDefinitionId === childDefinitionId)?.taskId
-      : null
   return {
     method: 'automation.resolveCoordinatedGate',
     params: {
       ...base,
       gateId: action.gateId,
+      gateScope: action.scope,
       decision: action.decision,
       ...(action.note ? { note: action.note } : {}),
-      ...(childDefinitionId ? { childDefinitionId } : {}),
-      ...(taskId ? { taskId } : {})
+      ...(action.scope !== 'parent' && action.childDefinitionId
+        ? { childDefinitionId: action.childDefinitionId }
+        : {}),
+      // Why: dispatchId is omitted on purpose; the host binds the exact latest attempt.
+      ...(action.scope === 'stage' && stage?.taskId ? { taskId: stage.taskId } : {})
     }
   }
 }
 
 /**
  * Submits one operator action. Scope and eligibility come from a fresh host inspection, never from
- * the rendered view, so a replay after an uncertain reply is checked against what the host recorded.
+ * the rendered view. `replay` resends a request whose answer was lost: the host answers its natural
+ * key with `already_recorded`, records it once, or refuses a conflict.
  */
 export async function submitCoordinatedRunOperatorAction(
   binding: CoordinatedRunBinding,
   run: AutomationRun,
-  action: CoordinatedRunOperatorAction
+  action: CoordinatedRunOperatorAction,
+  options: { replay?: boolean } = {}
 ): Promise<CoordinatedRunOperatorOutcome> {
   const current = await inspectCoordinatedRun(
     binding,
     run.id,
     run.automationDefinitionRevision ?? undefined
   )
-  const snapshot = matchingFrozenSnapshot(current, run)
-  if (!snapshot) {
-    throw new Error(
-      'The frozen run scope is unavailable until matching run history is refreshed. Nothing was submitted.'
-    )
+  const refusal = operatorScopeRefusal(current, matchingFrozenSnapshot(current, run))
+  const authority = current.inspection.targetExecutionAuthority
+  if (refusal || !authority) {
+    throw new Error(`${refusal} Nothing was submitted.`)
   }
-  const { method, params } = operatorParams(current, snapshot, action)
+  const { method, params } = operatorParams(current, action, authority, options.replay === true)
   try {
-    const response = await callRuntimeRpc<CoordinatedFakeRunReconcileResponse>(
+    const response = await callRuntimeRpc<CoordinatedOperatorActionResponse>(
       getAutomationAuthorityTarget(binding.owner.authority),
       method,
       params,
       { timeoutMs: REQUEST_TIMEOUT_MS }
     )
+    if (response.disposition !== 'recorded' && response.disposition !== 'already_recorded') {
+      throw new Error('The host answered without saying whether the request was recorded.')
+    }
+    const view = validateCoordinatedRunView(response.view, params, params.definitionRevision)
+    if (view.inspection.targetExecutionAuthority !== authority) {
+      throw new Error('The host answered for a different execution authority.')
+    }
     return {
       action,
+      disposition: response.disposition,
       state: response.state,
       reason: response.reason,
-      view: validateCoordinatedRunView(response.view, params, params.definitionRevision)
+      view
     }
   } catch (error) {
     throw new CoordinatedOperatorUnconfirmedError(

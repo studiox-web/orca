@@ -14,6 +14,7 @@ import type {
   CoordinatedRunSelectionInput
 } from '../../../../shared/rpc-contract/coordinated-automation-run-params'
 import { COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import type { CoordinatedRunOperatorAction } from './coordinated-run-operator-client'
 import { ownerKey } from '../../../../shared/automation-owner-key'
 import { getAutomationAuthorityTarget } from './automation-host-client'
 import { listAutomationRunsForOwner } from './automation-scoped-list-client'
@@ -23,7 +24,7 @@ export type CoordinatedRunRequest = {
   start?: CoordinatedFakeRunStartInput
   reconcile?: CoordinatedRunSelectionInput
   /** An operator request that reached the host without a confirmed answer. */
-  unconfirmedOperator?: { kind: 'stop' | 'retry' | 'gate'; label: string }
+  unconfirmedOperator?: { action: CoordinatedRunOperatorAction; label: string; detail: string }
 }
 export type CoordinatedRunRequests = Map<string, CoordinatedRunRequest>
 export type CoordinatedRunBinding = { automation: Automation; owner: AutomationOwnerRef }

@@ -11,12 +11,15 @@ import {
 } from './AutomationCoordinatedHostRunControls'
 import { AutomationHistoricalSnapshotViewer } from './AutomationHistoricalSnapshotViewer'
 import { AutomationRunControlImpactDialog } from './AutomationRunControlImpactDialog'
-import { classifyPendingGates, matchingFrozenSnapshot } from './coordinated-run-operator-client'
+import { CoordinatedHostStageEvidence } from './AutomationCoordinatedHostStageEvidence'
+import {
+  describePendingGates,
+  matchingFrozenSnapshot,
+  operatorScopeRefusal,
+  type CoordinatedPendingGate
+} from './coordinated-run-operator-client'
 import { openCoordinatedStageSession } from './coordinated-stage-session-open'
 import { useCoordinatedRunApi } from './use-coordinated-run-api'
-
-const SCOPE_UNAVAILABLE =
-  'The frozen run scope is unavailable until matching run history is refreshed.'
 
 export function AutomationCoordinatedHostRunPanel(
   props: Parameters<typeof useCoordinatedRunApi>[0]
@@ -27,16 +30,15 @@ export function AutomationCoordinatedHostRunPanel(
   const runIds = pinned
     ? []
     : [...new Set([...props.runs.map((run) => run.id), ...(selectedRunId ? [selectedRunId] : [])])]
-  const unconfirmed =
-    state.unconfirmedOperator &&
-    !(state.unconfirmedOperator.kind === 'stop' && view?.inspection.operatorStop)
-      ? state.unconfirmedOperator
-      : null
+  const unconfirmed = state.unconfirmedOperator
   const run = state.selectedRun
   const snapshot = view ? matchingFrozenSnapshot(view, run) : null
-  const [pending, setPending] = useState<{ runId: string; request: HostRunControlRequest } | null>(
-    null
-  )
+  const [pending, setPending] = useState<{
+    runId: string
+    request: HostRunControlRequest
+    gate?: CoordinatedPendingGate
+  } | null>(null)
+  const scopeRefusal = view ? operatorScopeRefusal(view, snapshot) : null
   // Why: a confirmation opened for one run must never submit against a newly selected run.
   const request =
     view && pending?.runId === view.inspection.automationRunId ? pending.request : null
@@ -44,9 +46,10 @@ export function AutomationCoordinatedHostRunPanel(
   const controls: CoordinatedHostRunControlBindings | null = view
     ? {
         busy: state.busy || !state.ready,
-        scopeUnavailable: snapshot ? null : SCOPE_UNAVAILABLE,
-        pendingGates: classifyPendingGates(view, snapshot),
-        onRequest: (next) => setPending({ runId: view.inspection.automationRunId, request: next }),
+        scopeUnavailable: scopeRefusal,
+        pendingGates: describePendingGates(view, snapshot),
+        onRequest: (next, gate) =>
+          setPending({ runId: view.inspection.automationRunId, request: next, gate }),
         onOpenSession: (stage) => {
           if (owner) {
             void openCoordinatedStageSession(stage, owner, props.hostEntry?.label)
@@ -140,9 +143,25 @@ export function AutomationCoordinatedHostRunPanel(
       ) : null}
       {unconfirmed ? (
         <p role="alert" className="text-xs text-status-warning break-words">
-          An earlier {unconfirmed.label} for this run reached the host without a confirmed answer.
-          Check the host state shown here before submitting again.
+          An earlier {unconfirmed.label} for this run was submitted without a confirmed answer (
+          {unconfirmed.detail}). Its effect is unknown.
         </p>
+      ) : null}
+      {unconfirmed ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!state.ready || state.busy}
+            onClick={() => void state.replayUnconfirmed()}
+          >
+            Ask host about this request
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Resends the identical request. The host answers whether it was already recorded and
+            records it at most once.
+          </p>
+        </div>
       ) : null}
       {state.operatorOutcome ? (
         <p role="status" className="text-xs text-muted-foreground break-words">
@@ -161,9 +180,8 @@ export function AutomationCoordinatedHostRunPanel(
         <AutomationRunControlImpactDialog
           request={request}
           projectedRun={{
-            targetExecutionAuthority: snapshot
-              ? `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}`
-              : 'Authority unavailable',
+            targetExecutionAuthority:
+              view.inspection.targetExecutionAuthority ?? 'Authority unavailable',
             automationRunId: view.inspection.automationRunId,
             orchestrationRunId: view.inspection.orchestrationRunId,
             definitionRevision: view.inspection.definitionRevision,
@@ -172,8 +190,8 @@ export function AutomationCoordinatedHostRunPanel(
             workspaceLabel: run?.workspaceDisplayName ?? run?.workspaceId ?? 'Not recorded',
             hostLabel: props.hostEntry?.label ?? 'the owning host',
             stopEligibility: {
-              canStop: view.actions.stop.available && snapshot !== null,
-              reason: !view.actions.stop.available ? view.actions.stop.reason : SCOPE_UNAVAILABLE
+              canStop: view.actions.stop.available && scopeRefusal === null,
+              reason: !view.actions.stop.available ? view.actions.stop.reason : scopeRefusal
             }
           }}
           isPending={controls.busy}
@@ -189,9 +207,20 @@ export function AutomationCoordinatedHostRunPanel(
               })
             }
           }}
-          onConfirmResolveGate={(_stage, gateId, decision, note) =>
-            void state.operate({ kind: 'gate', gateId, decision, ...(note ? { note } : {}) })
-          }
+          onConfirmResolveGate={(_stage, _gateId, decision, note) => {
+            // Why: the decision keeps the exact host scope and child it was opened for, never a bare id.
+            const gate = pending?.gate
+            if (gate) {
+              void state.operate({
+                kind: 'gate',
+                gateId: gate.gateId,
+                scope: gate.scope,
+                childDefinitionId: gate.childDefinitionId,
+                decision,
+                ...(note ? { note } : {})
+              })
+            }
+          }}
         />
       ) : null}
     </section>
@@ -249,6 +278,7 @@ export function CoordinatedHostRunEvidence({
           >
             <h4 className="font-medium">
               {stage.name} · {stage.role}
+              {inspection.activeStageIds.includes(stage.childDefinitionId) ? ' · attempt open' : ''}
             </h4>
             <p className="break-all">
               Child {stage.childDefinitionId} · Task {stage.taskId ?? 'not materialized'} · Mapped
@@ -274,8 +304,9 @@ export function CoordinatedHostRunEvidence({
             {stage.semantic.kind === 'available' ? (
               <>
                 <p className="break-all">
-                  Accepted Dispatch: {stage.semantic.acceptedDispatchId ?? 'None recorded'} ·
-                  Admitted attempts: {stage.semantic.attempts}
+                  Latest launched Dispatch: {stage.semantic.activeDispatchId ?? 'None'} · Accepted
+                  Dispatch: {stage.semantic.acceptedDispatchId ?? 'None recorded'} · Admitted
+                  attempts: {stage.semantic.attempts}
                 </p>
                 {stage.semantic.lastError ? (
                   <p className="text-status-warning">{stage.semantic.lastError}</p>
@@ -291,6 +322,7 @@ export function CoordinatedHostRunEvidence({
                 </ol>
               </>
             ) : null}
+            <CoordinatedHostStageEvidence stage={stage} />
             <CoordinatedHostStageActions
               stage={stage}
               retryAvailable={view.actions.retry.available}
@@ -330,10 +362,7 @@ export function CoordinatedHostRunEvidence({
       <div className="space-y-1 text-xs text-muted-foreground">
         <p>Findings unavailable: {view.findings.reason}</p>
         <p>Limits unavailable: {view.limits.reason}</p>
-        <p>
-          Spend, elapsed time, worker reports, artifacts and live questions are not supplied by this
-          API.
-        </p>
+        <p>Spend, elapsed time and live questions are not supplied by this API.</p>
       </div>
       <CoordinatedHostRunControls view={view} controls={controls} />
       {inspection.receipt.kind === 'available' ? (

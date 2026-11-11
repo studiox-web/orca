@@ -77,6 +77,8 @@ export function coordinatedHostViewFixture(
       idempotencyKey: `request:${runId}`,
       materializationPhase: 'ready_for_dispatch',
       orchestrationRunId: sampleCompletedVerifiedRun.orchestrationRunId ?? null,
+      targetExecutionAuthority: 'local:local-host',
+      activeStageIds: [],
       stages: (sampleCompletedVerifiedRun.childMappings ?? []).map((mapping) => ({
         childDefinitionId: mapping.childDefinitionId,
         name:
@@ -100,6 +102,7 @@ export function coordinatedHostViewFixture(
           kind: 'available',
           status: 'accepted',
           attempts: 1,
+          activeDispatchId: mapping.dispatchId ?? null,
           acceptedDispatchId: mapping.dispatchId ?? null,
           lastError: null,
           lineage: [
@@ -125,8 +128,11 @@ export function coordinatedHostViewFixture(
         gateResolutionEligibility: {
           canResolve: false,
           reason: 'The run is already settled.',
-          pendingGateId: null
-        }
+          pendingGateId: null,
+          pendingGateIds: [],
+          approvableDispatchId: null
+        },
+        evidence: { kind: 'absent', reason: 'No report is admitted for this stage.' }
       })),
       progress: {
         kind: 'available',
@@ -150,7 +156,8 @@ export function coordinatedHostViewFixture(
       humanResolution: {
         available: false,
         reason: 'No pending human decisions.',
-        pendingDecisionKeys: []
+        pendingDecisionKeys: [],
+        pendingDecisions: []
       }
     },
     actions: {

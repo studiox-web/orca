@@ -7,7 +7,8 @@ import { coordinatedHostActiveViewFixture } from './coordinated-host-active-run-
 import { sampleCoordinatedArticleAutomation } from './coordinated-automation-run-fixture-data'
 
 import {
-  classifyPendingGates,
+  CoordinatedOperatorUnconfirmedError,
+  describePendingGates,
   matchingFrozenSnapshot,
   submitCoordinatedRunOperatorAction
 } from './coordinated-run-operator-client'
@@ -31,6 +32,13 @@ const scope = {
 }
 let inspected: CoordinatedRunView
 let answered: CoordinatedRunView
+let disposition: string | undefined
+const stageGate = {
+  kind: 'gate' as const,
+  gateId: 'gate-editorial-signoff',
+  scope: 'stage' as const,
+  childDefinitionId: 'child-reviewer'
+}
 
 function actionCalls(): [string, unknown][] {
   return vi
@@ -42,6 +50,7 @@ function actionCalls(): [string, unknown][] {
 beforeEach(() => {
   inspected = coordinatedHostActiveViewFixture()
   answered = coordinatedHostActiveViewFixture()
+  disposition = 'recorded'
   vi.mocked(callRuntimeRpc).mockReset()
   vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method) => {
     if (method === 'status.get') {
@@ -54,7 +63,12 @@ beforeEach(() => {
     if (method === 'automation.inspectCoordinatedRun') {
       return { view: inspected }
     }
-    return { state: 'outcome_uncertain', reason: 'Awaiting exit evidence.', view: answered }
+    return {
+      state: 'outcome_uncertain',
+      reason: 'Awaiting exit evidence.',
+      disposition,
+      view: answered
+    }
   })
 })
 
@@ -66,15 +80,28 @@ describe('coordinated run operator client', () => {
     expect(outcome.reason).toBe('Awaiting exit evidence.')
   })
 
-  it('submits nothing when run history is not the frozen definition the host inspected', async () => {
-    const stale = {
+  it('uses the host authority without frozen history and refuses an absent or contradicted one', async () => {
+    const unmatched = {
       ...run,
       resolvedSnapshot: { ...run.resolvedSnapshot!, canonicalDigest: 'sha256:other' }
     }
+    await submitCoordinatedRunOperatorAction(binding, unmatched, { kind: 'stop' })
+    expect(actionCalls()).toEqual([['automation.stopCoordinatedRun', scope]])
+    const contradicted = {
+      ...run,
+      resolvedSnapshot: {
+        ...run.resolvedSnapshot!,
+        executionTarget: { ...run.resolvedSnapshot!.executionTarget, id: 'other-host' }
+      }
+    }
     await expect(
-      submitCoordinatedRunOperatorAction(binding, stale, { kind: 'stop' })
-    ).rejects.toThrow('frozen run scope is unavailable')
-    expect(actionCalls()).toEqual([])
+      submitCoordinatedRunOperatorAction(binding, contradicted, { kind: 'stop' })
+    ).rejects.toThrow('different execution authority')
+    inspected.inspection.targetExecutionAuthority = null
+    await expect(
+      submitCoordinatedRunOperatorAction(binding, run, { kind: 'stop' })
+    ).rejects.toThrow('no frozen execution authority')
+    expect(actionCalls()).toHaveLength(1)
   })
 
   it('submits nothing when the host refuses the action on fresh inspection', async () => {
@@ -124,12 +151,18 @@ describe('coordinated run operator client', () => {
     expect(actionCalls()).toEqual([])
   })
 
-  it('binds a stage gate to its stage and Task and leaves the Dispatch to the host', async () => {
+  it('keeps a shared gate id bound to the exact scope the operator chose', async () => {
+    await submitCoordinatedRunOperatorAction(binding, run, {
+      ...stageGate,
+      decision: 'approve',
+      note: 'Reviewed draft 4'
+    })
     await submitCoordinatedRunOperatorAction(binding, run, {
       kind: 'gate',
       gateId: 'gate-editorial-signoff',
-      decision: 'approve',
-      note: 'Reviewed draft 4'
+      scope: 'parent',
+      childDefinitionId: null,
+      decision: 'reject'
     })
     expect(actionCalls()).toEqual([
       [
@@ -137,49 +170,100 @@ describe('coordinated run operator client', () => {
         {
           ...scope,
           gateId: 'gate-editorial-signoff',
+          gateScope: 'stage',
           decision: 'approve',
           note: 'Reviewed draft 4',
           childDefinitionId: 'child-reviewer',
           taskId: 'task_rev_3'
         }
+      ],
+      [
+        'automation.resolveCoordinatedGate',
+        { ...scope, gateId: 'gate-editorial-signoff', gateScope: 'parent', decision: 'reject' }
       ]
     ])
   })
 
-  it('sends a run-level escalation without stage scope and refuses an unreported gate', async () => {
-    await submitCoordinatedRunOperatorAction(binding, run, {
-      kind: 'gate',
-      gateId: 'escalation:uncertain-effect',
-      decision: 'escalate'
-    })
-    expect(actionCalls()).toEqual([
-      [
-        'automation.resolveCoordinatedGate',
-        { ...scope, gateId: 'escalation:uncertain-effect', decision: 'escalate' }
-      ]
-    ])
+  it('refuses a stage approve before an attempt exists but still submits a reject', async () => {
+    inspected.inspection.stages[2].gateResolutionEligibility.approvableDispatchId = null
+    await expect(
+      submitCoordinatedRunOperatorAction(binding, run, { ...stageGate, decision: 'approve' })
+    ).rejects.toThrow('Approve is refused until this stage has an attempt')
+    expect(actionCalls()).toEqual([])
+    await submitCoordinatedRunOperatorAction(binding, run, { ...stageGate, decision: 'reject' })
+    expect(actionCalls()).toHaveLength(1)
+  })
+
+  it('refuses a decision the host does not report pending in that exact scope', async () => {
     await expect(
       submitCoordinatedRunOperatorAction(binding, run, {
-        kind: 'gate',
-        gateId: 'gate-not-pending',
-        decision: 'approve'
+        ...stageGate,
+        childDefinitionId: 'child-writer',
+        decision: 'reject'
       })
-    ).rejects.toThrow('no longer reports this decision')
-    expect(actionCalls()).toHaveLength(1)
+    ).rejects.toThrow('no longer reports this decision as pending in this scope')
+    expect(actionCalls()).toEqual([])
+  })
+
+  it('replays an unconfirmed request on its natural key and reports that nothing new was written', async () => {
+    inspected.actions.stop = {
+      available: false,
+      state: 'refused',
+      reason: 'Operator stop is already recorded; awaiting exit evidence.'
+    }
+    inspected.inspection.stages[1].retryEligibility = {
+      canRetry: false,
+      reason: 'Attempt ctx_writer_3 is still open.',
+      retryOfDispatchId: null
+    }
+    disposition = 'already_recorded'
+    const stop = await submitCoordinatedRunOperatorAction(
+      binding,
+      run,
+      { kind: 'stop' },
+      { replay: true }
+    )
+    await submitCoordinatedRunOperatorAction(
+      binding,
+      run,
+      { kind: 'retry', childDefinitionId: 'child-writer', retryOfDispatchId: 'ctx_writer_2' },
+      { replay: true }
+    )
+    expect(stop.disposition).toBe('already_recorded')
+    expect(actionCalls().map(([method]) => method)).toEqual([
+      'automation.stopCoordinatedRun',
+      'automation.retryCoordinatedStage'
+    ])
+    expect(actionCalls()[1][1]).toMatchObject({ retryOfDispatchId: 'ctx_writer_2' })
+  })
+
+  it('treats an answer without a disposition or for another authority as unconfirmed', async () => {
+    disposition = undefined
+    await expect(
+      submitCoordinatedRunOperatorAction(binding, run, { kind: 'stop' })
+    ).rejects.toBeInstanceOf(CoordinatedOperatorUnconfirmedError)
+    disposition = 'recorded'
+    answered.inspection.targetExecutionAuthority = 'ssh:other'
+    await expect(
+      submitCoordinatedRunOperatorAction(binding, run, { kind: 'stop' })
+    ).rejects.toBeInstanceOf(CoordinatedOperatorUnconfirmedError)
   })
 
   it('rejects an answer that names a different run', async () => {
     answered.inspection.automationRunId = 'another-run'
     await expect(
       submitCoordinatedRunOperatorAction(binding, run, { kind: 'stop' })
-    ).rejects.toThrow('different runtime, parent, run')
+    ).rejects.toBeInstanceOf(CoordinatedOperatorUnconfirmedError)
   })
 
-  it('leaves a pending key unclassified without matching frozen history', () => {
+  it('lists every host decision once per scope, with or without frozen history', () => {
     expect(matchingFrozenSnapshot(inspected, { ...run, id: 'other' })).toBeNull()
-    expect(classifyPendingGates(inspected, null).map((gate) => gate.scope)).toEqual([
-      'unclassified',
-      'escalation'
+    const gates = describePendingGates(inspected, null)
+    expect(gates.map((gate) => [gate.gateId, gate.scope, gate.childDefinitionId])).toEqual([
+      ['gate-editorial-signoff', 'stage', 'child-reviewer'],
+      ['gate-editorial-signoff', 'parent', null],
+      ['escalation:uncertain-effect', 'escalation', null]
     ])
+    expect(new Set(gates.map((gate) => gate.key)).size).toBe(3)
   })
 })

@@ -54,6 +54,10 @@ export type RunControlActionRequest<S extends RunControlImpactStage = ProjectedC
       gateId: string
       scopeLabel: string
       eligibility: ControlEligibility
+      /** Set when the host refuses `approve` for this gate; other decisions stay submittable. */
+      approveUnavailableReason?: string | null
+      /** What a decision in this scope does and does not change. */
+      impactNote?: string
     }
 
 type AutomationRunControlImpactDialogProps<S extends RunControlImpactStage> = {
@@ -92,19 +96,24 @@ export function AutomationRunControlImpactDialog<
         ? request.eligibility
         : null
 
+  const approveRefusal =
+    request?.kind === 'resolve_run_gate' && gateDecision === 'approve'
+      ? (request.approveUnavailableReason ?? null)
+      : null
+
   const canExecute =
     request?.kind === 'stop'
       ? projectedRun.stopEligibility.canStop
       : request?.kind === 'retry'
         ? request.stage.retryEligibility.canRetry
-        : (gateEligibility?.canResolve ?? false)
+        : (gateEligibility?.canResolve ?? false) && approveRefusal === null
 
   const unavailableReason =
     request?.kind === 'stop'
       ? projectedRun.stopEligibility.reason
       : request?.kind === 'retry'
         ? request.stage.retryEligibility.reason
-        : (gateEligibility?.reason ?? null)
+        : (gateEligibility?.reason ?? approveRefusal)
 
   const handleConfirm = (): void => {
     if (!request || !canExecute || isPending) {
@@ -285,6 +294,11 @@ export function AutomationRunControlImpactDialog<
                     Reject closes this gate against the stage or run. Escalate records the decision
                     and leaves the gate pending. Definitions and run history are not edited.
                   </p>
+                  {request.kind === 'resolve_run_gate' && request.impactNote ? (
+                    <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">
+                      {request.impactNote}
+                    </p>
+                  ) : null}
                   <div className="space-y-2">
                     <Label>Decision</Label>
                     <RadioGroup

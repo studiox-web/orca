@@ -5,7 +5,7 @@ import {
 } from './AutomationCoordinatedHostRunControls'
 import { sampleCoordinatedFrozenSnapshotRev2 } from './coordinated-automation-run-fixture-data'
 import { coordinatedHostActiveViewFixture } from './coordinated-host-active-run-view-fixture'
-import { classifyPendingGates } from './coordinated-run-operator-client'
+import { describePendingGates } from './coordinated-run-operator-client'
 
 const view = coordinatedHostActiveViewFixture()
 const stoppedView = {
@@ -23,7 +23,7 @@ const stoppedView = {
 const controls: CoordinatedHostRunControlBindings = {
   busy: false,
   scopeUnavailable: null,
-  pendingGates: classifyPendingGates(view, sampleCoordinatedFrozenSnapshotRev2),
+  pendingGates: describePendingGates(view, sampleCoordinatedFrozenSnapshotRev2),
   onRequest: () => {},
   onOpenSession: () => {}
 }

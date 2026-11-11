@@ -69,9 +69,16 @@ function stageItem(child: string): HTMLElement {
 }
 function outcome(
   action: CoordinatedRunOperatorOutcome['action'],
-  view = coordinatedHostActiveViewFixture()
+  view = coordinatedHostActiveViewFixture(),
+  disposition: CoordinatedRunOperatorOutcome['disposition'] = 'recorded'
 ): CoordinatedRunOperatorOutcome {
-  return { action, state: 'outcome_uncertain', reason: 'Awaiting exit evidence.', view }
+  return {
+    action,
+    disposition,
+    state: 'outcome_uncertain',
+    reason: 'Awaiting exit evidence.',
+    view
+  }
 }
 async function select(runId: string) {
   await act(async () => {
@@ -212,11 +219,11 @@ describe('selected host run operator controls', () => {
     expect(vi.mocked(submitCoordinatedRunOperatorAction).mock.calls[0]?.[2]).toEqual({
       kind: 'stop'
     })
-    expect(container.textContent).not.toContain('The host answered')
+    expect(container.textContent).not.toContain('The host recorded')
     await act(async () => reply.resolve(outcome({ kind: 'stop' }, stopped)))
     const status = [...container.querySelectorAll('[role="status"]')].map((el) => el.textContent)
     expect(status.join(' ')).toContain(
-      'The host answered the stop request. A stop is recorded; worker exit is not proven until the run settles. Reported run state: outcome_uncertain (Awaiting exit evidence.).'
+      'The host recorded the stop request. Worker exit is not proven until the run settles. Reported run state: outcome_uncertain (Awaiting exit evidence.).'
     )
   })
   it('retries only the confirmed latest attempt and keeps ineligible stages disabled', async () => {
@@ -239,24 +246,96 @@ describe('selected host run operator controls', () => {
       retryOfDispatchId: 'ctx_writer_2'
     })
   })
-  it('resolves a pending decision by its host-reported key and shows recorded approvals', async () => {
-    vi.mocked(submitCoordinatedRunOperatorAction).mockResolvedValue(
-      outcome({ kind: 'gate', gateId: 'escalation:uncertain-effect', decision: 'approve' })
+  it('resolves same-id decisions in their own scope and shows recorded approvals', async () => {
+    vi.mocked(submitCoordinatedRunOperatorAction).mockImplementation(
+      async (_binding, _run, action) => outcome(action)
     )
     await render()
-    const decisions = container.querySelector('[aria-label="Pending decisions"]')!
-    expect(decisions.textContent).toContain('gate-editorial-signoff')
+    const decisions = () => container.querySelector('[aria-label="Pending decisions"]')!
+    expect(decisions().querySelectorAll('li')).toHaveLength(3)
     expect(container.querySelector('[aria-label="Stage approvals"]')?.textContent).toContain(
       'gate-editorial-signoff · reviewer · pending · stage child-reviewer'
     )
-    await click('Resolve', decisions.querySelectorAll('li')[1])
-    expect(document.body.textContent).toContain('Run-level escalation (no stage scope)')
+    await click('Resolve', decisions().querySelectorAll('li')[1])
+    expect(document.body.textContent).toContain('Parent outcome (no stage scope)')
     await click('Confirm Gate Decision', document.body)
-    expect(vi.mocked(submitCoordinatedRunOperatorAction).mock.calls[0]?.[2]).toEqual({
-      kind: 'gate',
-      gateId: 'escalation:uncertain-effect',
-      decision: 'approve'
-    })
+    await click('Resolve', decisions().querySelectorAll('li')[2])
+    expect(document.body.textContent).toContain('records your acknowledgement only')
+    await click('Confirm Gate Decision', document.body)
+    expect(vi.mocked(submitCoordinatedRunOperatorAction).mock.calls.map((call) => call[2])).toEqual(
+      [
+        {
+          kind: 'gate',
+          gateId: 'gate-editorial-signoff',
+          scope: 'parent',
+          childDefinitionId: null,
+          decision: 'approve'
+        },
+        {
+          kind: 'gate',
+          gateId: 'escalation:uncertain-effect',
+          scope: 'escalation',
+          childDefinitionId: null,
+          decision: 'approve'
+        }
+      ]
+    )
+  })
+  it('blocks a stage approve until an attempt exists and names the attempt it would bind', async () => {
+    await render()
+    const first = () => container.querySelector('[aria-label="Pending decisions"] li')!
+    await click('Resolve', first())
+    expect(document.body.textContent).toContain('approve binds ctx_rev_1')
+    expect(button('Confirm Gate Decision').disabled).toBe(false)
+    await click('Cancel', document.body)
+    const waiting = coordinatedHostActiveViewFixture()
+    waiting.inspection.stages[2].gateResolutionEligibility.approvableDispatchId = null
+    vi.mocked(inspectCoordinatedRun).mockResolvedValue(waiting)
+    await click('Refresh test runs')
+    await click('Resolve', first())
+    expect(button('Confirm Gate Decision').disabled).toBe(true)
+    expect(document.body.textContent).toContain(
+      'Approve is refused until this stage has an attempt'
+    )
+    await act(async () => document.getElementById('gate-decision-reject')?.click())
+    expect(button('Confirm Gate Decision').disabled).toBe(false)
+  })
+  it('shows report evidence with its semantic disposition as plain text and never as links', async () => {
+    await render()
+    const writer = stageItem('writer')
+    expect(writer.textContent).toContain('Rejected by the coordinator')
+    expect(writer.textContent).toContain('A worker-reported succeeded is not semantic acceptance.')
+    expect(writer.textContent).toContain('<b>Ready to publish</b>')
+    expect(writer.querySelector('b')).toBeNull()
+    expect(writer.textContent).toContain('no content digest reported')
+    expect(writer.textContent).toContain('Blocker missing_citations')
+    expect(container.querySelector('a')).toBeNull()
+    expect(stageItem('researcher').textContent).toContain('· attempt open')
+    expect(stageItem('researcher').textContent).toContain('Report evidence absent:')
+    expect(stageItem('publisher').textContent).toContain(
+      'Report evidence unavailable: The native Task result no longer matches'
+    )
+    const superseded = coordinatedHostActiveViewFixture()
+    const stage = superseded.inspection.stages[1]
+    if (stage.semantic.kind === 'available') {
+      stage.semantic.activeDispatchId = 'ctx_writer_3'
+    }
+    vi.mocked(inspectCoordinatedRun).mockResolvedValue(superseded)
+    await click('Refresh test runs')
+    expect(stageItem('writer').textContent).toContain('A newer attempt ctx_writer_3 has launched')
+  })
+  it('refuses every control when the host authority is absent or contradicts run history', async () => {
+    const unfrozen = coordinatedHostActiveViewFixture()
+    unfrozen.inspection.targetExecutionAuthority = null
+    vi.mocked(inspectCoordinatedRun).mockResolvedValue(unfrozen)
+    await render()
+    expect(button('Stop run', container).disabled).toBe(true)
+    expect(button('Resolve', container).disabled).toBe(true)
+    expect(container.textContent).toContain('no frozen execution authority')
+    unfrozen.inspection.targetExecutionAuthority = 'ssh:other'
+    await click('Refresh test runs')
+    expect(button('Retry stage', stageItem('writer')).disabled).toBe(true)
+    expect(container.textContent).toContain('different execution authority than the host')
   })
   it('discards an operator reply that outlives the selected run', async () => {
     const reply = Promise.withResolvers<CoordinatedRunOperatorOutcome>()
@@ -267,7 +346,7 @@ describe('selected host run operator controls', () => {
     await select('second-run')
     await act(async () => reply.resolve(outcome({ kind: 'stop' })))
     expect(container.textContent).toContain('Parent run: second-run')
-    expect(container.textContent).not.toContain('The host answered')
+    expect(container.textContent).not.toContain('The host recorded')
   })
   it('claims no outcome when the host does not confirm the request', async () => {
     vi.mocked(submitCoordinatedRunOperatorAction).mockRejectedValue(new Error('request timed out'))
@@ -277,9 +356,9 @@ describe('selected host run operator controls', () => {
     const alert = container.querySelector('[role="alert"]')?.textContent
     expect(alert).toContain('request timed out')
     expect(alert).toContain('no outcome change is claimed')
-    expect(container.textContent).not.toContain('The host answered')
+    expect(container.textContent).not.toContain('The host recorded')
   })
-  it('keeps controls unavailable when run history is not the inspected frozen definition', async () => {
+  it('keeps host-scoped controls and hides frozen details when history is another definition', async () => {
     props = {
       ...props,
       runs: props.runs.map((run) => ({
@@ -288,10 +367,10 @@ describe('selected host run operator controls', () => {
       }))
     }
     await render()
-    expect(button('Stop run', container).disabled).toBe(true)
-    expect(button('Retry stage', stageItem('writer')).disabled).toBe(true)
-    expect(button('Resolve', container).disabled).toBe(true)
-    expect(container.textContent).toContain('frozen run scope is unavailable')
+    expect(button('Stop run', container).disabled).toBe(false)
+    expect(container.textContent).toContain(
+      'Frozen definition details are unavailable until matching run history is refreshed.'
+    )
   })
   it('opens only the host-minted terminal of the current attempt on the owning host', async () => {
     await render()
@@ -342,9 +421,9 @@ describe('run pinned to the run details route', () => {
       sampleCompletedVerifiedRun.id
     )
   })
-  it('drops a reply after the route changes but keeps the unconfirmed request identity', async () => {
+  it('drops a reply after the route changes, keeps the unconfirmed request, and replays it once', async () => {
     const reply = Promise.withResolvers<CoordinatedRunOperatorOutcome>()
-    vi.mocked(submitCoordinatedRunOperatorAction).mockReturnValue(reply.promise)
+    vi.mocked(submitCoordinatedRunOperatorAction).mockReturnValueOnce(reply.promise)
     await render()
     await click('Stop run')
     await click('Confirm Stop Run', document.body)
@@ -356,8 +435,20 @@ describe('run pinned to the run details route', () => {
     props = { ...props, pinnedRun: sampleCompletedVerifiedRun }
     await render()
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'An earlier stop request for this run reached the host without a confirmed answer.'
+      'An earlier stop request for this run was submitted without a confirmed answer (timed out). Its effect is unknown.'
     )
+    vi.mocked(submitCoordinatedRunOperatorAction).mockResolvedValueOnce(
+      outcome({ kind: 'stop' }, coordinatedHostActiveViewFixture(), 'already_recorded')
+    )
+    await click('Ask host about this request')
+    expect(vi.mocked(submitCoordinatedRunOperatorAction).mock.calls[1]?.slice(2)).toEqual([
+      { kind: 'stop' },
+      { replay: true }
+    ])
+    expect(container.textContent).toContain(
+      'The host had already recorded this stop request; this request wrote nothing.'
+    )
+    expect(container.textContent).not.toContain('Its effect is unknown')
   })
   it('records nothing as unconfirmed when the request was refused before submission', async () => {
     vi.mocked(submitCoordinatedRunOperatorAction).mockRejectedValue(
@@ -367,7 +458,7 @@ describe('run pinned to the run details route', () => {
     await click('Stop run')
     await click('Confirm Stop Run', document.body)
     await click('Refresh run')
-    expect(container.textContent).not.toContain('reached the host without a confirmed answer')
+    expect(container.textContent).not.toContain('Its effect is unknown')
   })
   it('stays read-only for a run that belongs to another Automation', async () => {
     props = { ...props, pinnedRun: { ...other, automationId: 'another-automation' } }

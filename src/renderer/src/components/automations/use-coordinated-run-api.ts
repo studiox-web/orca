@@ -27,7 +27,7 @@ import {
 type RunOperation =
   | { kind: 'start' }
   | { kind: 'reconcile' }
-  | { kind: 'operator'; action: CoordinatedRunOperatorAction }
+  | { kind: 'operator'; action: CoordinatedRunOperatorAction; replay?: boolean }
 
 type ReadState = {
   key: string
@@ -177,7 +177,9 @@ export function useCoordinatedRunApi(input: {
     try {
       const outcome =
         request.kind === 'operator'
-          ? await submitCoordinatedRunOperatorAction(binding, selectedRun!, request.action)
+          ? await submitCoordinatedRunOperatorAction(binding, selectedRun!, request.action, {
+              replay: request.replay
+            })
           : null
       const result =
         outcome?.view ??
@@ -206,8 +208,9 @@ export function useCoordinatedRunApi(input: {
       // Why: recorded before the stale check so a route change cannot forget an uncertain submission.
       if (request.kind === 'operator' && error instanceof CoordinatedOperatorUnconfirmedError) {
         retained.unconfirmedOperator = {
-          kind: request.action.kind,
-          label: operatorActionLabel(request.action)
+          action: request.action,
+          label: operatorActionLabel(request.action),
+          detail: error.message
         }
       }
       if (!mounted.current || currentKey.current !== key) {
@@ -245,6 +248,11 @@ export function useCoordinatedRunApi(input: {
     operatorOutcome: !unavailable && operator?.scope === scopeKey ? operator.outcome : null,
     start: () => perform({ kind: 'start' }),
     reconcile: () => perform({ kind: 'reconcile' }),
-    operate: (action: CoordinatedRunOperatorAction) => perform({ kind: 'operator', action })
+    operate: (action: CoordinatedRunOperatorAction) => perform({ kind: 'operator', action }),
+    /** Resends the identical unconfirmed request; the host answers on its natural key. */
+    replayUnconfirmed: () => {
+      const action = requests.get(scopeKey)?.unconfirmedOperator?.action
+      return action ? perform({ kind: 'operator', action, replay: true }) : Promise.resolve()
+    }
   }
 }

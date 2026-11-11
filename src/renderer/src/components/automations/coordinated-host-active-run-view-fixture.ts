@@ -11,7 +11,9 @@ const awaitingStage = {
   gate: {
     canResolve: false,
     reason: 'No pending gate awaits a decision for this stage.',
-    pendingGateId: null
+    pendingGateId: null,
+    pendingGateIds: [],
+    approvableDispatchId: null
   }
 }
 
@@ -25,6 +27,7 @@ export function coordinatedHostActiveViewFixture(runId?: string): CoordinatedRun
         kind: 'available' as const,
         status: awaitingStage.semanticStatus,
         attempts: 1,
+        activeDispatchId: stage.mappedDispatchId,
         acceptedDispatchId: null,
         lastError: null,
         lineage: stage.semantic.kind === 'available' ? stage.semantic.lineage : []
@@ -62,7 +65,34 @@ export function coordinatedHostActiveViewFixture(runId?: string): CoordinatedRun
       return {
         ...pending,
         semantic: { ...pending.semantic, lastError: 'Worker reported a failed draft check.' },
-        retryEligibility: { canRetry: true, reason: null, retryOfDispatchId: 'ctx_writer_2' }
+        retryEligibility: { canRetry: true, reason: null, retryOfDispatchId: 'ctx_writer_2' },
+        evidence: {
+          kind: 'available',
+          dispatchId: 'ctx_writer_2',
+          reportDigest: 'sha256:5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8',
+          disposition: 'rejected',
+          dispositionReason: 'Required check draft-quality did not pass.',
+          outcome: 'succeeded',
+          summary: 'Draft written to the staging path.\n<b>Ready to publish</b>',
+          artifacts: [
+            {
+              kind: 'article-draft',
+              uri: 'file:///workspace/article-pilot/drafts/draft-4.md',
+              sha256: 'sha256:2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae'
+            },
+            { kind: 'outline', uri: 'file:///workspace/article-pilot/outline.md', sha256: null }
+          ],
+          checks: [
+            { id: 'draft-quality', outcome: 'failed', evidence: ['Two sources lack citations'] }
+          ],
+          blockers: [
+            {
+              code: 'missing_citations',
+              message: 'Two claims have no source.',
+              resolvableBy: 'retry'
+            }
+          ]
+        }
       }
     }
     if (stage.childDefinitionId === 'child-reviewer') {
@@ -71,17 +101,38 @@ export function coordinatedHostActiveViewFixture(runId?: string): CoordinatedRun
         gateResolutionEligibility: {
           canResolve: true,
           reason: null,
-          pendingGateId: 'gate-editorial-signoff'
+          pendingGateId: 'gate-editorial-signoff',
+          pendingGateIds: ['gate-editorial-signoff'],
+          approvableDispatchId: 'ctx_rev_1'
+        },
+        evidence: {
+          kind: 'available',
+          dispatchId: 'ctx_rev_1',
+          reportDigest: 'sha256:fcde2b2edba56bf408601fb721fe9b5c338d10ee429ea04fae5511b68fbf8fb9',
+          disposition: 'accepted',
+          dispositionReason: null,
+          outcome: 'succeeded',
+          summary: 'Review complete; awaiting editorial sign-off.',
+          artifacts: [],
+          checks: [{ id: 'style-guide', outcome: 'passed' }],
+          blockers: []
         }
       }
     }
-    return pending
+    return {
+      ...pending,
+      evidence: {
+        kind: 'unavailable',
+        reason: 'The native Task result no longer matches the admitted report digest.'
+      }
+    }
   })
   return {
     ...settled,
     inspection: {
       ...settled.inspection,
       runStatus: 'dispatched',
+      activeStageIds: ['child-researcher'],
       stages,
       progress: {
         kind: 'available',
@@ -121,7 +172,13 @@ export function coordinatedHostActiveViewFixture(runId?: string): CoordinatedRun
       humanResolution: {
         available: true,
         reason: null,
-        pendingDecisionKeys: ['gate-editorial-signoff', 'escalation:uncertain-effect']
+        pendingDecisionKeys: ['gate-editorial-signoff', 'escalation:uncertain-effect'],
+        // Why: one id is both a stage and a parent requirement, so scope must travel with it.
+        pendingDecisions: [
+          { gateId: 'gate-editorial-signoff', scope: 'stage', childDefinitionId: 'child-reviewer' },
+          { gateId: 'gate-editorial-signoff', scope: 'parent', childDefinitionId: null },
+          { gateId: 'escalation:uncertain-effect', scope: 'escalation', childDefinitionId: null }
+        ]
       }
     },
     actions: {
