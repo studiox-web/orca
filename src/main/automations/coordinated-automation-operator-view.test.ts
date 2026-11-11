@@ -198,7 +198,7 @@ describe('coordinated operator view and scoped decisions', () => {
     await expect(
       adapter.resolveGate({ ...scope(run), gateId: 'signoff', decision: 'approve' })
     ).rejects.toThrow(/belongs to stage "writer"/)
-    // No attempt exists yet, so there is no exact evidence for a stage approval to bind.
+    // A stage approval that names no exact Dispatch and report digest fails closed.
     await expect(
       adapter.resolveGate({
         ...scope(run),
@@ -206,7 +206,18 @@ describe('coordinated operator view and scoped decisions', () => {
         decision: 'approve',
         childDefinitionId: 'writer'
       })
-    ).rejects.toThrow(/no attempt to approve yet/)
+    ).rejects.toThrow(/must name the exact Dispatch and report digest/)
+    // Naming evidence the host does not hold is refused too: nothing has reported yet.
+    await expect(
+      adapter.resolveGate({
+        ...scope(run),
+        gateId: 'signoff',
+        decision: 'approve',
+        childDefinitionId: 'writer',
+        dispatchId: 'ctx_never_launched',
+        expectedReportDigest: `sha256:${'0'.repeat(64)}`
+      })
+    ).rejects.toThrow(/binds Dispatch|awaiting approval/)
     const replay = await adapter.resolveGate({
       ...scope(run),
       gateId: 'signoff',

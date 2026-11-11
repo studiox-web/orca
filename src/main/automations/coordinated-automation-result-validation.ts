@@ -36,10 +36,15 @@ export type WorkerResultValidationContext = Readonly<{
   trustedAuthorIdentity?: string
   authorIdentities?: readonly string[]
 }>
+import { structuredReportDigest } from './coordinated-automation-worker-report-envelope'
 
 export type WorkerResultValidationOutcome =
   | { valid: true; report: StructuredWorkerResult }
-  | { valid: false; error: string }
+  | {
+      valid: false
+      error: string
+      awaitingApproval?: { gateIds: string[]; report: StructuredWorkerResult }
+    }
 
 export function validateLaunchPolicy(
   child: ResolvedChildSnapshot,
@@ -209,25 +214,6 @@ export function validateStructuredWorkerResult(
     }
   }
 
-  const stageApprovalValidation = validateStageApprovals(
-    context.child.stageAcceptance?.requiredApprovals,
-    context.hostApprovals,
-    {
-      automationId: context.snapshot.automationId,
-      definitionRevision: context.definitionRevision,
-      automationRunId: context.automationRunId,
-      orchestrationRunId: context.orchestrationRunId,
-      childDefinitionId: context.child.childDefinitionId,
-      taskId: context.taskId,
-      dispatchId: context.dispatchId,
-      trustedAuthorIdentity: context.trustedAuthorIdentity,
-      authorIdentities: context.authorIdentities
-    }
-  )
-  if (!stageApprovalValidation.valid) {
-    return { valid: false, error: stageApprovalValidation.error }
-  }
-
   if (data.effects.some((e) => e.status !== 'denied')) {
     return {
       valid: false,
@@ -240,6 +226,36 @@ export function validateStructuredWorkerResult(
     return {
       valid: false,
       error: 'Worker result outcome cannot be "succeeded" when blockers are present.'
+    }
+  }
+
+  // Approvals are judged last so a missing decision is only reported for an otherwise valid report.
+  const stageApprovalValidation = validateStageApprovals(
+    context.child.stageAcceptance?.requiredApprovals,
+    context.hostApprovals,
+    {
+      automationId: context.snapshot.automationId,
+      definitionRevision: context.definitionRevision,
+      automationRunId: context.automationRunId,
+      orchestrationRunId: context.orchestrationRunId,
+      childDefinitionId: context.child.childDefinitionId,
+      taskId: context.taskId,
+      dispatchId: context.dispatchId,
+      reportDigest: structuredReportDigest(report),
+      trustedAuthorIdentity: context.trustedAuthorIdentity,
+      authorIdentities: context.authorIdentities
+    }
+  )
+  if (!stageApprovalValidation.valid) {
+    return {
+      valid: false,
+      error: stageApprovalValidation.error,
+      // Every other check passed and nothing present was refused: only a decision is missing.
+      ...(stageApprovalValidation.missingApprovalIds && data.outcome === 'succeeded'
+        ? {
+            awaitingApproval: { gateIds: stageApprovalValidation.missingApprovalIds, report: data }
+          }
+        : {})
     }
   }
 

@@ -126,9 +126,12 @@ export async function operatorStopOutcome(
     })
     return { state: 'outcome_uncertain' as const, reason, run: held, progress: ctx.ledger.progress }
   }
-  const open = Object.values(ctx.ledger.progress.stages)
-    .flatMap((stage) => stage.lineage)
-    .filter(isOpenAttempt)
+  // A held report already proves its worker delivered and exited; only unreported attempts wait.
+  const open = Object.values(ctx.ledger.progress.stages).flatMap((stage) =>
+    stage.lineage.filter(
+      (record) => isOpenAttempt(record) && record.dispatchId !== stage.pendingApproval?.dispatchId
+    )
+  )
   if (open.length > 0) {
     return hold(
       `${detail}; awaiting exit evidence for attempt(s) ${open

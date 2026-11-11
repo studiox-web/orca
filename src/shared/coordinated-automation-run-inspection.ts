@@ -58,8 +58,8 @@ export type CoordinatedGateResolutionEligibility = {
   /** Every pending gate of this stage, in resolution order; `pendingGateId` is the first. */
   pendingGateIds: readonly string[]
   /**
-   * The attempt an `approve` of a stage requirement would bind; null means approve is refused
-   * until an attempt exists (reject/escalate need none).
+   * The attempt whose held report an `approve` of a stage requirement would bind; null means
+   * approve is refused until a report is held for approval (reject/escalate need none).
    */
   approvableDispatchId: string | null
 }
@@ -111,6 +111,21 @@ export type CoordinatedApprovalObservation = {
   }
 }
 
+/** A report held for an operator decision, with exactly what an approval would bind. */
+export type CoordinatedStagePendingApprovalView = {
+  dispatchId: string
+  reportDigest: string
+  gateIds: readonly string[]
+  since: number
+  /** The held report's content while the native result still matches `reportDigest`. */
+  report: Availability<
+    Pick<
+      CoordinatedStageReportEvidence,
+      'outcome' | 'summary' | 'artifacts' | 'checks' | 'blockers'
+    >
+  >
+}
+
 export type CoordinatedRunHumanResolution = {
   available: boolean
   reason: string | null
@@ -150,6 +165,8 @@ export type CoordinatedStageInspection = {
   gateResolutionEligibility: CoordinatedGateResolutionEligibility
   /** Latest admitted report evidence; absent before any report, unavailable if unprovable. */
   evidence: Availability<CoordinatedStageReportEvidence>
+  /** Present only while a report is held for approval; it is not yet admitted or accepted. */
+  pendingApproval?: CoordinatedStagePendingApprovalView
 }
 
 export type CoordinatedRunInspection = {

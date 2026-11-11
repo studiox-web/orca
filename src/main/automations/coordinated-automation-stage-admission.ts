@@ -4,22 +4,13 @@ import {
 } from './coordinated-automation-native-attempt'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
-import { StructuredWorkerResultSchema } from '../../shared/coordinated-automation-receipt-schemas'
-import type { StructuredWorkerResult } from '../../shared/coordinated-automation-receipt-types'
 import type {
   ResolvedAutomationRunSnapshot,
   ResolvedChildSnapshot
 } from '../../shared/coordinated-automation-types'
-import { validateAttemptReport } from './coordinated-automation-attempt-validation'
-import {
-  decodeWorkerReportResult,
-  structuredReportDigest
-} from './coordinated-automation-worker-report-envelope'
+import { classifyAttempt, type AttemptVerdict } from './coordinated-automation-attempt-verdict'
 import type { CoordinatedPassContext } from './coordinated-automation-recovery-context'
-import {
-  applyReviewFindings,
-  upstreamFindingFingerprint
-} from './coordinated-automation-review-loop'
+import { applyReviewFindings } from './coordinated-automation-review-loop'
 import { withEscalation, withHalt, withStage } from './coordinated-automation-progress-ledger'
 import {
   COORDINATED_START_FAILURE_PREFIX,
@@ -29,98 +20,6 @@ import { withAttemptStatus } from './coordinated-automation-attempt-lineage'
 
 export { COORDINATED_START_FAILURE_PREFIX }
 
-function boundReport(
-  report: unknown,
-  run: AutomationRun,
-  snapshot: ResolvedAutomationRunSnapshot,
-  child: ResolvedChildSnapshot,
-  taskId: string,
-  dispatchId: string
-): StructuredWorkerResult | null {
-  const parsed = StructuredWorkerResultSchema.safeParse(report)
-  if (!parsed.success) {
-    return null
-  }
-  const data = parsed.data
-  return data.automationRunId === run.id &&
-    data.orchestrationRunId === run.orchestrationRunId &&
-    data.childDefinitionId === child.childDefinitionId &&
-    data.taskId === taskId &&
-    data.dispatchId === dispatchId &&
-    data.definitionRevision === snapshot.definitionRevision &&
-    data.resolvedConfigDigest === snapshot.canonicalDigest
-    ? data
-    : null
-}
-
-type AttemptVerdict =
-  | { kind: 'accepted'; digest: string; report: StructuredWorkerResult }
-  | { kind: 'revision'; digest: string; fingerprint: string; reason: string }
-  | { kind: 'halt'; digest: string; state: 'blocked' | 'outcome_uncertain'; reason: string }
-  | {
-      kind: 'rejected'
-      digest: string
-      reason: string
-      startFailure: boolean
-      timedOut?: boolean
-    }
-
-function classifyAttempt(
-  ctx: CoordinatedPassContext,
-  run: AutomationRun,
-  snapshot: ResolvedAutomationRunSnapshot,
-  child: ResolvedChildSnapshot,
-  taskId: string,
-  dispatchId: string,
-  nativeSucceeded: boolean
-): AttemptVerdict {
-  const decoded = decodeWorkerReportResult(ctx.orchestrationDb.getTask(taskId)?.result)
-  if (decoded.kind !== 'structured') {
-    const reason = decoded.kind === 'unsupported' ? decoded.reason : decoded.readable
-    return {
-      kind: 'rejected',
-      digest: structuredReportDigest({ dispatchId, readable: decoded.readable }),
-      reason: reason || `Attempt ${dispatchId} produced no structured report.`,
-      startFailure: decoded.readable.startsWith(COORDINATED_START_FAILURE_PREFIX),
-      timedOut: decoded.readable.startsWith(COORDINATED_TIMEOUT_PREFIX)
-    }
-  }
-  const digest = structuredReportDigest(decoded.report)
-  const bound = boundReport(decoded.report, run, snapshot, child, taskId, dispatchId)
-  if (bound?.outcome === 'blocked' || bound?.outcome === 'uncertain') {
-    return {
-      kind: 'halt',
-      digest,
-      state: bound.outcome === 'blocked' ? 'blocked' : 'outcome_uncertain',
-      reason: `Stage "${child.childDefinitionId}" reported ${bound.outcome}: ${bound.summary}`
-    }
-  }
-  const fingerprint = bound ? upstreamFindingFingerprint(bound) : null
-  if (bound?.outcome === 'failed' && fingerprint && child.dependencies.length > 0) {
-    return { kind: 'revision', digest, fingerprint, reason: bound.summary }
-  }
-  const validation = validateAttemptReport(ctx, {
-    report: decoded.report,
-    run,
-    snapshot,
-    child,
-    taskId,
-    dispatchId
-  })
-  if (!validation.valid) {
-    return { kind: 'rejected', digest, reason: validation.error, startFailure: false }
-  }
-  if (validation.report.outcome !== 'succeeded' || !nativeSucceeded) {
-    return {
-      kind: 'rejected',
-      digest,
-      reason: `Attempt ${dispatchId} reported ${validation.report.outcome}: ${validation.report.summary}`,
-      startFailure: false
-    }
-  }
-  return { kind: 'accepted', digest, report: validation.report }
-}
-
 function applyVerdict(
   progress: CoordinatedRunProgress,
   input: {
@@ -128,7 +27,7 @@ function applyVerdict(
     child: ResolvedChildSnapshot
     taskId: string
     dispatchId: string
-    verdict: AttemptVerdict
+    verdict: Exclude<AttemptVerdict, { kind: 'awaiting_approval' }>
     costUsd: number
     now: number
   }
@@ -174,6 +73,7 @@ function applyVerdict(
   next = withStage(next, id, (stage) => ({
     ...stage,
     status: verdict.kind === 'accepted' ? 'accepted' : 'rejected',
+    pendingApproval: null,
     activeDispatchId: dispatchId,
     attempts: stage.attempts + 1,
     lastError: verdict.kind === 'accepted' ? null : verdict.reason,
@@ -283,8 +183,12 @@ export function admitSettledAttempts(
       taskId: mapping.taskId,
       dispatchId: latest.id
     }
-    const costUsd = ctx.workerProvider.estimateCostUsd?.(identity) ?? 0
     const dispatchId = latest.id
+    if (verdict.kind === 'awaiting_approval') {
+      holdForApproval(ctx, child.childDefinitionId, dispatchId, verdict)
+      continue
+    }
+    const costUsd = ctx.workerProvider.estimateCostUsd?.(identity) ?? 0
     ctx.ledger.update(
       `admit:${verdict.kind}`,
       (progress) =>
@@ -303,4 +207,36 @@ export function admitSettledAttempts(
     )
   }
   return ctx.ledger.progress.sequence !== before
+}
+
+/** Holds an otherwise valid report for its missing decision: no admission, no retry, no dependent. */
+function holdForApproval(
+  ctx: CoordinatedPassContext,
+  childDefinitionId: string,
+  dispatchId: string,
+  verdict: Extract<AttemptVerdict, { kind: 'awaiting_approval' }>
+): void {
+  const held = ctx.ledger.progress.stages[childDefinitionId]?.pendingApproval
+  if (
+    held?.dispatchId === dispatchId &&
+    held.reportDigest === verdict.digest &&
+    held.gateIds.join('\n') === verdict.gateIds.join('\n')
+  ) {
+    return
+  }
+  const since = ctx.clock.now()
+  ctx.ledger.update(
+    'hold:awaiting-approval',
+    (progress) =>
+      withStage(progress, childDefinitionId, (stage) => ({
+        ...stage,
+        pendingApproval: {
+          dispatchId,
+          reportDigest: verdict.digest,
+          gateIds: verdict.gateIds,
+          since
+        }
+      })),
+    childDefinitionId
+  )
 }

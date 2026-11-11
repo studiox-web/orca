@@ -426,27 +426,62 @@ describe('Coordinated Run Operator Actions', () => {
       taskId: 'task',
       dispatchId: 'ctx_first'
     }
-    const approved = {
+    const held = (dispatchId: string, reportDigest: string) => ({
+      dispatchId,
+      reportDigest,
+      gateIds: ['gate-1'],
+      since: 3
+    })
+    const digest = `sha256:${'a'.repeat(64)}`
+    // A held report is the only thing an approval can bind.
+    const waiting = {
       ...progress,
-      stages: { writer: { ...progress.stages.writer, lineage: [attempt('ctx_first', 1)] } },
-      approvals: [approval]
+      stages: {
+        writer: {
+          ...progress.stages.writer,
+          lineage: [attempt('ctx_first', 1)],
+          pendingApproval: held('ctx_first', digest)
+        }
+      }
     }
     expect(
-      stageGateResolutionEligibility({ progress: approved, child: gatedChild, runSettled: false })
+      stageGateResolutionEligibility({ progress: waiting, child: gatedChild, runSettled: false })
     ).toEqual({
-      canResolve: false,
-      reason: 'No pending gate awaits a decision for this stage.',
-      pendingGateId: null,
-      pendingGateIds: [],
+      canResolve: true,
+      reason: null,
+      pendingGateId: 'gate-1',
+      pendingGateIds: ['gate-1'],
       approvableDispatchId: 'ctx_first'
     })
+    const approved = { ...waiting, approvals: [{ ...approval, reportDigest: digest }] }
+    expect(
+      stageGateResolutionEligibility({ progress: approved, child: gatedChild, runSettled: false })
+    ).toMatchObject({ canResolve: false, pendingGateIds: [] })
+    // The same attempt now holds different report bytes: the approval no longer speaks for it.
+    const changedReport = {
+      ...approved,
+      stages: {
+        writer: {
+          ...waiting.stages.writer,
+          pendingApproval: held('ctx_first', `sha256:${'b'.repeat(64)}`)
+        }
+      }
+    }
+    expect(
+      stageGateResolutionEligibility({
+        progress: changedReport,
+        child: gatedChild,
+        runSettled: false
+      })
+    ).toMatchObject({ canResolve: true, pendingGateIds: ['gate-1'] })
+    // A later attempt supersedes the approved one entirely.
     const superseded = {
       ...approved,
       stages: {
         writer: {
           ...progress.stages.writer,
           lineage: [
-            { ...attempt('ctx_first', 1), status: 'abandoned' as const },
+            { ...attempt('ctx_first', 1), status: 'admitted' as const },
             attempt('ctx_second', 2)
           ]
         }
@@ -457,7 +492,7 @@ describe('Coordinated Run Operator Actions', () => {
     ).toMatchObject({
       canResolve: true,
       pendingGateIds: ['gate-1'],
-      approvableDispatchId: 'ctx_second'
+      approvableDispatchId: null
     })
   })
 })

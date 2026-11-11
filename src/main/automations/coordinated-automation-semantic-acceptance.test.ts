@@ -696,17 +696,18 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
         'Worker report cannot smuggle approval or effect trust authority'
       )
 
-      // Missing host approval must fail closed
+      // A missing host approval never accepts: the delivered report is held for the decision.
       scenario = 'missing_approval'
-      await adapter.retryTask({
+      const held = await adapter.retryTask({
         automationRunId: run!.id,
         taskId: task.id,
         retryOfDispatchId: db.getDispatchContext(task.id)!.id
       })
+      expect(held.outcome).toBe('awaiting_approval')
       task = db.getTask(task.id)!
-      expect(task.result).toContain(
-        'Required stage approval "appr_editor" (role "editor") missing from host approvals'
-      )
+      const heldOutcome = await adapter.reconcileRun(run!.id)
+      expect(heldOutcome.state).not.toBe('completed')
+      expect(heldOutcome.run.completionReceipt ?? null).toBeNull()
 
       // Succeeded when host provides approval
       scenario = 'valid'
@@ -716,11 +717,9 @@ describe('Coordinated Automation Semantic Acceptance & Hardening', () => {
         workerProvider,
         hostApprovals
       })
-      const validResult = await adapterWithHostApproval.retryTask({
-        automationRunId: run!.id,
-        taskId: task.id,
-        retryOfDispatchId: db.getDispatchContext(task.id)!.id
-      })
+      // The held attempt settled natively, so a fresh attempt reopens the Task.
+      db.updateTaskStatus(task.id, 'ready')
+      const validResult = await adapterWithHostApproval.dispatchTask(run!.id, task.id)
       expect(validResult.outcome).toBe('succeeded')
       expect(db.getTask(task.id)?.status).toBe('completed')
     })

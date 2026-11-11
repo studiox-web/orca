@@ -276,6 +276,11 @@ async function executeTaskDispatch(
     taskId,
     dispatchId: currentMappedDispatchId
   })
+  if (!validation.valid && validation.awaitingApproval) {
+    // Technically delivered; stage admission holds it for the operator instead of rejecting it.
+    settle('succeeded', encodeCoordinatedWorkerReport(validation.awaitingApproval.report))
+    return { taskId, dispatchId: dispatch.id, outcome: 'awaiting_approval' }
+  }
   if (!validation.valid) {
     settle('failed', encodeCoordinatedWorkerReport(rawReport, validation.error))
     return { taskId, dispatchId: dispatch.id, outcome: 'failed' }

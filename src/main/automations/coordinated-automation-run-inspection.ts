@@ -13,7 +13,10 @@ import {
 } from './coordinated-automation-native-validation'
 import { runIsOperatorSettled } from './coordinated-automation-operator-actions'
 import { isOpenAttempt, lastAttemptDispatchId } from './coordinated-automation-attempt-lineage'
-import { stageReportEvidence } from './coordinated-automation-stage-report-evidence'
+import {
+  stagePendingApproval,
+  stageReportEvidence
+} from './coordinated-automation-stage-report-evidence'
 import {
   approvalObservations,
   runHumanResolution,
@@ -203,6 +206,10 @@ export function inspectCoordinatedRun(input: {
       : null
     const runSettled = runIsOperatorSettled(run)
     const operator = stageOperatorEligibility({ progress, child, runSettled })
+    const pendingApproval =
+      !untrusted && progress.kind === 'available'
+        ? stagePendingApproval(db, progress.progress, child.childDefinitionId, taskId)
+        : undefined
     return {
       childDefinitionId: child.childDefinitionId,
       name: child.name,
@@ -221,7 +228,8 @@ export function inspectCoordinatedRun(input: {
         untrusted ??
         (progress.kind === 'available'
           ? stageReportEvidence(db, progress.progress, child.childDefinitionId, taskId)
-          : { kind: progress.kind, reason: progress.reason })
+          : { kind: progress.kind, reason: progress.reason }),
+      ...(pendingApproval ? { pendingApproval } : {})
     }
   })
   return {
@@ -240,7 +248,13 @@ export function inspectCoordinatedRun(input: {
     activeStageIds:
       progress.kind === 'available' && !mappingProblem
         ? Object.entries(progress.progress.stages)
-            .filter(([, stage]) => stage.lineage.some(isOpenAttempt))
+            // A held report is waiting on a person, not on a running worker.
+            .filter(([, stage]) =>
+              stage.lineage.some(
+                (record) =>
+                  isOpenAttempt(record) && record.dispatchId !== stage.pendingApproval?.dispatchId
+              )
+            )
             .map(([id]) => id)
         : [],
     stages,

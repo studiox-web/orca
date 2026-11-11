@@ -33,7 +33,16 @@ const StageProgressSchema: z.ZodType<CoordinatedStageProgress> = z.object({
   lineage: z.array(AttemptRecordSchema),
   reviewIterations: z.number().int().nonnegative(),
   findings: z.array(z.string()),
-  lastError: z.string().nullable()
+  lastError: z.string().nullable(),
+  pendingApproval: z
+    .object({
+      dispatchId: Identifier,
+      reportDigest: Digest,
+      gateIds: z.array(z.string().min(1)),
+      since: z.number()
+    })
+    .nullable()
+    .optional()
 })
 
 const AdmittedReportSchema: z.ZodType<CoordinatedAdmittedReport> = z.object({
@@ -120,6 +129,7 @@ export const CoordinatedRunProgressSchema: z.ZodType<CoordinatedRunProgress> = z
         childDefinitionId: z.string().optional(),
         taskId: z.string().optional(),
         dispatchId: z.string().optional(),
+        reportDigest: z.string().optional(),
         targetChildId: z.string().optional()
       })
     )
@@ -132,6 +142,7 @@ export const CoordinatedRunProgressSchema: z.ZodType<CoordinatedRunProgress> = z
         actor: z.string().min(1),
         childDefinitionId: z.string().nullable(),
         dispatchId: z.string().nullable(),
+        reportDigest: z.string().optional(),
         gateId: z.string().nullable(),
         gateScope: z.enum(['stage', 'parent', 'escalation']).optional(),
         decision: z.enum(['approve', 'reject', 'escalate']).nullable(),

@@ -114,6 +114,7 @@ export type CoordinatedRunRetryRequest = CoordinatedRunOperatorScope & {
 export type CoordinatedRunGateRequest = CoordinatedRunOperatorScope & {
   gateId: string
   gateScope?: CoordinatedGateScope
+  expectedReportDigest?: string
   decision: 'approve' | 'reject' | 'escalate'
   note?: string
   childDefinitionId?: string

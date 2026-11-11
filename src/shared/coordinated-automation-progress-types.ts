@@ -54,6 +54,16 @@ export type CoordinatedStageProgress = {
   /** Fingerprints of findings already sent back to this stage. */
   findings: string[]
   lastError: string | null
+  /** A report valid in everything but its required approvals, held for an operator decision. */
+  pendingApproval?: CoordinatedStagePendingApproval | null
+}
+
+/** The exact attempt and report bytes an operator decision would speak for. */
+export type CoordinatedStagePendingApproval = {
+  dispatchId: string
+  reportDigest: string
+  gateIds: string[]
+  since: number
 }
 
 export type CoordinatedReportDisposition = 'accepted' | 'rejected' | 'stale' | 'duplicate'
@@ -134,6 +144,8 @@ export type CoordinatedRunApproval = SemanticReceiptApproval & {
   childDefinitionId?: string
   taskId?: string
   dispatchId?: string
+  /** Report the approver saw; an approval never carries over to different report bytes. */
+  reportDigest?: string
   targetChildId?: string
 }
 
@@ -144,6 +156,8 @@ export type CoordinatedOperatorDecision = {
   actor: string
   childDefinitionId: string | null
   dispatchId: string | null
+  /** Held report a stage gate decision spoke for; a replay must name the same candidate. */
+  reportDigest?: string
   gateId: string | null
   /** Scope the gate decision was bound to; absent on records written before scopes existed. */
   gateScope?: 'stage' | 'parent' | 'escalation'

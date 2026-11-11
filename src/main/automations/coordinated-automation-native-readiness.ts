@@ -26,7 +26,10 @@ export function syncNativeReadiness(
       !task ||
       stage.status === 'accepted' ||
       latest?.status === 'pending' ||
-      latest?.status === 'dispatched'
+      latest?.status === 'dispatched' ||
+      // A held report is a true native completion awaiting a person; dependents stay gated below
+      // by semantic acceptance, so the settled Task is neither reopened nor failed.
+      (latest !== undefined && stage.pendingApproval?.dispatchId === latest.id)
     ) {
       continue
     }

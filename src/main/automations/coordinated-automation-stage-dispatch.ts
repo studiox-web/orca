@@ -54,6 +54,31 @@ function haltWith(
   )
 }
 
+/** A held report waits on a person, but never past the run's own wall-clock budget. */
+export function haltExpiredApprovalHolds(
+  ctx: CoordinatedPassContext,
+  snapshot: ResolvedAutomationRunSnapshot
+): boolean {
+  const progress = ctx.ledger.progress
+  const limit = snapshot.globalCeilings.maxWallClockSeconds
+  const held = Object.entries(progress.stages).find(([, stage]) => stage.pendingApproval)
+  if (limit === undefined || !held || progress.halt || progress.operatorStop) {
+    return false
+  }
+  if (ctx.clock.now() - progress.startedAt < limit * 1000) {
+    return false
+  }
+  const [id, stage] = held
+  haltWith(ctx, {
+    key: `wall_clock_ceiling:approval:${id}:${stage.pendingApproval!.dispatchId}`,
+    code: 'wall_clock_ceiling',
+    childDefinitionId: id,
+    detail: `Stage "${id}" attempt ${stage.pendingApproval!.dispatchId} still awaited approval ${stage.pendingApproval!.gateIds.join(', ')} when the run's ${limit}s wall-clock budget ran out; its report was neither accepted nor rejected.`,
+    state: 'blocked'
+  })
+  return true
+}
+
 /** Stages whose dependencies are semantically accepted and whose own budget allows an attempt. */
 function runnableStages(
   ctx: CoordinatedPassContext,

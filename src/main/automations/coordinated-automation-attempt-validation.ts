@@ -7,6 +7,11 @@ import {
   type WorkerResultValidationOutcome,
   validateStructuredWorkerResult
 } from './coordinated-automation-result-validation'
+import type { CoordinatedStagePendingApproval } from '../../shared/coordinated-automation-progress-types'
+import {
+  decodeWorkerReportResult,
+  structuredReportDigest
+} from './coordinated-automation-worker-report-envelope'
 import {
   type CoordinatedRecoveryContext,
   coordinatedWorkerAuthorIdentity
@@ -62,4 +67,56 @@ export function validateAttemptReport(
       ...(ctx.trustedAuthorIdentity ? [ctx.trustedAuthorIdentity] : [])
     ]
   })
+}
+
+/**
+ * Re-verifies a held report at the moment of an approval: the native result must still be the
+ * held bytes, and every other acceptance check (artifact hashes included) must still pass with
+ * only this gate's decision outstanding. Anything else refuses the approval.
+ */
+export function assertHeldReportApprovable(
+  ctx: Parameters<typeof validateAttemptReport>[0] &
+    Pick<CoordinatedRecoveryContext, 'orchestrationDb'>,
+  input: {
+    run: AutomationRun
+    snapshot: ResolvedAutomationRunSnapshot
+    child: ResolvedChildSnapshot
+    taskId: string | undefined
+    held: CoordinatedStagePendingApproval | null
+    gateId: string
+  }
+): void {
+  const { held, taskId } = input
+  const stage = input.child.childDefinitionId
+  if (!held || !taskId) {
+    throw new Error(
+      `Stage "${stage}" has no report awaiting approval; an approval must bind an exact attempt and its report.`
+    )
+  }
+  const decoded = decodeWorkerReportResult(ctx.orchestrationDb.getTask(taskId)?.result)
+  if (
+    ctx.orchestrationDb.getDispatchContext(taskId)?.id !== held.dispatchId ||
+    decoded.kind !== 'structured' ||
+    structuredReportDigest(decoded.report) !== held.reportDigest
+  ) {
+    throw new Error(
+      `The report held for stage "${stage}" is no longer attempt ${held.dispatchId} with digest ${held.reportDigest}; inspect it again before deciding.`
+    )
+  }
+  const validation = validateAttemptReport(ctx, {
+    report: decoded.report,
+    run: input.run,
+    snapshot: input.snapshot,
+    child: input.child,
+    taskId,
+    dispatchId: held.dispatchId
+  })
+  if (
+    !validation.valid &&
+    !(validation.awaitingApproval && validation.awaitingApproval.gateIds.includes(input.gateId))
+  ) {
+    throw new Error(
+      `The held evidence for stage "${stage}" no longer validates: ${validation.error}`
+    )
+  }
 }

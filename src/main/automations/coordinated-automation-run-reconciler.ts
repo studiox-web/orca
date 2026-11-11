@@ -26,7 +26,10 @@ import { acceptedStageReports } from './coordinated-automation-accepted-reports'
 import { admitSettledAttempts } from './coordinated-automation-stage-admission'
 import { isCompleteCoordinatedHostApproval } from './coordinated-automation-approval-validation'
 import { resolveRunWorkspacePath } from './coordinated-automation-attempt-validation'
-import { dispatchRunnableStages } from './coordinated-automation-stage-dispatch'
+import {
+  haltExpiredApprovalHolds,
+  dispatchRunnableStages
+} from './coordinated-automation-stage-dispatch'
 import {
   reconcileStartingAttempts,
   repairNativeChildDispatchMappings,
@@ -53,9 +56,10 @@ function awaitedAttempts(ctx: CoordinatedPassContext): string[] {
   return Object.entries(ctx.ledger.progress.stages).flatMap(([id, stage]) =>
     stage.lineage
       .filter((record) => record.status === 'active' && record.dispatchId !== null)
-      .map(
-        (record) =>
-          `Stage "${id}" attempt ${record.dispatchId} awaits its report until ${record.deadlineAt}.`
+      .map((record) =>
+        stage.pendingApproval?.dispatchId === record.dispatchId
+          ? `Stage "${id}" attempt ${record.dispatchId} reported ${stage.pendingApproval.reportDigest} and awaits approval ${stage.pendingApproval.gateIds.join(', ')}.`
+          : `Stage "${id}" attempt ${record.dispatchId} awaits its report until ${record.deadlineAt}.`
       )
   )
 }
@@ -236,6 +240,7 @@ export async function reconcileCoordinatedRun(
     progressed = (await settleStoppingAttemptsForReconcile(ctx, run)) || progressed
     progressed = abandonStoppedAttempts(ctx, run) || progressed
     progressed = admitSettledAttempts(ctx, run, snapshot) || progressed
+    progressed = haltExpiredApprovalHolds(ctx, snapshot) || progressed
     syncNativeReadiness(ctx, run, snapshot)
     reverifyAcceptedArtifacts(ctx, run, snapshot)
     if (ctx.effectAdapter) {

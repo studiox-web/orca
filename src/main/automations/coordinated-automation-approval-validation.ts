@@ -14,6 +14,8 @@ export type CoordinatedStageHostApproval = SemanticReceiptApproval & {
   childDefinitionId: string
   taskId: string
   dispatchId: string
+  /** Set on operator approvals; such an approval speaks only for these exact report bytes. */
+  reportDigest?: string
   targetChildId?: never
 }
 
@@ -62,11 +64,14 @@ export type StageApprovalValidationContext = Readonly<{
   childDefinitionId: string
   taskId: string
   dispatchId: string
+  reportDigest?: string
   trustedAuthorIdentity?: string
   authorIdentities?: readonly string[]
 }>
 
-export type StageApprovalValidationResult = { valid: true } | { valid: false; error: string }
+export type StageApprovalValidationResult =
+  | { valid: true }
+  | { valid: false; error: string; missingApprovalIds?: string[] }
 
 /**
  * One id may name a stage requirement and a parent requirement; a well-formed approval of the
@@ -162,14 +167,20 @@ export function validateStageApprovals(
 
   const approvals = hostApprovals ?? []
   const usedApprovers = new Set<string>()
+  const missing: StageApprovalRequirement[] = []
 
   for (const req of required) {
-    const byId = approvalsForScope(approvals, req.id, 'stage')
+    // An approval of other report bytes is not an approval of this report.
+    const byId = approvalsForScope(approvals, req.id, 'stage').filter(
+      (a) =>
+        a.scope !== 'stage' ||
+        a.reportDigest === undefined ||
+        context.reportDigest === undefined ||
+        a.reportDigest === context.reportDigest
+    )
     if (byId.length === 0) {
-      return {
-        valid: false,
-        error: `Required stage approval "${req.id}" (role "${req.role}") missing from host approvals.`
-      }
+      missing.push(req)
+      continue
     }
     if (byId.length > 1) {
       return {
@@ -207,7 +218,14 @@ export function validateStageApprovals(
     }
   }
 
-  return { valid: true }
+  // Reported only when nothing present was refused: the report is waiting, not wrong.
+  return missing.length > 0
+    ? {
+        valid: false,
+        error: `Required stage approval "${missing[0].id}" (role "${missing[0].role}") missing from host approvals.`,
+        missingApprovalIds: missing.map((req) => req.id)
+      }
+    : { valid: true }
 }
 
 export type ParentApprovalResolutionContext = Readonly<{

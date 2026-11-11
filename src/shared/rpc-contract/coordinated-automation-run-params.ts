@@ -49,7 +49,13 @@ export const ResolveCoordinatedGate = CoordinatedRunOperatorBase.extend({
   note: z.string().min(1).max(2000).optional(),
   childDefinitionId: z.string().min(1).optional(),
   taskId: z.string().min(1).optional(),
-  dispatchId: z.string().min(1).optional()
+  dispatchId: z.string().min(1).optional(),
+  /**
+   * Digest of the held report the operator was shown (stage.pendingApproval.reportDigest).
+   * Approving a stage gate requires it together with dispatchId; the host refuses if either
+   * differs from what it holds at submission.
+   */
+  expectedReportDigest: z.string().min(1).optional()
 })
 
 export type CoordinatedFakeRunStartInput = z.infer<typeof CoordinatedFakeRunStart>

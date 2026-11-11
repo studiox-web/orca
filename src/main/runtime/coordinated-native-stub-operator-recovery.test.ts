@@ -71,35 +71,17 @@ it('binds one gate id per scope: the stage approval names the exact attempt, the
   const dispatchId = await dispatchWriter(f, run.id)
   const terminal = f.createdTerminals.at(-1)!
 
-  // The host binds the stage approval to the stage's one launched attempt when none is named.
-  const resolved = await f.adapter.resolveGate({
-    ...operatorScope(run),
-    gateId: 'gate-review',
-    decision: 'approve',
-    note: 'Reviewed out of band.',
-    childDefinitionId: 'writer'
-  })
-  expect(resolved.state).toBe('outcome_uncertain')
-  expect(resolved.disposition).toBe('recorded')
-  const parent = await f.adapter.resolveGate({
-    ...operatorScope(run),
-    gateId: 'gate-review',
-    gateScope: 'parent',
-    decision: 'approve'
-  })
-  expect(parent.disposition).toBe('recorded')
-  const progress = f.adapter.inspectProgress(run.id)!
-  expect(progress.approvals).toHaveLength(2)
-  expect(progress.approvals![0]).toMatchObject({
-    scope: 'stage',
-    approvalId: 'gate-review',
-    approverIdentity: 'local_operator',
-    childDefinitionId: 'writer',
-    taskId: writerTaskId,
-    dispatchId
-  })
-  expect(progress.approvals![1]).toMatchObject({ scope: 'parent', approvalId: 'gate-review' })
-  expect(progress.approvals![1].dispatchId).toBeUndefined()
+  // Before the worker reports there is no evidence, so a stage approval is refused outright.
+  await expect(
+    f.adapter.resolveGate({
+      ...operatorScope(run),
+      gateId: 'gate-review',
+      decision: 'approve',
+      childDefinitionId: 'writer',
+      dispatchId,
+      expectedReportDigest: `sha256:${'0'.repeat(64)}`
+    })
+  ).rejects.toThrow(/awaiting approval/)
 
   await sendWorkerDone(f, {
     handle: terminal.handle,
@@ -113,9 +95,50 @@ it('binds one gate id per scope: the stage approval names the exact attempt, the
     }),
     evidence: evidenceFor(terminal)
   })
-  const completed = await f.adapter.reconcileRun(run.id)
-  expect(completed.state).toBe('completed')
+  // The authenticated report settled the native Dispatch; semantic acceptance waits on a person.
+  const waiting = await f.adapter.reconcileRun(run.id)
+  expect(waiting.state).toBe('waiting')
+  expect(waiting.reason).toContain('awaits approval gate-review')
+  expect(f.db.getDispatchContextById(dispatchId)!.status).toBe('completed')
+  expect(f.db.getTask(writerTaskId)!.status).toBe('completed')
+  const held = f.adapter.inspectProgress(run.id)!.stages['writer'].pendingApproval!
+  expect(held.dispatchId).toBe(dispatchId)
+  expect(native.spawn).toHaveBeenCalledTimes(1)
+
+  const parent = await f.adapter.resolveGate({
+    ...operatorScope(run),
+    gateId: 'gate-review',
+    gateScope: 'parent',
+    decision: 'approve'
+  })
+  expect(parent).toMatchObject({ disposition: 'recorded', state: 'waiting' })
+  const completed = await f.adapter.resolveGate({
+    ...operatorScope(run),
+    gateId: 'gate-review',
+    decision: 'approve',
+    note: 'Reviewed the delivered report.',
+    childDefinitionId: 'writer',
+    dispatchId,
+    expectedReportDigest: held.reportDigest
+  })
+  expect(completed).toMatchObject({ disposition: 'recorded', state: 'completed' })
   expect(completed.run.completionReceipt).toBeTruthy()
+  const progress = f.adapter.inspectProgress(run.id)!
+  expect(progress.approvals).toHaveLength(2)
+  expect(progress.approvals![0]).toMatchObject({ scope: 'parent', approvalId: 'gate-review' })
+  expect(progress.approvals![0].dispatchId).toBeUndefined()
+  expect(progress.approvals![1]).toMatchObject({
+    scope: 'stage',
+    approvalId: 'gate-review',
+    approverIdentity: 'local_operator',
+    childDefinitionId: 'writer',
+    taskId: writerTaskId,
+    dispatchId,
+    reportDigest: held.reportDigest
+  })
+  // One process, one Dispatch: the hold consumed no extra attempt.
+  expect(native.spawn).toHaveBeenCalledTimes(1)
+  expect(f.db.getDispatchContext(writerTaskId)!.id).toBe(dispatchId)
 })
 
 it('refuses gate replays and scope-mismatched decisions before any write', async () => {
@@ -145,14 +168,34 @@ it('refuses gate replays and scope-mismatched decisions before any write', async
       dispatchId
     })
   ).rejects.toThrow(/belongs to stage/)
+  const terminal = f.createdTerminals.at(-1)!
+  await sendWorkerDone(f, {
+    handle: terminal.handle,
+    dispatchId,
+    taskId: writerTaskId,
+    outcome: 'succeeded',
+    structuredResult: structuredReport(run, {
+      childDefinitionId: 'writer',
+      taskId: writerTaskId,
+      dispatchId
+    }),
+    evidence: evidenceFor(terminal)
+  })
+  expect((await f.adapter.reconcileRun(run.id)).state).toBe('waiting')
+  const held = f.adapter.inspectProgress(run.id)!.stages['writer'].pendingApproval!
   const approve = {
     ...operatorScope(run),
     gateId: 'gate-review',
     decision: 'approve' as const,
     childDefinitionId: 'writer',
     taskId: writerTaskId,
-    dispatchId
+    dispatchId,
+    expectedReportDigest: held.reportDigest
   }
+  // Fail closed without the displayed evidence.
+  await expect(
+    f.adapter.resolveGate({ ...approve, expectedReportDigest: undefined })
+  ).rejects.toThrow(/must name the exact Dispatch and report digest/)
   expect((await f.adapter.resolveGate(approve)).disposition).toBe('recorded')
   // A lost acknowledgement replays to the same answer; a different decision is refused.
   expect((await f.adapter.resolveGate(approve)).disposition).toBe('already_recorded')

@@ -107,7 +107,9 @@ export function stageGateResolutionEligibility(input: {
       )
       .map((entry) => entry.key)
   ]
-  const approvableDispatchId = stageBoundDispatchId(progress.stages[child.childDefinitionId])
+  // Only a held report can be approved; an attempt that has not reported offers no evidence.
+  const approvableDispatchId =
+    progress.stages[child.childDefinitionId]?.pendingApproval?.dispatchId ?? null
   return pendingGateIds.length > 0
     ? {
         canResolve: true,
@@ -143,9 +145,7 @@ export function gatePending(
       approval.scope === scope &&
       approval.approvalId === gateId &&
       // A stage approval of a superseded attempt does not approve the current one.
-      (scope === 'parent' ||
-        approval.dispatchId ===
-          (stageBoundDispatchId(progress.stages[approval.childDefinitionId ?? '']) ?? undefined))
+      (scope === 'parent' || stageApprovalIsCurrent(progress, approval))
   )
   const rejected = (progress.operatorDecisions ?? []).some(
     (decision) =>
@@ -205,5 +205,21 @@ function escalationPending(
         decision.gateId === escalation.key &&
         (decision.gateScope ?? 'escalation') === 'escalation'
     )
+  )
+}
+
+/** A stage approval counts only for the stage's current attempt and the report bytes it named. */
+function stageApprovalIsCurrent(
+  progress: CoordinatedRunProgress,
+  approval: NonNullable<CoordinatedRunProgress['approvals']>[number]
+): boolean {
+  const stage = progress.stages[approval.childDefinitionId ?? '']
+  const reportDigest = stage?.pendingApproval?.reportDigest ?? stage?.acceptedReportDigest
+  return (
+    approval.dispatchId === (stageBoundDispatchId(stage) ?? undefined) &&
+    (approval.reportDigest === undefined ||
+      reportDigest === undefined ||
+      reportDigest === null ||
+      approval.reportDigest === reportDigest)
   )
 }

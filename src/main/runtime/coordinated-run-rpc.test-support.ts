@@ -27,6 +27,8 @@ export async function createCoordinatedRunRpcFixture(
     start?: boolean
     injection?: Partial<CoordinatedRunHostInjection>
     fakeEffects?: boolean
+    /** Definition for the fixture's parent; the default two-stage pipeline when omitted. */
+    definition?: Parameters<typeof coordinatedCreateInput>[0]
   } = {}
 ) {
   const env = await RecoveryEnv.create({ nestedProfile: options.nestedProfile })
@@ -78,7 +80,7 @@ export async function createCoordinatedRunRpcFixture(
   if (options.start !== false) {
     service.start()
   }
-  const { automationId } = env.createDefinitionOnly(coordinatedCreateInput())
+  const { automationId } = env.createDefinitionOnly(coordinatedCreateInput(options.definition))
   const dispatcher = new RpcDispatcher({
     runtime,
     methods: [...AUTOMATION_METHODS, ...COORDINATED_AUTOMATION_RUN_METHODS]

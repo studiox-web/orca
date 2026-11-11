@@ -406,13 +406,17 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
       progressStore: createMemoryCoordinatedRunProgressStore(),
       workerProvider
     })
-    const missingStageRun = await missingStageAdapter.runUntilSettled(run!.id)
-    expect(missingStageRun.status).toBe('dispatch_failed')
-    const orchRunId = missingStageRun.orchestrationRunId!
+    // An otherwise valid report with no decision yet is held: never accepted, never failed.
+    const missingStage = await missingStageAdapter.reconcileRun(run!.id)
+    expect(missingStage.state).toBe('waiting')
+    expect(missingStage.reason).toContain('awaits approval stage_appr_1')
+    expect(missingStage.run.completionReceipt ?? null).toBeNull()
+    const orchRunId = missingStage.run.orchestrationRunId!
     let task = db.listTasks({ runId: orchRunId })[0]
-    expect(task.result).toContain(
-      'Required stage approval "stage_appr_1" (role "reviewer") missing'
-    )
+    expect(
+      missingStageAdapter.inspectProgress(run!.id)!.stages['step_1'].pendingApproval
+    ).toMatchObject({ dispatchId: db.getDispatchContext(task.id)!.id, gateIds: ['stage_appr_1'] })
+    expect(missingStageAdapter.inspectProgress(run!.id)!.stages['step_1'].attempts).toBe(0)
 
     const buildValidStageApproval = (dispatchId: string): CoordinatedStageHostApproval => ({
       approvalId: 'stage_appr_1',
@@ -451,11 +455,18 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
         workerProvider: stageProvider,
         hostApprovals: approvals
       })
-      await a.retryTask({
-        automationRunId: run!.id,
-        taskId: task.id,
-        retryOfDispatchId: db.getDispatchContext(task.id)!.id
-      })
+      const latest = db.getDispatchContext(task.id)!
+      if (latest.status === 'failed') {
+        await a.retryTask({
+          automationRunId: run!.id,
+          taskId: task.id,
+          retryOfDispatchId: latest.id
+        })
+      } else {
+        // A held report settled natively; the coordinator reopens the Task for a new attempt.
+        db.updateTaskStatus(task.id, 'ready')
+        await a.dispatchTask(run!.id, task.id)
+      }
       return db.getTask(task.id)!
     }
 
@@ -463,9 +474,9 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     task = await retryStageWith((d) => [
       { ...buildValidStageApproval(d), approvalId: 'wrong_stage_id' }
     ])
-    expect(task.result).toContain(
-      'Required stage approval "stage_appr_1" (role "reviewer") missing'
-    )
+    // An approval of some other id leaves the required one undecided: technically delivered, held.
+    expect(db.getDispatchContext(task.id)!.status).toBe('completed')
+    expect(task.result).not.toContain('stage_appr_1')
 
     // 3. Stage wrong-scope (parent scope) and omitted scope
     task = await retryStageWith((d) => [
