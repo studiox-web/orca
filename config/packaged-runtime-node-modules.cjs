@@ -25,6 +25,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@linear/sdk',
   '@orca/process-host',
   '@parcel/watcher',
+  'ajv',
   'electron-updater',
   'i18next',
   'jsonc-parser',
