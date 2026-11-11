@@ -68,6 +68,10 @@ Uncertain launches/writes, locks, receipts and required reconciliation:
 Next bounded action and authorization limits:
 ```
 
+Before the replacement edits, require an acknowledgement of the current handoff: exact Task/Dispatch, source revision, dirty-file inventory, critical shared contracts, scope and next action. Queue acceptance or a notification is not proof that the brief was consumed. If a stored Task prompt has historical provider instructions, explicitly supersede them with the latest user selection and deliver the current brief before implementation. Use native messaging and supported launch/attachment paths; do not steer a dispatched worker through its terminal.
+
+The November 11 transfer exposed this distinction: Kimi had continued working while two supplemental Dispatch messages remained unhandled. Codex received the consolidated brief at launch and acknowledged it before edits. An external terminal also prevented Orca from proving a guarded stop; Graham exited the agent, its exact terminal showed exit plus a shell prompt, and only then was the old assignment fenced and replaced. Fencing alone would not have proved process exit. Current selection for this build is Codex for all remaining assignments; the November 10 capacity note above is historical.
+
 Native `worker_done` settles a worker assignment; a progress note, input-accepted receipt, passing typecheck, or quota stop does not. The coordinator still validates the reported artifacts and acceptance criteria before declaring the parent outcome complete.
 
 ## Verify at the appropriate level
