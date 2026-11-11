@@ -57,8 +57,8 @@ function effectPipeline(): CoordinatedAutomationCreateInput {
 let env: RecoveryEnv
 const STAGE_DEADLINE_MS = 1_800_000
 
-async function startEffectRun(states: FakeEffectState[] = ['verified']) {
-  const { runId } = env.createRun(effectPipeline())
+async function startEffectRun(states: FakeEffectState[] = ['verified'], input = effectPipeline()) {
+  const { runId } = env.createRun(input)
   const effectId = env.effectId(runId, 'stage', LOCAL_STAGE_EFFECT)
   await env.harness.effects.seed(effectId, LOCAL_STAGE_EFFECT.kind)
   await env.harness.effects.script(effectId, states)
@@ -78,7 +78,216 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await env.dispose()
+})
+
+async function interruptEffectIntent() {
+  const run = await startEffectRun(['verified'], {
+    ...effectPipeline(),
+    globalCeilings: { maxWallClockSeconds: 60 }
+  })
+  env.crashAt('effect.after-intent')
+  await expect(env.adapter.reconcileRun(run.runId)).rejects.toThrow(InjectedCoordinatorCrash)
+  const progress = env.adapter.inspectProgress(run.runId)!
+  expect(progress.effects[run.effectId]).toMatchObject({
+    status: 'intent_recorded',
+    applyAuthorizations: 1,
+    receipt: null
+  })
+  expect((await effectRecord(run.effectId)).applyCount).toBe(0)
+  const deadline =
+    progress.startedAt +
+    env.run(run.runId).resolvedSnapshot!.globalCeilings.maxWallClockSeconds! * 1000
+  await env.reopen()
+  return { ...run, progress, deadline }
+}
+
+function advanceDuringQuery(start: number, end: number) {
+  const query = env.harness.effects.query.bind(env.harness.effects)
+  return vi.spyOn(env.harness.effects, 'query').mockImplementationOnce(async (effectId) => {
+    expect(env.harness.clock.now()).toBe(start)
+    await env.harness.clock.advanceTo(end)
+    return query(effectId)
+  })
+}
+
+describe('coordinated recovery: effect deadline fences', () => {
+  it('retains an authorized intent but does not start apply if its durable write reaches expiry', async () => {
+    const { runId, effectId } = await startEffectRun(['verified'], {
+      ...effectPipeline(),
+      globalCeilings: { maxWallClockSeconds: 60 }
+    })
+    const deadline = env.harness.clock.now() + 60_000
+    const boundaryHook = env.boundaryHook()
+    vi.spyOn(env, 'boundaryHook').mockReturnValue((boundary, detail) => {
+      boundaryHook(boundary, detail)
+      if (boundary === 'effect.after-intent') {
+        vi.spyOn(env.harness.clock, 'now').mockReturnValue(deadline)
+      }
+    })
+    await env.reopen()
+    const apply = vi.spyOn(env.harness.effects, 'apply')
+    const outcome = await env.adapter.reconcileRun(runId)
+    expect(outcome.state).toBe('blocked')
+    expect(outcome.progress!.effects[effectId]).toMatchObject({
+      effectId,
+      status: 'intent_recorded',
+      receipt: null,
+      applyAuthorizations: 1
+    })
+    expect(outcome.progress!.escalations).toEqual([
+      expect.objectContaining({ code: 'wall_clock_ceiling', at: deadline })
+    ])
+    expect(outcome.run.completionReceipt).toBeNull()
+    expect(env.dispatchIds(runId, 'review')).toHaveLength(0)
+    await env.reopen()
+    const replay = await env.adapter.reconcileRun(runId)
+    expect(replay.progress!.effects).toEqual(outcome.progress!.effects)
+    expect(apply).not.toHaveBeenCalled()
+    expect((await effectRecord(effectId)).applyCount).toBe(0)
+  })
+
+  it.each([0, 1])(
+    'does not reauthorize an intent when its query returns at deadline + %ims',
+    async (offset) => {
+      const { runId, effectId, progress, deadline } = await interruptEffectIntent()
+      await env.harness.clock.advanceTo(deadline - 1)
+      const query = advanceDuringQuery(deadline - 1, deadline + offset)
+      const apply = vi.spyOn(env.harness.effects, 'apply')
+
+      const outcome = await env.adapter.reconcileRun(runId)
+      expect(query).toHaveBeenCalledExactlyOnceWith(effectId)
+      expect.soft(apply).not.toHaveBeenCalled()
+      expect.soft(outcome.progress!.effects).toEqual(progress.effects)
+      expect(outcome.state).toBe('blocked')
+      expect(outcome.run.completionReceipt).toBeNull()
+      expect(outcome.progress!.halt).toMatchObject({ state: 'blocked', at: deadline + offset })
+      expect(outcome.progress!.escalations).toEqual([
+        expect.objectContaining({ code: 'wall_clock_ceiling', at: deadline + offset })
+      ])
+      expect(outcome.progress!.stages).toEqual(progress.stages)
+      expect(outcome.progress!.reports).toEqual(progress.reports)
+      expect(env.dispatchIds(runId, 'review')).toHaveLength(0)
+
+      for (const restart of [false, true]) {
+        if (restart) {
+          await env.reopen()
+        }
+        const replay = await env.adapter.reconcileRun(runId)
+        expect(replay.state).toBe('blocked')
+        expect(replay.run.completionReceipt).toBeNull()
+        expect(replay.progress!.halt).toEqual(outcome.progress!.halt)
+        expect(replay.progress!.escalations).toEqual(outcome.progress!.escalations)
+        expect.soft(replay.progress!.effects).toEqual(progress.effects)
+        expect(env.dispatchIds(runId, 'review')).toHaveLength(0)
+      }
+      expect(query).toHaveBeenCalledTimes(1)
+      expect.soft(apply).not.toHaveBeenCalled()
+      expect.soft((await effectRecord(effectId)).applyCount).toBe(0)
+    }
+  )
+
+  it('recovers once when the awaited query returns one millisecond before the deadline', async () => {
+    const { runId, effectId, progress, deadline } = await interruptEffectIntent()
+    await env.harness.clock.advanceTo(deadline - 2)
+    const query = advanceDuringQuery(deadline - 2, deadline - 1)
+    const apply = vi.spyOn(env.harness.effects, 'apply')
+    const outcome = await env.adapter.reconcileRun(runId)
+    expect(query).toHaveBeenCalledExactlyOnceWith(effectId)
+    expect(apply).toHaveBeenCalledExactlyOnceWith(effectId)
+    expect(outcome.state).toBe('completed')
+    expect(outcome.progress!.effects[effectId]).toEqual({
+      ...progress.effects[effectId],
+      status: 'verified',
+      applyAuthorizations: 2,
+      receipt: `fake-receipt:${effectId}:1`,
+      updatedAt: deadline - 1
+    })
+    expect(outcome.progress!.halt).toBeNull()
+    expect(outcome.run.completionReceipt!.effectReceipts).toHaveLength(1)
+    expect(env.dispatchIds(runId, 'review')).toHaveLength(1)
+    await env.harness.clock.advanceTo(deadline)
+    await env.reopen()
+    const replay = await env.adapter.reconcileRun(runId)
+    expect(replay.run.completionReceipt).toEqual(outcome.run.completionReceipt)
+    expect(apply).toHaveBeenCalledTimes(1)
+    expect((await effectRecord(effectId)).applyCount).toBe(1)
+  })
+
+  it.each(['verified', 'uncertain', 'not_started'] as const)(
+    'retains a %s result from an apply already in flight at expiry without replaying it',
+    async (state) => {
+      const { runId, effectId } = await startEffectRun([state], {
+        ...effectPipeline(),
+        globalCeilings: { maxWallClockSeconds: 60 }
+      })
+      const deadline = env.harness.clock.now() + 60_000
+      const runApply = env.harness.effects.apply.bind(env.harness.effects)
+      const apply = vi.spyOn(env.harness.effects, 'apply').mockImplementationOnce(async (id) => {
+        await env.harness.clock.advanceTo(deadline)
+        return runApply(id)
+      })
+      const outcome = await env.adapter.reconcileRun(runId)
+      expect(apply).toHaveBeenCalledExactlyOnceWith(effectId)
+      expect(outcome.progress!.effects[effectId]).toMatchObject({
+        effectId,
+        status: state === 'verified' ? 'verified' : 'uncertain',
+        applyAuthorizations: 1,
+        receipt: state === 'verified' ? `fake-receipt:${effectId}:1` : null
+      })
+      expect(outcome.progress!.escalations).toContainEqual(
+        expect.objectContaining({ code: 'wall_clock_ceiling', at: deadline })
+      )
+      expect(outcome.run.completionReceipt).toBeNull()
+      expect(env.dispatchIds(runId, 'review')).toHaveLength(0)
+      await env.reopen()
+      const replay = await env.adapter.reconcileRun(runId)
+      expect(replay.progress!.effects).toEqual(outcome.progress!.effects)
+      expect(apply).toHaveBeenCalledTimes(1)
+      expect((await effectRecord(effectId)).applyCount).toBe(1)
+    }
+  )
+
+  it.each(['applied', 'verified', 'uncertain', 'denied'] as const)(
+    'retains a late %s query observation without authorizing another apply',
+    async (state) => {
+      const { runId, effectId, progress, deadline } = await interruptEffectIntent()
+      const receipt =
+        state === 'applied' || state === 'verified' ? 'fake-receipt:observed' : undefined
+      await env.harness.effects.exposeExternalState(effectId, state, receipt)
+      await env.harness.clock.advanceTo(deadline - 1)
+      const query = advanceDuringQuery(deadline - 1, deadline)
+      const apply = vi.spyOn(env.harness.effects, 'apply')
+      const outcome = await env.adapter.reconcileRun(runId)
+      expect(query).toHaveBeenCalledExactlyOnceWith(effectId)
+      expect(apply).not.toHaveBeenCalled()
+      expect(outcome.progress!.effects[effectId]).toEqual({
+        ...progress.effects[effectId],
+        status: state,
+        receipt: receipt ?? null,
+        updatedAt: deadline
+      })
+      expect(outcome.progress!.escalations).toContainEqual(
+        expect.objectContaining({ code: 'wall_clock_ceiling', at: deadline })
+      )
+      if (state === 'uncertain' || state === 'denied') {
+        expect(outcome.progress!.escalations).toContainEqual(
+          expect.objectContaining({
+            code: state === 'uncertain' ? 'uncertain_effect' : 'effect_denied'
+          })
+        )
+      }
+      expect(outcome.run.completionReceipt).toBeNull()
+      expect(env.dispatchIds(runId, 'review')).toHaveLength(0)
+      await env.reopen()
+      const replay = await env.adapter.reconcileRun(runId)
+      expect(replay.progress!.effects).toEqual(outcome.progress!.effects)
+      expect(replay.progress!.halt).toEqual(outcome.progress!.halt)
+      expect(replay.run.completionReceipt).toBeNull()
+      expect(apply).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('coordinated recovery: uncertain-effect gates', () => {

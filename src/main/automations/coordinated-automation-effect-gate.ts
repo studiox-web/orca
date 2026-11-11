@@ -128,10 +128,26 @@ function recordObservation(
   )
 }
 
+function effectApplicationHalted(
+  ctx: CoordinatedPassContext,
+  snapshot: ResolvedAutomationRunSnapshot
+): boolean {
+  haltExpiredRun(ctx, snapshot)
+  const progress = ctx.ledger.progress
+  return (
+    progress.halt?.state === 'failed' ||
+    progress.escalations.some((entry) => entry.code === 'wall_clock_ceiling')
+  )
+}
+
 async function applyOnce(
   ctx: CoordinatedPassContext,
+  snapshot: ResolvedAutomationRunSnapshot,
   entry: CoordinatedEffectEntry
 ): Promise<void> {
+  if (effectApplicationHalted(ctx, snapshot)) {
+    return
+  }
   const adapter = ctx.effectAdapter!
   const authorized = {
     ...entry,
@@ -148,6 +164,9 @@ async function applyOnce(
     childDefinitionId: entry.childDefinitionId,
     label: entry.effectId
   })
+  if (effectApplicationHalted(ctx, snapshot)) {
+    return
+  }
   const observation = await adapter.apply(entry.effectId)
   // The apply may have happened; a stopped host records nothing and the next generation queries.
   assertCoordinatorActive(ctx)
@@ -176,20 +195,16 @@ export async function advanceStageEffects(
   const before = ctx.ledger.progress.sequence
   const automationRunId = ctx.ledger.progress.automationRunId
   for (const declared of declaredStageEffects(snapshot, automationRunId)) {
-    haltExpiredRun(ctx, snapshot)
-    const progress = ctx.ledger.progress
-    if (
-      progress.halt?.state === 'failed' ||
-      progress.escalations.some((entry) => entry.code === 'wall_clock_ceiling')
-    ) {
+    if (effectApplicationHalted(ctx, snapshot)) {
       break
     }
+    const progress = ctx.ledger.progress
     const entry = progress.effects[declared.effectId]
     if (!entry) {
       if (progress.stages[declared.childDefinitionId]?.status !== 'accepted') {
         continue
       }
-      await applyOnce(ctx, {
+      await applyOnce(ctx, snapshot, {
         effectId: declared.effectId,
         childDefinitionId: declared.childDefinitionId,
         kind: declared.requirement.kind,
@@ -208,9 +223,10 @@ export async function advanceStageEffects(
     }
     const observation = await ctx.effectAdapter!.query(entry.effectId)
     assertCoordinatorActive(ctx)
+    haltExpiredRun(ctx, snapshot)
     const status = observedStatus(observation)
     if (status === null && entry.status === 'intent_recorded') {
-      await applyOnce(ctx, entry)
+      await applyOnce(ctx, snapshot, entry)
       continue
     }
     recordObservation(
