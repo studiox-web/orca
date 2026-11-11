@@ -35,6 +35,13 @@ type Observation = {
 }
 
 const observations = new WeakMap<PreparedNativeStubLaunch, Observation>()
+/** PTYs a dispatched permit spawned; only that host-owned path can add one. */
+const observedPtyIds = new Set<string>()
+
+/** True only for a PTY running the pinned stub, which draws none of Codex's own render cues. */
+export function isNativeStubFixturePty(ptyId: string): boolean {
+  return observedPtyIds.has(ptyId)
+}
 
 /** Starts at physical spawn, before the stub's first render can arrive; one observation per permit. */
 export function beginNativeStubFixtureObservation(
@@ -57,6 +64,7 @@ export function beginNativeStubFixtureObservation(
     unsubscribe: () => {}
   }
   observations.set(permit, observation)
+  observedPtyIds.add(physical.ptyId)
   observation.unsubscribe = source.subscribeToTerminalData(physical.ptyId, (data) => {
     const window = observation.carry + data
     observation.carry = window.slice(-CARRY_CHARS)
@@ -66,6 +74,9 @@ export function beginNativeStubFixtureObservation(
     observation.submitted ||=
       observation.writeBegun && window.includes(NATIVE_STUB_SUBMITTED_MARKER)
     observation.exited ||= window.includes(NATIVE_STUB_EXIT_MARKER)
+    if (observation.exited) {
+      observedPtyIds.delete(observation.ptyId)
+    }
     if (before !== `${observation.ready}${observation.submitted}${observation.exited}`) {
       for (const notify of observation.changed) {
         notify()
@@ -75,7 +86,11 @@ export function beginNativeStubFixtureObservation(
 }
 
 export function endNativeStubFixtureObservation(permit: PreparedNativeStubLaunch): void {
-  observations.get(permit)?.unsubscribe()
+  const observation = observations.get(permit)
+  observation?.unsubscribe()
+  if (observation) {
+    observedPtyIds.delete(observation.ptyId)
+  }
 }
 
 function requireObservation(permit: PreparedNativeStubLaunch, ptyId?: string): Observation {

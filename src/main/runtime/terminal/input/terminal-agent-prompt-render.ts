@@ -8,6 +8,7 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../../../shared/runtime-types'
+import { isNativeStubFixturePty } from '../../native-stub-fixture-protocol'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
@@ -20,7 +21,11 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
     dispose: () => void
   } | null {
     const pty = this.ptysById.get(ptyId)
-    if (!['claude', 'codex'].includes(pty?.launchAgent ?? pty?.foregroundAgent ?? '')) {
+    if (
+      !['claude', 'codex'].includes(pty?.launchAgent ?? pty?.foregroundAgent ?? '') ||
+      // The pinned stub is launched as Codex but never draws Codex's paste marker.
+      isNativeStubFixturePty(ptyId)
+    ) {
       return null
     }
     let armed = false

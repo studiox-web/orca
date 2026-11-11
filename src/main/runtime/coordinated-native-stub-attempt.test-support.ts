@@ -49,6 +49,14 @@ const disposers: (() => void)[] = []
 let exitCallback: LocalPtyExitCallback | undefined
 let nativeSpawn: Mock = vi.fn()
 let stubBehavior: StubPtyBehavior = 'responsive'
+let stubSelfReport: ((transcript: string, env: Record<string, string>) => void) | null = null
+
+/** Lets the emulated stub act on its own input, with only its own spawn environment. */
+export function setStubSelfReport(
+  report: ((transcript: string, env: Record<string, string>) => void) | null
+): void {
+  stubSelfReport = report
+}
 
 /** Registers per-test PTY mock and cleanup; the caller owns the hoisted `node-pty` mock. */
 export function installNativeStubAttemptHooks(spawn: Mock): void {
@@ -61,16 +69,25 @@ function resetNativeSpawn(): void {
   exitCallback = undefined
   nativeSpawn.mockReset()
   stubBehavior = 'responsive'
-  nativeSpawn.mockImplementation(() => {
-    const process = createLocalPtyMockProcess({
-      get: () => exitCallback,
-      set: (callback) => {
-        exitCallback = callback
-      }
-    })
-    emulatePinnedStubOnPty(process, () => stubBehavior)
-    return process
-  })
+  stubSelfReport = null
+  nativeSpawn.mockImplementation(
+    (_file: string, _args: unknown, options?: { env?: Record<string, string> }) => {
+      const process = createLocalPtyMockProcess({
+        get: () => exitCallback,
+        set: (callback) => {
+          exitCallback = callback
+        }
+      })
+      // The stub only ever sees its own stdin and the environment it was spawned with.
+      const env = { ...options?.env }
+      emulatePinnedStubOnPty(
+        process,
+        () => stubBehavior,
+        (transcript) => stubSelfReport?.(transcript, env)
+      )
+      return process
+    }
+  )
 }
 
 /** Selects how the next controlled PTY plays the pinned stub. */

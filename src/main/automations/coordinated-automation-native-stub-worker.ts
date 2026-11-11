@@ -16,6 +16,7 @@ import { beginNativeStubFixtureObservation } from '../runtime/native-stub-fixtur
 import { launchPreparedWorkerDispatch } from '../runtime/rpc/methods/orchestration/worker/prepared-worker-dispatch-launch'
 import { folderWorkspaceRepoId } from '../../shared/folder-workspace-worktree'
 import { ROOT_DISPATCH_DEPTH } from '../../shared/nested-worker-depth'
+import { withCoordinatedReportBrief } from './coordinated-automation-report-brief'
 import { coordinatedMappingProblem } from './coordinated-automation-native-validation'
 import { LOCAL_SELF_OWNER, runScopeRefusal } from './coordinated-automation-run-host-gate'
 import {
@@ -249,7 +250,7 @@ export async function prepareCoordinatedNativeStubAttempt(
         runtime: host.runtime,
         db: host.db,
         run: host.db.getRun(binding.orchestrationRunId)!,
-        started,
+        started: withCoordinatedReportBrief(started, input.run, input.child),
         params: {
           task: input.taskId,
           worktree: `id:${workspaceId}`,

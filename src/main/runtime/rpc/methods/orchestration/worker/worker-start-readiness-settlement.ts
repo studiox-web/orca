@@ -101,7 +101,11 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
     (stubFixture
       ? // The stub fires no Codex turn hook; only its own echoed submission proves the turn.
         {
-          verdict: (await waitForNativeStubFixtureSubmission(stubFixture, turnStartTimeoutMs))
+          // The stub echoes at once or never; its wait is bounded by the frozen launch budget.
+          verdict: (await waitForNativeStubFixtureSubmission(
+            stubFixture,
+            Math.min(turnStartTimeoutMs, Math.max(0, args.readinessDeadline - Date.now()))
+          ))
             ? 'observed'
             : 'unobserved',
           prompt: promptDelivery
