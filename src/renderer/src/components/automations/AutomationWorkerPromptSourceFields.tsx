@@ -38,7 +38,7 @@ export function AutomationWorkerPromptSourceFields({
   return (
     <div className="space-y-2 rounded-md border border-border/50 p-3">
       <div className="flex items-center justify-between">
-        <Label className="font-semibold text-xs">
+        <Label>
           {translate('auto.components.automations.workers.promptSourceTitle', 'Prompt source')}
         </Label>
         <div
@@ -83,13 +83,14 @@ export function AutomationWorkerPromptSourceFields({
 
       {promptKind === 'inline' ? (
         <div className="space-y-1">
-          <Label htmlFor="prompt-inline-text" className="text-2xs text-muted-foreground">
+          <Label variant="settings" htmlFor="prompt-inline-text">
             {translate(
               'auto.components.automations.workers.inlineInstructions',
               'Inline instructions'
             )}
           </Label>
           <Textarea
+            variant="code"
             id="prompt-inline-text"
             value={promptText}
             onChange={(e) => onPromptTextChange(e.target.value)}
@@ -98,7 +99,6 @@ export function AutomationWorkerPromptSourceFields({
               'Enter specialist instructions for this worker...'
             )}
             rows={4}
-            className="font-mono text-xs"
           />
         </div>
       ) : (
@@ -108,11 +108,14 @@ export function AutomationWorkerPromptSourceFields({
               {translate('auto.components.automations.workers.filePath', 'File path')}
             </Label>
             <Input
+              variant="code"
               id="prompt-path"
               value={promptPath}
               onChange={(e) => onPromptPathChange(e.target.value)}
-              placeholder="automations/goals/writer/GOAL.md"
-              className="font-mono"
+              placeholder={translate(
+                'auto.components.automations.AutomationWorkerPromptSourceFields.a42c8d3c81',
+                'automations/goals/writer/GOAL.md'
+              )}
             />
           </div>
           <div className="space-y-1">
@@ -123,11 +126,14 @@ export function AutomationWorkerPromptSourceFields({
               )}
             </Label>
             <Input
+              variant="code"
               id="prompt-digest"
               value={promptDigest}
               onChange={(e) => onPromptDigestChange(e.target.value)}
-              placeholder="sha256:..."
-              className="font-mono text-3xs"
+              placeholder={translate(
+                'auto.components.automations.AutomationWorkerPromptSourceFields.2ce267f437',
+                'sha256:...'
+              )}
             />
           </div>
         </div>

@@ -1,3 +1,4 @@
+import type { OrcaRuntimeWithStateFields } from './construction/runtime-construction'
 import { isDeepStrictEqual } from 'node:util'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
@@ -22,7 +23,7 @@ const createKeys = new Set([
 ])
 
 export function beginNativeProviderTerminal(
-  runtime: object,
+  runtime: OrcaRuntimeWithStateFields,
   selector: string | undefined,
   opts: TerminalCreateOptions
 ): void {
@@ -91,7 +92,7 @@ export function bindNativeProviderCommand(
 
 export function assertNativeProviderRuntimeSpawn(
   args: RuntimePtySpawnArgs,
-  runtime?: object
+  runtime?: OrcaRuntimeWithStateFields
 ): void {
   const permit = requireNativeProviderLaunch(args.preparedNativeProvider!, runtime)
   if (

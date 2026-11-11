@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type {
   Automation,
   StageAcceptanceRecord,
@@ -58,12 +59,18 @@ function resolveAttemptOpenStatus(
   if (technicalStatus === 'queued') {
     return {
       canOpenWorker: false,
-      reason: 'Worker attempt is queued and has not started a live session yet.'
+      reason: translate(
+        'auto.components.automations.coordinated.automation.attempt.projection.37a31e987d',
+        'Worker attempt is queued and has not started a live session yet.'
+      )
     }
   }
   return {
     canOpenWorker: false,
-    reason: 'No live chat, terminal, or dispatch open target is recorded for this attempt.'
+    reason: translate(
+      'auto.components.automations.coordinated.automation.attempt.projection.dfa042dc3f',
+      'No live chat, terminal, or dispatch open target is recorded for this attempt.'
+    )
   }
 }
 
@@ -102,7 +109,12 @@ export function projectCoordinatedAttempt(input: {
     workerReportOutcome: obs.workerReportOutcome ?? report?.outcome ?? null,
     semanticAcceptanceStatus,
     summary: report?.summary ?? null,
-    ownerLabel: obs.ownerLabel ?? crewRow?.label ?? `${obs.childDefinitionId} worker`,
+    ownerLabel:
+      obs.ownerLabel ??
+      crewRow?.label ??
+      translate('auto.components.automations.coordinatedLabels.childWorker', '{{child}} worker', {
+        child: obs.childDefinitionId
+      }),
     agentKind: obs.agentKind ?? crewRow?.agentKind ?? input.fallbackAgent,
     hostLabel: obs.hostLabel ?? crewRow?.hostLabel ?? input.fallbackHostLabel,
     crewRow,
@@ -228,8 +240,10 @@ export function deriveStageExecutionStatus(input: {
   return input.upstreamSatisfied ? 'ready' : 'queued'
 }
 
-const WORKER_OPEN_UNBOUND_REASON =
+const WORKER_OPEN_UNBOUND_REASON = translate(
+  'auto.components.automations.coordinated.automation.attempt.projection.c91c0c6b5f',
   'Opening workers is unavailable here because this view has no bound runtime host.'
+)
 
 function unbindAttempt(attempt: ProjectedCoordinatedAttempt): ProjectedCoordinatedAttempt {
   return attempt.canOpenWorker

@@ -106,9 +106,7 @@ describe('AutomationWorkersSection', () => {
       onWorkersChange
     })
 
-    const addButton = container.querySelector(
-      'button[aria-label="Add worker"]'
-    ) as HTMLButtonElement
+    const addButton = container.querySelector<HTMLButtonElement>('button[aria-label="Add worker"]')!
     expect(addButton).not.toBeNull()
 
     await act(async () => {
@@ -140,9 +138,9 @@ describe('AutomationWorkersSection', () => {
       onWorkersChange
     })
 
-    const moveDownBtn = container.querySelector(
+    const moveDownBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Move worker down"]'
-    ) as HTMLButtonElement
+    )!
     expect(moveDownBtn).not.toBeNull()
 
     await act(async () => {
@@ -163,9 +161,9 @@ describe('AutomationWorkersSection', () => {
       onWorkersChange
     })
 
-    const disableBtn = container.querySelector(
+    const disableBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Disable worker"]'
-    ) as HTMLButtonElement
+    )!
     expect(disableBtn).not.toBeNull()
     expect(disableBtn.getAttribute('aria-pressed')).toBe('true')
 
@@ -186,9 +184,9 @@ describe('AutomationWorkersSection', () => {
     })
 
     // Worker 1 is a dependency of Worker 2
-    const removeBtn = container.querySelector(
+    const removeBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Remove worker Researcher Alpha"]'
-    ) as HTMLButtonElement
+    )!
     expect(removeBtn).not.toBeNull()
 
     await act(async () => {
@@ -200,9 +198,9 @@ describe('AutomationWorkersSection', () => {
     expect(document.body.textContent).toContain('Writer Beta')
 
     // Confirm removal
-    const confirmBtn = document.body.querySelector(
-      '[data-testid="confirm-delete-worker"]'
-    ) as HTMLButtonElement
+    const confirmBtn = document.body.querySelector<HTMLButtonElement>(
+      'button[data-testid="confirm-delete-worker"]'
+    )!
     expect(confirmBtn).not.toBeNull()
 
     await act(async () => {
@@ -224,9 +222,9 @@ describe('AutomationWorkersSection', () => {
       onWorkersChange
     })
 
-    const resetModelBtn = container.querySelector(
+    const resetModelBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Reset model to inherited"]'
-    ) as HTMLButtonElement
+    )!
     expect(resetModelBtn).not.toBeNull()
 
     await act(async () => {
@@ -286,9 +284,9 @@ describe('AutomationWorkersSection', () => {
 
     expect(container.textContent).toContain('30m')
 
-    const resetTimeoutBtn = container.querySelector(
+    const resetTimeoutBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Reset timeout to inherited"]'
-    ) as HTMLButtonElement
+    )!
     expect(resetTimeoutBtn).not.toBeNull()
 
     await act(async () => {
@@ -346,13 +344,13 @@ describe('AutomationWorkersSection', () => {
     expect(validationAlert).not.toBeNull()
     expect(validationAlert?.textContent).toContain('dependency cycle')
 
-    const jumpBtn = container.querySelector(
+    const jumpBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Jump to worker child-a"]'
-    ) as HTMLButtonElement
+    )!
     expect(jumpBtn).not.toBeNull()
 
     // Mock scrollIntoView
-    const cardA = container.querySelector('#worker-card-child-a') as HTMLDivElement
+    const cardA = container.querySelector<HTMLDivElement>('div#worker-card-child-a')!
     expect(cardA).not.toBeNull()
     cardA.scrollIntoView = vi.fn()
 
@@ -374,7 +372,7 @@ describe('AutomationWorkersSection', () => {
     expect(container.querySelector('[data-testid="automation-workers-list"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="automation-workers-graph"]')).toBeNull()
 
-    const graphBtn = container.querySelector('button[aria-label="Graph view"]') as HTMLButtonElement
+    const graphBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Graph view"]')!
     await act(async () => {
       graphBtn.focus()
       graphBtn.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
@@ -384,7 +382,7 @@ describe('AutomationWorkersSection', () => {
     expect(container.querySelector('[data-testid="automation-workers-list"]')).toBeNull()
 
     // Switch back using Space key on List view button
-    const listBtn = container.querySelector('button[aria-label="List view"]') as HTMLButtonElement
+    const listBtn = container.querySelector<HTMLButtonElement>('button[aria-label="List view"]')!
     expect(listBtn).not.toBeNull()
     await act(async () => {
       listBtn.focus()
@@ -495,9 +493,9 @@ describe('AutomationWorkersSection', () => {
     expect(snapshotViewer?.textContent).toContain(snapshot.canonicalDigest)
 
     // Verify copy button exists with accessible name
-    const copyBtn = container.querySelector(
+    const copyBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Copy canonical digest"]'
-    ) as HTMLButtonElement
+    )!
     expect(copyBtn).not.toBeNull()
 
     // Verify NO execution / dispatch / run now buttons are rendered

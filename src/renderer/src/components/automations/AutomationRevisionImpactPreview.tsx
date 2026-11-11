@@ -47,13 +47,13 @@ export function AutomationRevisionImpactPreview({
 
         <div className="flex items-center gap-1.5 text-xs">
           {isExistingRevision ? (
-            <Badge variant="secondary" className="font-mono text-3xs">
+            <Badge variant="secondary">
               {translate('auto.components.automations.workers.revisionPrefix', 'Rev {{revision}}', {
                 revision: currentRevision
               })}
             </Badge>
           ) : (
-            <Badge variant="outline" className="text-3xs text-muted-foreground">
+            <Badge variant="outline">
               {translate('auto.components.automations.workers.draftBadge', 'Draft')}
             </Badge>
           )}
@@ -61,10 +61,7 @@ export function AutomationRevisionImpactPreview({
           {isExistingRevision && hasModifications ? (
             <>
               <ArrowRight className="size-3 text-muted-foreground" aria-hidden="true" />
-              <Badge
-                variant="outline"
-                className="border-primary/50 font-mono text-3xs text-primary"
-              >
+              <Badge variant="outline">
                 {translate(
                   'auto.components.automations.workers.nextRevisionPrefix',
                   'Next: Rev {{revision}}',
@@ -125,10 +122,7 @@ export function AutomationRevisionImpactPreview({
                     )}
             </span>
           </div>
-          <Badge
-            variant="outline"
-            className="text-3xs text-muted-foreground self-start @sm:self-center shrink-0"
-          >
+          <Badge variant="outline" className="self-start @sm:self-center shrink-0">
             <ShieldCheck className="mr-1 size-3 text-status-success" aria-hidden="true" />
             {translate('auto.components.automations.workers.frozen', 'Frozen')}
           </Badge>

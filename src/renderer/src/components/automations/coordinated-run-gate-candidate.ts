@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type {
   CoordinatedPendingDecision,
   CoordinatedStagePendingApprovalView
@@ -47,10 +48,17 @@ export function approveRefusal(
   )
   const held = stage?.pendingApproval
   if (!held) {
-    return 'Approval requires the available held report.'
+    return translate(
+      'auto.components.automations.coordinated.run.gate.candidate.bef536105e',
+      'Approval requires the available held report.'
+    )
   }
   if (held.report.kind !== 'available') {
-    return `Approval requires the available held report. Report ${held.report.kind}: ${held.report.reason}`
+    return translate(
+      'auto.components.automations.coordinated.run.gate.candidate.5a023d6ea1',
+      'Approval requires the available held report. Report {{value0}}: {{value1}}',
+      { value0: held.report.kind, value1: held.report.reason }
+    )
   }
   if (
     !stage.taskId ||
@@ -61,7 +69,10 @@ export function approveRefusal(
     !stage.gateResolutionEligibility.pendingGateIds.includes(gate.gateId) ||
     !held.gateIds.includes(gate.gateId)
   ) {
-    return 'The held report is not eligible for this stage approval.'
+    return translate(
+      'auto.components.automations.coordinated.run.gate.candidate.144266572e',
+      'The held report is not eligible for this stage approval.'
+    )
   }
   return null
 }
@@ -69,7 +80,12 @@ export function approveRefusal(
 function runScope(view: CoordinatedRunView): StopCoordinatedRunInput {
   const { inspection } = view
   if (!inspection.targetExecutionAuthority) {
-    throw new Error('The host reports no frozen execution authority. Nothing was submitted.')
+    throw new Error(
+      translate(
+        'auto.components.automations.coordinated.run.gate.candidate.43a1efea45',
+        'The host reports no frozen execution authority. Nothing was submitted.'
+      )
+    )
   }
   return {
     runtimeId: view.runtimeId,
@@ -132,7 +148,10 @@ export function coordinatedGateParams(
     (action.scope === 'stage' && (!stage || candidate.taskId !== stage.taskId))
   ) {
     throw new Error(
-      'The decision scope changed since it was opened. Nothing was submitted; reopen the decision.'
+      translate(
+        'auto.components.automations.coordinated.run.gate.candidate.294ca75f91',
+        'The decision scope changed since it was opened. Nothing was submitted; reopen the decision.'
+      )
     )
   }
   if (!replay) {
@@ -145,7 +164,10 @@ export function coordinatedGateParams(
       )
     ) {
       throw new Error(
-        'The host no longer reports this decision as pending in this scope. Nothing was submitted.'
+        translate(
+          'auto.components.automations.coordinated.run.gate.candidate.c1498a7982',
+          'The host no longer reports this decision as pending in this scope. Nothing was submitted.'
+        )
       )
     }
   }
@@ -154,7 +176,10 @@ export function coordinatedGateParams(
   if (action.scope === 'stage') {
     if (!candidate.taskId || !candidate.stageCandidate) {
       throw new Error(
-        'The host has not identified an exact stage candidate. Nothing was submitted.'
+        translate(
+          'auto.components.automations.coordinated.run.gate.candidate.97fa3fd260',
+          'The host has not identified an exact stage candidate. Nothing was submitted.'
+        )
       )
     }
     const current = stage?.pendingApproval
@@ -170,14 +195,24 @@ export function coordinatedGateParams(
         (held && JSON.stringify(held.report) !== JSON.stringify(stage?.pendingApproval?.report)))
     ) {
       throw new Error(
-        'The held report or attempt changed since this decision was opened. Nothing was submitted; review the current candidate.'
+        translate(
+          'auto.components.automations.coordinated.run.gate.candidate.161dde48d1',
+          'The held report or attempt changed since this decision was opened. Nothing was submitted; review the current candidate.'
+        )
       )
     }
   }
   if (approval) {
     if (candidate.approveUnavailableReason || !held || held.report.kind !== 'available') {
       throw new Error(
-        `${candidate.approveUnavailableReason ?? 'Approval requires the available held report.'} Nothing was submitted.`
+        translate(
+          'auto.components.automations.coordinated.run.gate.candidate.9f2cae37be',
+          '{{value0}} Nothing was submitted.',
+          {
+            value0:
+              candidate.approveUnavailableReason ?? 'Approval requires the available held report.'
+          }
+        )
       )
     }
     const current = stage?.pendingApproval
@@ -191,17 +226,29 @@ export function coordinatedGateParams(
           stage.semantic.activeDispatchId !== held.dispatchId))
     ) {
       throw new Error(
-        'The stage has a different attempt. The original approval is retained; nothing was submitted.'
+        translate(
+          'auto.components.automations.coordinated.run.gate.candidate.39cf2e6cab',
+          'The stage has a different attempt. The original approval is retained; nothing was submitted.'
+        )
       )
     }
     if (!replay || current) {
       const refusal = replay
         ? current?.report.kind === 'available'
           ? null
-          : 'The held report is no longer available.'
+          : translate(
+              'auto.components.automations.coordinated.run.gate.candidate.5353a7895c',
+              'The held report is no longer available.'
+            )
         : approveRefusal(view, action)
       if (refusal) {
-        throw new Error(`${refusal} Nothing was submitted.`)
+        throw new Error(
+          translate(
+            'auto.components.automations.coordinated.run.gate.candidate.9f2cae37be',
+            '{{value0}} Nothing was submitted.',
+            { value0: refusal }
+          )
+        )
       }
       if (
         current?.dispatchId !== held.dispatchId ||
@@ -209,7 +256,10 @@ export function coordinatedGateParams(
         JSON.stringify(current.report) !== JSON.stringify(held.report)
       ) {
         throw new Error(
-          'The held report changed since this decision was opened. Nothing was submitted; review the current report.'
+          translate(
+            'auto.components.automations.coordinated.run.gate.candidate.37bfb2293c',
+            'The held report changed since this decision was opened. Nothing was submitted; review the current report.'
+          )
         )
       }
     }

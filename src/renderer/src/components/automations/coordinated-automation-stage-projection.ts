@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type {
   Automation,
   AutomationRun,
@@ -123,7 +124,10 @@ export function projectCoordinatedStage(input: {
   const hasUncertainEffect = effects.some((e) => e.status === 'uncertain')
   const hasPendingApproval = stageApprovals.some((a) => a.status === 'pending')
   const skippedReason = !source.enabled
-    ? 'Disabled in frozen run snapshot'
+    ? translate(
+        'auto.components.automations.coordinated.automation.stage.projection.3eec909757',
+        'Disabled in frozen run snapshot'
+      )
     : (observation?.skippedStages?.[source.childDefinitionId] ?? null)
 
   const upstreamSatisfied = source.dependencies.every((dep) =>
@@ -146,7 +150,7 @@ export function projectCoordinatedStage(input: {
   })
 
   const technicalStatusLabel = !source.enabled
-    ? 'Disabled'
+    ? translate('auto.components.automations.coordinatedLabels.disabled', 'Disabled')
     : activeAttempt
       ? activeAttempt.technicalStatus
       : mappedTaskId
@@ -157,18 +161,36 @@ export function projectCoordinatedStage(input: {
   const isRetryableState = stageExecutionStatus === 'failed' || stageExecutionStatus === 'blocked'
   const retryAvailability = input.operatorActions?.retryStage?.availability
   const retryReason = !input.isFeatureFlagEnabled
-    ? 'Coordinated automations feature flag is disabled.'
+    ? translate(
+        'auto.components.automations.coordinated.automation.stage.projection.0f27295e39',
+        'Coordinated automations feature flag is disabled.'
+      )
     : input.isQuarantined
-      ? 'Run is quarantined due to integrity validation failure.'
+      ? translate(
+          'auto.components.automations.coordinated.automation.stage.projection.9d0b915442',
+          'Run is quarantined due to integrity validation failure.'
+        )
       : hasUncertainEffect
-        ? 'Retry is blocked after an uncertain external effect; reconcile receipt and external state first.'
+        ? translate(
+            'auto.components.automations.coordinated.automation.stage.projection.24c8098734',
+            'Retry is blocked after an uncertain external effect; reconcile receipt and external state first.'
+          )
         : !mappedTaskId || !retryOfDispatchId || !run.orchestrationRunId
-          ? 'Stage has no materialized Task or prior Dispatch attempt to retry.'
+          ? translate(
+              'auto.components.automations.coordinated.automation.stage.projection.59e7319386',
+              'Stage has no materialized Task or prior Dispatch attempt to retry.'
+            )
           : !isRetryableState
-            ? 'Only failed or blocked stages can be retried.'
+            ? translate(
+                'auto.components.automations.coordinated.automation.stage.projection.25c9e3078c',
+                'Only failed or blocked stages can be retried.'
+              )
             : !retryAvailability?.supported || !input.operatorActions?.retryStage?.onRetryStage
               ? (retryAvailability?.reason ??
-                'Host stage-retry operation binding is not yet connected.')
+                translate(
+                  'auto.components.automations.coordinated.automation.stage.projection.d478d09ac6',
+                  'Host stage-retry operation binding is not yet connected.'
+                ))
               : null
 
   const pendingGate =
@@ -176,16 +198,31 @@ export function projectCoordinatedStage(input: {
     (hasUncertainEffect ? `uncertain-effect:${source.childDefinitionId}` : null)
   const gateAvailability = input.operatorActions?.resolveGate?.availability
   const gateReason = !input.isFeatureFlagEnabled
-    ? 'Coordinated automations feature flag is disabled.'
+    ? translate(
+        'auto.components.automations.coordinated.automation.stage.projection.0f27295e39',
+        'Coordinated automations feature flag is disabled.'
+      )
     : input.isQuarantined
-      ? 'Run is quarantined due to integrity validation failure.'
+      ? translate(
+          'auto.components.automations.coordinated.automation.stage.projection.9d0b915442',
+          'Run is quarantined due to integrity validation failure.'
+        )
       : !pendingGate
-        ? 'No pending approval or uncertainty gate on this stage.'
+        ? translate(
+            'auto.components.automations.coordinated.automation.stage.projection.d09166bfc6',
+            'No pending approval or uncertainty gate on this stage.'
+          )
         : !run.orchestrationRunId
-          ? 'Run has no linked orchestration Run.'
+          ? translate(
+              'auto.components.automations.coordinated.automation.stage.projection.afdb492cb7',
+              'Run has no linked orchestration Run.'
+            )
           : !gateAvailability?.supported || !input.operatorActions?.resolveGate?.onResolveGate
             ? (gateAvailability?.reason ??
-              'Host gate-resolution operation binding is not yet connected.')
+              translate(
+                'auto.components.automations.coordinated.automation.stage.projection.7bd8d66152',
+                'Host gate-resolution operation binding is not yet connected.'
+              ))
             : null
 
   return {

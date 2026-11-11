@@ -18,6 +18,7 @@ import type {
   AutomationDispatchResult
 } from './automation-row-action-dispatch'
 import type { AutomationSaveContext } from './automation-save-context'
+import { translate } from '@/i18n/i18n'
 
 export type CoordinatedCreateIntent = {
   creationKey: string
@@ -38,10 +39,22 @@ export function coordinatedDraftDefinition(
   draft: AutomationDraft
 ): { ok: true; definition: CoordinatedDefinitionDraftFields } | { ok: false; message: string } {
   if (!draft.outcomeContract?.humanStatement.trim()) {
-    return { ok: false, message: 'Describe the outcome before saving.' }
+    return {
+      ok: false,
+      message: translate(
+        'auto.components.automations.automation.coordinated.save.b35475c933',
+        'Describe the outcome before saving.'
+      )
+    }
   }
   if (!draft.children || draft.children.length === 0) {
-    return { ok: false, message: 'Add at least one worker before saving.' }
+    return {
+      ok: false,
+      message: translate(
+        'auto.components.automations.automation.coordinated.save.891cf7af8e',
+        'Add at least one worker before saving.'
+      )
+    }
   }
   return {
     ok: true,
@@ -75,7 +88,12 @@ async function saveCoordinatedCreate(
   if (!intent || !input.createDestination) {
     return {
       ok: false,
-      notice: ownerNotice('Reopen the create dialog and choose an available project before saving.')
+      notice: ownerNotice(
+        translate(
+          'auto.components.automations.automation.coordinated.save.36bad74be5',
+          'Reopen the create dialog and choose an available project before saving.'
+        )
+      )
     }
   }
   intent.submission ??= {
@@ -99,7 +117,15 @@ export async function reconcileCoordinatedCreate(
   const { local, destination } = context
   const submission = intent.submission
   if (!submission) {
-    return { ok: false, notice: ownerNotice('No submitted creation is available to reconcile.') }
+    return {
+      ok: false,
+      notice: ownerNotice(
+        translate(
+          'auto.components.automations.automation.coordinated.save.60df576174',
+          'No submitted creation is available to reconcile.'
+        )
+      )
+    }
   }
   const created: AutomationDispatchResult<Automation> = submission.confirmed
     ? { ok: true, value: submission.confirmed }
@@ -119,7 +145,11 @@ export async function reconcileCoordinatedCreate(
     return {
       ok: false,
       notice: {
-        message: `The original creation is confirmed as "${created.value.name}" (${created.value.id}). Your current edits are not saved and remain in this dialog. Copy them, close this dialog, then reopen that automation to apply them. A new create dialog starts a separate automation.`,
+        message: translate(
+          'auto.components.automations.automation.coordinated.save.18c25847c7',
+          'The original creation is confirmed as "{{value0}}" ({{value1}}). Your current edits are not saved and remain in this dialog. Copy them, close this dialog, then reopen that automation to apply them. A new create dialog starts a separate automation.',
+          { value0: created.value.name, value1: created.value.id }
+        ),
         recovery: null,
         severity: 'owner'
       }
@@ -138,7 +168,12 @@ export async function saveCoordinatedDefinition(
   if (input.moveTarget) {
     return {
       ok: false,
-      notice: ownerNotice('Coordinated automations cannot be moved to another host yet.')
+      notice: ownerNotice(
+        translate(
+          'auto.components.automations.automation.coordinated.save.a19b5e18a6',
+          'Coordinated automations cannot be moved to another host yet.'
+        )
+      )
     }
   }
   if (local.editingAutomationId === null) {
@@ -149,14 +184,23 @@ export async function saveCoordinatedDefinition(
   if (!current || openedRevision === undefined) {
     return {
       ok: false,
-      notice: ownerNotice('This automation is no longer available. Refresh and try again.')
+      notice: ownerNotice(
+        translate(
+          'auto.components.automations.automation.coordinated.save.fe3728047a',
+          'This automation is no longer available. Refresh and try again.'
+        )
+      )
     }
   }
   if (current.definitionRevision !== openedRevision) {
     return {
       ok: false,
       notice: ownerNotice(
-        `This coordinated automation changed to Rev ${current.definitionRevision ?? '?'} after you opened Rev ${openedRevision}. Your edits are kept; copy them, reopen the automation, and apply them again.`
+        translate(
+          'auto.components.automations.automation.coordinated.save.6b2a4b4eae',
+          'This coordinated automation changed to Rev {{value0}} after you opened Rev {{value1}}. Your edits are kept; copy them, reopen the automation, and apply them again.',
+          { value0: current.definitionRevision ?? '?', value1: openedRevision }
+        )
       )
     }
   }

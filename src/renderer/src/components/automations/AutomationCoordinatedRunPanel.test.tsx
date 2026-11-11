@@ -342,17 +342,17 @@ describe('AutomationCoordinatedRunPanel', () => {
     expect(container.querySelector('[data-testid="run-control-pending"]')?.textContent).toContain(
       'Submitting stop run request'
     )
-    const stopBtn = container.querySelector(
-      '[data-testid="stop-coordinated-run-btn"]'
-    ) as HTMLButtonElement
+    const stopBtn = container.querySelector<HTMLButtonElement>(
+      'button[data-testid="stop-coordinated-run-btn"]'
+    )!
     expect(stopBtn.disabled).toBe(true)
-    const retryBtn = container.querySelector(
-      '[data-testid="retry-stage-btn-child-writer"]'
-    ) as HTMLButtonElement
+    const retryBtn = container.querySelector<HTMLButtonElement>(
+      'button[data-testid="retry-stage-btn-child-writer"]'
+    )!
     expect(retryBtn.disabled).toBe(true)
-    const gateBtn = container.querySelector(
-      '[data-testid="resolve-gate-btn-child-reviewer"]'
-    ) as HTMLButtonElement
+    const gateBtn = container.querySelector<HTMLButtonElement>(
+      'button[data-testid="resolve-gate-btn-child-reviewer"]'
+    )!
     expect(gateBtn.disabled).toBe(true)
 
     // A second entry-point click cannot reopen the dialog or resubmit
@@ -371,7 +371,7 @@ describe('AutomationCoordinatedRunPanel', () => {
     expect(result).toContain('The owning host settles the outcome')
     expect(result).not.toContain('stopped')
     expect(
-      (container.querySelector('[data-testid="stop-coordinated-run-btn"]') as HTMLButtonElement)
+      container.querySelector<HTMLButtonElement>('button[data-testid="stop-coordinated-run-btn"]')!
         .disabled
     ).toBe(false)
   })
@@ -403,12 +403,13 @@ describe('AutomationCoordinatedRunPanel', () => {
     expect(error?.textContent).toContain('the owning host changed')
     expect(container.querySelector('[data-testid="run-control-result"]')).toBeNull()
     expect(
-      (container.querySelector('[data-testid="stop-coordinated-run-btn"]') as HTMLButtonElement)
+      container.querySelector<HTMLButtonElement>('button[data-testid="stop-coordinated-run-btn"]')!
         .disabled
     ).toBe(false)
     expect(
-      (container.querySelector('[data-testid="retry-stage-btn-child-writer"]') as HTMLButtonElement)
-        .disabled
+      container.querySelector<HTMLButtonElement>(
+        'button[data-testid="retry-stage-btn-child-writer"]'
+      )!.disabled
     ).toBe(false)
   })
 
@@ -426,8 +427,10 @@ describe('AutomationCoordinatedRunPanel', () => {
 
     const runSwitchButtons = () =>
       Array.from(
-        container.querySelectorAll('[role="group"][aria-label="Select coordinated run"] button')
-      ) as HTMLButtonElement[]
+        container.querySelectorAll<HTMLButtonElement>(
+          '[role="group"][aria-label="Select coordinated run"] button'
+        )
+      )
     expect(runSwitchButtons()).toHaveLength(2)
 
     // Submit a stop on the first run; its result notice is visible

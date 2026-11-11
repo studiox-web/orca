@@ -1,3 +1,4 @@
+import { AutomationWorkersEmptyState } from './AutomationWorkersEmptyState'
 import React, { useEffect, useMemo, useState } from 'react'
 import { Plus, List, Network, History } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -218,13 +219,19 @@ export function AutomationWorkersSection({
           <h3 className="font-semibold text-base text-foreground">
             {translate('auto.components.automations.workers.title', 'Workers')}
           </h3>
-          <Badge variant="secondary" className="font-mono text-xs">
-            {workers.length}
-          </Badge>
+          <Badge variant="secondary">{workers.length}</Badge>
           {!validationResult.valid ? (
-            <Badge variant="destructive" className="text-3xs uppercase tracking-wider">
+            <Badge variant="destructive">
               {validationResult.errors.length}{' '}
-              {validationResult.errors.length === 1 ? 'issue' : 'issues'}
+              {validationResult.errors.length === 1
+                ? translate(
+                    'auto.components.automations.AutomationWorkersSection.606053ef26',
+                    'issue'
+                  )
+                : translate(
+                    'auto.components.automations.AutomationWorkersSection.b920604f32',
+                    'issues'
+                  )}
             </Badge>
           ) : null}
         </div>
@@ -234,8 +241,8 @@ export function AutomationWorkersSection({
             <Button
               type="button"
               variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-7 gap-1 px-2.5 text-2xs"
+              size="xs"
+
               onClick={() => setViewMode('list')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -251,8 +258,8 @@ export function AutomationWorkersSection({
             <Button
               type="button"
               variant={viewMode === 'graph' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-7 gap-1 px-2.5 text-2xs"
+              size="xs"
+
               onClick={() => setViewMode('graph')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -269,8 +276,8 @@ export function AutomationWorkersSection({
               <Button
                 type="button"
                 variant={viewMode === 'historical' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-7 gap-1 px-2.5 text-2xs"
+                size="xs"
+
                 onClick={() => setViewMode('historical')}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -293,8 +300,8 @@ export function AutomationWorkersSection({
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="h-7 gap-1 text-2xs"
+              size="xs"
+
               onClick={handleAddWorker}
               aria-label={translate('auto.components.automations.workers.addWorker', 'Add worker')}
             >
@@ -339,29 +346,7 @@ export function AutomationWorkersSection({
           }}
         />
       ) : workers.length === 0 ? (
-        <div
-          className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/70 p-8 text-center text-xs text-muted-foreground"
-          data-testid="automation-workers-empty"
-        >
-          <p>
-            {translate(
-              'auto.components.automations.workers.emptyState',
-              'No specialist workers defined yet.'
-            )}
-          </p>
-          {isEditing ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="mt-3 gap-1"
-              onClick={handleAddWorker}
-            >
-              <Plus className="size-3.5" />
-              <span>Add first worker</span>
-            </Button>
-          ) : null}
-        </div>
+        <AutomationWorkersEmptyState isEditing={isEditing} onAddWorker={handleAddWorker} />
       ) : (
         <div
           role="list"

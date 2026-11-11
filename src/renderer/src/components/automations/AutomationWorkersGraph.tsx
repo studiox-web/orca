@@ -78,9 +78,7 @@ export function AutomationWorkersGraph({
                   })}
                 </span>
               </div>
-              <Badge variant="outline" className="text-3xs">
-                {layer.nodes.length}
-              </Badge>
+              <Badge variant="outline">{layer.nodes.length}</Badge>
             </div>
 
             <div className="space-y-2">
@@ -99,7 +97,11 @@ export function AutomationWorkersGraph({
                     type="button"
                     tabIndex={0}
                     onClick={() => onSelectChild?.(node.child.id)}
-                    aria-label={`Select worker ${node.child.name}`}
+                    aria-label={translate(
+                      'auto.components.automations.AutomationWorkersGraph.c619dd73c7',
+                      'Select worker {{value0}}',
+                      { value0: node.child.name }
+                    )}
                     className={`group w-full rounded-md border text-left transition-all p-2.5 ${
                       isSelected
                         ? 'border-ring bg-accent/80 shadow-xs ring-1 ring-ring'
@@ -108,13 +110,8 @@ export function AutomationWorkersGraph({
                     data-testid={`graph-node-${node.child.id}`}
                   >
                     <div className="flex items-center justify-between gap-1.5">
-                      <Badge variant="secondary" className="font-semibold text-3xs uppercase">
-                        {node.child.role}
-                      </Badge>
-                      <Badge
-                        variant="outline"
-                        className="border-border/50 text-3xs uppercase tracking-wider text-muted-foreground"
-                      >
+                      <Badge variant="secondary">{node.child.role}</Badge>
+                      <Badge variant="outline">
                         {node.child.mutationClass.replace('_writer', '')}
                       </Badge>
                     </div>
@@ -144,7 +141,13 @@ export function AutomationWorkersGraph({
 
                       {node.upstreamIds.length > 0 ? (
                         <div className="flex items-center gap-0.5 text-3xs text-muted-foreground shrink-0">
-                          <span>in:{node.upstreamIds.length}</span>
+                          <span>
+                            {translate(
+                              'auto.components.automations.AutomationWorkersGraph.d628f0e307',
+                              'in:'
+                            )}
+                            {node.upstreamIds.length}
+                          </span>
                         </div>
                       ) : null}
                     </div>

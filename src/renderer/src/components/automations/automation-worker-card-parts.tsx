@@ -26,23 +26,20 @@ function ProvenanceBadge({
 }): React.JSX.Element {
   if (isOverridden && isExplicitNone) {
     return (
-      <Badge
-        variant="outline"
-        className="border-status-warning-border bg-status-warning-background text-status-warning-text text-3xs"
-      >
+      <Badge variant="outline">
         {translate('auto.components.automations.workers.overriddenNone', 'Overridden (None)')}
       </Badge>
     )
   }
   if (isOverridden) {
     return (
-      <Badge variant="outline" className="border-primary/50 text-primary text-3xs">
+      <Badge variant="outline">
         {translate('auto.components.automations.workers.explicitOverride', 'Overridden')}
       </Badge>
     )
   }
   return (
-    <Badge variant="outline" className="text-muted-foreground text-3xs">
+    <Badge variant="outline">
       {translate('auto.components.automations.workers.inherited', 'Inherited')}
     </Badge>
   )
@@ -59,8 +56,8 @@ function ResetFieldButton({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
-      className="h-5 gap-1 px-1 text-3xs text-muted-foreground hover:text-foreground"
+      size="xs"
+
       aria-label={label}
       onClick={onClick}
     >
@@ -164,7 +161,12 @@ export function WorkerConfigGrid({
               /{effectiveModel}
             </span>
           ) : isModelExplicitNone ? (
-            <span className="font-mono text-3xs text-muted-foreground italic">/(none)</span>
+            <span className="font-mono text-3xs text-muted-foreground italic">
+              {translate(
+                'auto.components.automations.automation.worker.card.parts.f92599310f',
+                '/(none)'
+              )}
+            </span>
           ) : null}
         </div>
 
@@ -197,18 +199,21 @@ export function WorkerConfigGrid({
           <Brain className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="capitalize">
             {effectiveEffort
-              ? `effort: ${effectiveEffort}`
+              ? translate(
+                  'auto.components.automations.automation.worker.card.parts.2ac82d3f2d',
+                  'effort: {{value0}}',
+                  { value0: effectiveEffort }
+                )
               : translate('auto.components.automations.workers.defaultEffort', 'effort: default')}
           </span>
-          <Badge
-            variant="outline"
-            className="text-3xs uppercase tracking-wider text-muted-foreground"
-          >
-            {child.mutationClass}
-          </Badge>
+          <Badge variant="outline">{child.mutationClass}</Badge>
           {child.mutationLane ? (
             <span className="font-mono text-3xs text-muted-foreground truncate max-w-[100px]">
-              lane:{child.mutationLane}
+              {translate(
+                'auto.components.automations.automation.worker.card.parts.a80cbcbd7d',
+                'lane:'
+              )}
+              {child.mutationLane}
             </span>
           ) : null}
         </div>

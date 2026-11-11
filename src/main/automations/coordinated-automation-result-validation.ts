@@ -76,12 +76,14 @@ export function validateStructuredWorkerResult(
   report: unknown,
   context: WorkerResultValidationContext
 ): WorkerResultValidationOutcome {
-  const rawReport = report as Record<string, unknown>
+  if (typeof report !== 'object' || report === null || Array.isArray(report)) {
+    return { valid: false, error: 'Structured worker result schema invalid: expected an object.' }
+  }
   if (
-    rawReport.approvals !== undefined ||
-    rawReport.effectReceipts !== undefined ||
-    rawReport.approverIdentity !== undefined ||
-    rawReport.authorizedEffects !== undefined
+    ('approvals' in report && report.approvals !== undefined) ||
+    ('effectReceipts' in report && report.effectReceipts !== undefined) ||
+    ('approverIdentity' in report && report.approverIdentity !== undefined) ||
+    ('authorizedEffects' in report && report.authorizedEffects !== undefined)
   ) {
     return {
       valid: false,
@@ -157,8 +159,8 @@ export function validateStructuredWorkerResult(
       }
     }
     const payload =
-      (report as Record<string, unknown>).data ??
-      (report as Record<string, unknown>).metadata ??
+      ('data' in report ? report.data : undefined) ??
+      ('metadata' in report ? report.metadata : undefined) ??
       data
     if (!validateFn(payload)) {
       return {

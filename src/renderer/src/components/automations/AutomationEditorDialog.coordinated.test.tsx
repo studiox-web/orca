@@ -17,6 +17,14 @@ import { AutomationEditorDialog, type AutomationDraft } from './AutomationEditor
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 
 const roots: Root[] = []
+const repo: Repo = {
+  id: 'repo-1',
+  path: '/test-repo',
+  displayName: 'test-repo',
+  badgeColor: '#000',
+  addedAt: 1,
+  worktreeBaseRef: 'main'
+}
 
 async function renderEditorDialog(props: {
   draft: AutomationDraft
@@ -37,7 +45,7 @@ async function renderEditorDialog(props: {
           isEditing={false}
           isSaving={false}
           canSave={true}
-          repos={[{ id: 'repo-1', name: 'test-repo', defaultBaseRef: 'main' } as unknown as Repo]}
+          repos={[repo]}
           projectHostSetups={[]}
           automationYamlHooksByRepoKey={{}}
           getAutomationHooksCacheKey={() => ''}
@@ -119,14 +127,16 @@ describe('AutomationEditorDialog coordinated automations', () => {
     })
 
     const singleBtn = document.body.querySelector('button[aria-label="Single prompt mode"]')
-    const coordBtn = document.body.querySelector('button[aria-label="Coordinated workers mode"]')
+    const coordBtn = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Coordinated workers mode"]'
+    )
     expect(singleBtn).not.toBeNull()
     expect(coordBtn).not.toBeNull()
     expect(coordBtn?.getAttribute('role')).toBe('radio')
     expect(coordBtn?.getAttribute('aria-checked')).toBe('false')
 
     await act(async () => {
-      ;(coordBtn as HTMLButtonElement).click()
+      coordBtn!.click()
     })
 
     expect(onDraftChange).toHaveBeenCalled()
@@ -170,7 +180,7 @@ describe('AutomationEditorDialog coordinated automations', () => {
     // Verify Save/Create button is disabled
     const saveButton = Array.from(document.body.querySelectorAll('button')).find((b) =>
       ['Create', 'Save', 'Save Changes'].includes(b.textContent?.trim() ?? '')
-    ) as HTMLButtonElement | undefined
+    )
     expect(saveButton).toBeDefined()
     expect(saveButton?.disabled).toBe(false)
     await act(async () => {
@@ -179,9 +189,9 @@ describe('AutomationEditorDialog coordinated automations', () => {
     expect(onSave).toHaveBeenCalledTimes(1)
 
     // Test typing in outcome statement textarea
-    const textarea = document.body.querySelector(
-      '#automation-outcome-statement'
-    ) as HTMLTextAreaElement
+    const textarea = document.body.querySelector<HTMLTextAreaElement>(
+      'textarea#automation-outcome-statement'
+    )!
     expect(textarea).not.toBeNull()
 
     const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set

@@ -1,3 +1,4 @@
+import { AutomationCoordinatedControlNotice } from './AutomationCoordinatedControlNotice'
 import React, { useMemo, useState } from 'react'
 import { FileCheck2, GitFork, History, List } from 'lucide-react'
 import {
@@ -23,6 +24,7 @@ import {
   type ProjectedCoordinatedAttempt
 } from './coordinated-automation-run-projection'
 import { useCoordinatedRunControlLifecycle } from './use-coordinated-run-control-lifecycle'
+import { translate } from '@/i18n/i18n'
 
 export type CoordinatedRunPanelViewMode = 'list' | 'graph' | 'receipt' | 'snapshot'
 
@@ -177,7 +179,10 @@ export function AutomationCoordinatedRunPanel({
 
   return (
     <section
-      aria-label="Coordinated parent run panel"
+      aria-label={translate(
+        'auto.components.automations.AutomationCoordinatedRunPanel.0fa651ee73',
+        'Coordinated parent run panel'
+      )}
       data-testid="automation-coordinated-run-panel"
       className="@container w-full min-w-0 space-y-4 rounded-xl border border-border bg-card/30 p-4"
     >
@@ -185,17 +190,28 @@ export function AutomationCoordinatedRunPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            Coordinated Run Execution
+            {translate(
+              'auto.components.automations.AutomationCoordinatedRunPanel.e194255adc',
+              'Coordinated Run Execution'
+            )}
           </h3>
           <Badge variant="secondary">
-            {projection.stages.length} stage{projection.stages.length === 1 ? '' : 's'}
+            {projection.stages.length}{' '}
+            {translate(
+              'auto.components.automations.AutomationCoordinatedRunPanel.970e55e3c7',
+              'stage'
+            )}
+            {projection.stages.length === 1 ? '' : 's'}
           </Badge>
 
           {candidateRuns.length > 1 ? (
             <div
               className="flex flex-wrap items-center gap-1"
               role="group"
-              aria-label="Select coordinated run"
+              aria-label={translate(
+                'auto.components.automations.AutomationCoordinatedRunPanel.d0c40d6c6b',
+                'Select coordinated run'
+              )}
             >
               {candidateRuns.map((candidate) => {
                 const isSelectedRun = candidate.id === activeRun.id
@@ -217,7 +233,13 @@ export function AutomationCoordinatedRunPanel({
                     }}
                   >
                     {candidate.id}
-                    {rev ? ` (Rev ${rev})` : ''}
+                    {rev
+                      ? translate(
+                          'auto.components.automations.AutomationCoordinatedRunPanel.6a1faba538',
+                          ' (Rev {{value0}})',
+                          { value0: rev }
+                        )
+                      : ''}
                   </Button>
                 )
               })}
@@ -232,30 +254,48 @@ export function AutomationCoordinatedRunPanel({
             variant={viewMode === 'list' ? 'secondary' : 'ghost'}
             size="xs"
             onClick={() => setViewMode('list')}
-            aria-label="Run stages list view"
+            aria-label={translate(
+              'auto.components.automations.AutomationCoordinatedRunPanel.f2a01c2ab3',
+              'Run stages list view'
+            )}
           >
             <List className="size-3" />
-            Stages
+            {translate(
+              'auto.components.automations.AutomationCoordinatedRunPanel.874f0d873a',
+              'Stages'
+            )}
           </Button>
           <Button
             type="button"
             variant={viewMode === 'graph' ? 'secondary' : 'ghost'}
             size="xs"
             onClick={() => setViewMode('graph')}
-            aria-label="Run stages graph view"
+            aria-label={translate(
+              'auto.components.automations.AutomationCoordinatedRunPanel.b6599330dd',
+              'Run stages graph view'
+            )}
           >
             <GitFork className="size-3" />
-            Run Graph
+            {translate(
+              'auto.components.automations.AutomationCoordinatedRunPanel.963dc311f0',
+              'Run Graph'
+            )}
           </Button>
           <Button
             type="button"
             variant={viewMode === 'receipt' ? 'secondary' : 'ghost'}
             size="xs"
             onClick={() => setViewMode('receipt')}
-            aria-label="Run completion receipt view"
+            aria-label={translate(
+              'auto.components.automations.AutomationCoordinatedRunPanel.e032173a64',
+              'Run completion receipt view'
+            )}
           >
             <FileCheck2 className="size-3" />
-            Receipt
+            {translate(
+              'auto.components.automations.AutomationCoordinatedRunPanel.c246a4bf4c',
+              'Receipt'
+            )}
           </Button>
           {projection.resolvedSnapshot ? (
             <Button
@@ -263,10 +303,17 @@ export function AutomationCoordinatedRunPanel({
               variant={viewMode === 'snapshot' ? 'secondary' : 'ghost'}
               size="xs"
               onClick={() => setViewMode('snapshot')}
-              aria-label="Run frozen snapshot view"
+              aria-label={translate(
+                'auto.components.automations.AutomationCoordinatedRunPanel.fd30e5ce3d',
+                'Run frozen snapshot view'
+              )}
             >
               <History className="size-3" />
-              Frozen Rev {projection.resolvedSnapshot.definitionRevision}
+              {translate(
+                'auto.components.automations.AutomationCoordinatedRunPanel.a074477998',
+                'Frozen Rev'
+              )}{' '}
+              {projection.resolvedSnapshot.definitionRevision}
             </Button>
           ) : null}
         </div>
@@ -280,30 +327,7 @@ export function AutomationCoordinatedRunPanel({
         onInspectReceipt={() => setViewMode('receipt')}
       />
 
-      {/* Operator Action Lifecycle: honest pending/result/failure, fenced to the selected run */}
-      {controlNotice && controlNotice.runId === activeRun.id ? (
-        controlNotice.state === 'failed' ? (
-          <p
-            role="alert"
-            data-testid="run-control-error"
-            className="text-xs text-status-warning break-words"
-          >
-            {controlNotice.message}
-          </p>
-        ) : (
-          <p
-            role="status"
-            data-testid={
-              controlNotice.state === 'pending' ? 'run-control-pending' : 'run-control-result'
-            }
-            className="text-xs text-muted-foreground break-words"
-          >
-            {controlNotice.state === 'pending'
-              ? `Submitting ${controlNotice.label.toLowerCase()} request…`
-              : controlNotice.message}
-          </p>
-        )
-      ) : null}
+      <AutomationCoordinatedControlNotice notice={controlNotice} runId={activeRun.id} />
 
       {/* Active View Body */}
       {viewMode === 'list' ? (

@@ -19,7 +19,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { AutomationWorkerExecutionPolicyFields } from './AutomationWorkerExecutionPolicyFields'
 
-export type ReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max' | string
+export type ReasoningEffort = string
 
 export type LaunchConfigFormState = {
   overrideAgent: boolean
@@ -83,7 +83,7 @@ export function AutomationWorkerLaunchConfigFields({
 }: AutomationWorkerLaunchConfigFieldsProps): React.JSX.Element {
   return (
     <div className="space-y-3 rounded-md border border-border/50 p-3">
-      <Label className="font-semibold text-xs">
+      <Label>
         {translate('auto.components.automations.workers.launchConfigTitle', 'Launch Configuration')}
       </Label>
 
@@ -105,7 +105,12 @@ export function AutomationWorkerLaunchConfigFields({
         {state.overrideAgent ? (
           <Select
             value={state.agentId}
-            onValueChange={(val) => onChange((prev) => ({ ...prev, agentId: val as TuiAgent }))}
+            onValueChange={(val) => {
+              const agent = getAgentCatalog().find((entry) => entry.id === val)
+              if (agent) {
+                onChange((prev) => ({ ...prev, agentId: agent.id }))
+              }
+            }}
           >
             <SelectTrigger
               className="w-full"
@@ -162,6 +167,7 @@ export function AutomationWorkerLaunchConfigFields({
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Input
+                variant="code"
                 id="worker-model-override-input"
                 value={state.model}
                 disabled={state.modelExplicitNone}
@@ -169,12 +175,14 @@ export function AutomationWorkerLaunchConfigFields({
                   const val = e.target.value
                   onChange((prev) => ({ ...prev, model: val }))
                 }}
-                placeholder="e.g. claude-3-7-sonnet, gpt-5.6-sol"
+                placeholder={translate(
+                  'auto.components.automations.AutomationWorkerLaunchConfigFields.6082fdec1b',
+                  'e.g. claude-3-7-sonnet, gpt-5.6-sol'
+                )}
                 aria-label={translate(
                   'auto.components.automations.workers.modelInputLabel',
                   'Worker model override'
                 )}
-                className="font-mono text-xs"
               />
               <button
                 type="button"
@@ -240,7 +248,7 @@ export function AutomationWorkerLaunchConfigFields({
                 onChange((prev) => ({
                   ...prev,
                   effortExplicitNone: false,
-                  effort: val as ReasoningEffort
+                  effort: val
                 }))
               }
             }}
@@ -316,10 +324,9 @@ export function AutomationWorkerLaunchConfigFields({
           <Select
             value={state.workspaceMode}
             onValueChange={(val) => {
-              onChange((prev) => ({
-                ...prev,
-                workspaceMode: val as AutomationWorkspaceMode
-              }))
+              if (val === 'existing' || val === 'new_per_run') {
+                onChange((prev) => ({ ...prev, workspaceMode: val }))
+              }
             }}
           >
             <SelectTrigger

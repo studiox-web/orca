@@ -932,3 +932,37 @@ actual native worker/PTY/provider execution, installed behavior and cross-OS run
 still need their separate acceptance. DJVibe repackaging and the non-publishing
 shadow comparison remain future work. No live automations, schedules, publishing,
 content, independent backups or installed application are changed by this acceptance.
+
+### Full-delta gate corrections before push, November 11
+
+The first completed XOS-base gate exposed quality issues missed by narrower worker
+comparisons: 192 style/type/React findings, native runtime parameters typed too
+broadly, localization coverage/catalog drift, formatting of private scratch files,
+and one isolated startup-test failure. Its unit selection passed 975 tests and
+failed one across 85 files. This was a failed pre-push gate, not a passing release
+check; no push followed it.
+
+One backend/test batch removed all 35 owned casts and 12 broad runtime-parameter
+diagnostics while retaining canonical nominal runtime ownership and every existing
+capability/identity check. Malformed non-object worker reports now return a
+schema-invalid refusal instead of throwing before validation. The isolated startup
+test mocks the XOS IPC registration boundary and verifies its Store/runtime handoff;
+it does not start a goal queue. That batch passed 152 tests across 12 files and
+Node/CLI typechecks with exit 0. The coordinator verified all 15 tested blob IDs.
+
+The parallel renderer batch uses existing component sizes/variants, removes unsafe
+casts, preserves action candidate identities, and adds the missing translation
+keys without changing existing English text. Meaningful component splits retain
+file-size limits. Catalog generation adds 48 protected-copy keys without removing
+any; no rule or localization allowlist was weakened. Non-English packs retain
+English fallback where translations have not been authored. Full-feature quality
+against `origin/xos`, renderer typecheck, localization verification and scoped
+lint/format passed with exit 0. The focused selection passed 142 tests across 13
+files; an overlapping final affected selection passed 76 across seven. The
+coordinator verified all 59 final source/catalog hashes.
+
+The private generated `.cache/` directory is ignored by Git and formatting; no
+tracked source, stored evidence or operational safeguard was removed. The final
+combined app/gate and push verification remain coordinator-owned and are recorded
+in `.cache/xos-final-*` logs. These overlapping worker counts are not additive.
+The final gate must compare the full feature to XOS after the last edit/commit.

@@ -165,11 +165,12 @@ export function AutomationDetail({
                 : translate('auto.components.automations.enablement.paused', 'Paused')}
             </Badge>
             {isCoordinated ? (
-              <Badge
-                variant="outline"
-                className="border-primary/50 font-mono text-3xs text-primary"
-              >
-                Coordinated (Rev {automation.definitionRevision ?? 1})
+              <Badge variant="outline">
+                {translate(
+                  'auto.components.automations.AutomationDetail.22de9a8c48',
+                  'Coordinated (Rev'
+                )}{' '}
+                {automation.definitionRevision ?? 1})
               </Badge>
             ) : null}
           </div>
@@ -202,7 +203,7 @@ export function AutomationDetail({
             label={toolbarLabels.editLabel}
             onClick={isFlagOffCoordinated ? undefined : () => onEdit(automation)}
             disabled={isFlagOffCoordinated}
-            className={isFlagOffCoordinated ? 'opacity-40 cursor-not-allowed' : undefined}
+            className={isFlagOffCoordinated ? 'cursor-not-allowed' : undefined}
           >
             <Pencil className="size-4" />
           </ToolbarIconButton>
@@ -210,7 +211,7 @@ export function AutomationDetail({
             label={toolbarLabels.toggleLabel}
             onClick={isFlagOffCoordinated ? undefined : () => onToggle(automation)}
             disabled={isFlagOffCoordinated}
-            className={isFlagOffCoordinated ? 'opacity-40 cursor-not-allowed' : undefined}
+            className={isFlagOffCoordinated ? 'cursor-not-allowed' : undefined}
           >
             {automation.enabled ? <Pause className="size-4" /> : <Play className="size-4" />}
           </ToolbarIconButton>

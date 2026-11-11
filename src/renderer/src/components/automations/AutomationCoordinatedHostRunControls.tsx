@@ -1,4 +1,6 @@
 import React from 'react'
+import { gateScopeLabel, gateImpact } from './coordinated-host-run-control-copy'
+export { operatorOutcomeMessage } from './coordinated-host-run-control-copy'
 import { RotateCcw, ShieldCheck, Square, SquareTerminal } from 'lucide-react'
 import type {
   CoordinatedApprovalObservation,
@@ -7,13 +9,9 @@ import type {
 import type { CoordinatedRunView } from '../../../../shared/coordinated-automation-run-view'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { getIntlLocale } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import type { RunControlActionRequest } from './AutomationRunControlImpactDialog'
-import {
-  approveRefusal,
-  type CoordinatedPendingGate,
-  type CoordinatedRunOperatorOutcome
-} from './coordinated-run-operator-client'
+import { approveRefusal, type CoordinatedPendingGate } from './coordinated-run-operator-client'
 import { stageSessionOpenRefusal } from './coordinated-stage-session-open'
 
 export type HostRunControlRequest = RunControlActionRequest<CoordinatedStageInspection>
@@ -25,58 +23,6 @@ export type CoordinatedHostRunControlBindings = {
   pendingGates: readonly CoordinatedPendingGate[]
   onRequest: (request: HostRunControlRequest, gate?: CoordinatedPendingGate) => void
   onOpenSession: (stage: CoordinatedStageInspection) => void
-}
-
-function gateScopeLabel(gate: CoordinatedPendingGate, view: CoordinatedRunView): string {
-  if (gate.scope === 'parent') {
-    return 'Parent outcome (no stage scope)'
-  }
-  if (!gate.childDefinitionId) {
-    return 'Run-level escalation (no stage scope)'
-  }
-  if (gate.scope === 'escalation') {
-    return `${gate.childDefinitionId} (escalation)`
-  }
-  const stage = view.inspection.stages.find(
-    (entry) => entry.childDefinitionId === gate.childDefinitionId
-  )
-  const dispatchId = stage?.pendingApproval?.dispatchId
-  const candidate = stage?.gateResolutionEligibility.stageCandidate
-  const attempt =
-    candidate?.kind === 'attempt'
-      ? `attempt ${candidate.dispatchId} (no held report)`
-      : candidate?.kind === 'no_attempt'
-        ? 'no attempt'
-        : 'candidate unavailable'
-  return `${gate.childDefinitionId} / ${stage?.taskId ?? 'no-task'} / ${
-    dispatchId ? `report from ${dispatchId}` : attempt
-  }`
-}
-
-const GATE_IMPACT = {
-  stage:
-    'This decision applies only to the report or attempt shown here. Rejecting a held report may start a retry within the saved retry budget. With no held report, rejection halts the run. Escalation leaves the requirement pending for a later approval or rejection.',
-  parent: 'This decision applies to the parent outcome, not to any one stage.',
-  escalation:
-    'An escalation decision records your acknowledgement only. It does not clear the halt or approve a requirement.'
-} as const
-
-export function operatorOutcomeMessage(outcome: CoordinatedRunOperatorOutcome): string {
-  const { action, disposition } = outcome
-  const subject =
-    action.kind === 'stop'
-      ? 'stop request'
-      : action.kind === 'retry'
-        ? `retry of stage ${action.childDefinitionId}`
-        : `${action.decision} decision for ${action.scope} gate ${action.gateId}`
-  const recorded =
-    disposition === 'already_recorded'
-      ? `The host had already recorded this ${subject}; this request wrote nothing.`
-      : `The host recorded the ${subject}.`
-  const caveat = action.kind === 'stop' ? ' Worker exit is not proven until the run settles.' : ''
-  return `${recorded}${caveat} Reported run state: ${outcome.state}${
-    outcome.reason ? ` (${outcome.reason})` : ''
-  }.`
 }
 
 function ApprovalList({
@@ -98,9 +44,27 @@ function ApprovalList({
         >
           <span className="font-mono">{approval.approvalId}</span> · {approval.role} ·{' '}
           {approval.status}
-          {approval.approverIdentity ? ` by ${approval.approverIdentity}` : ''}
-          {approval.scope.childDefinitionId ? ` · stage ${approval.scope.childDefinitionId}` : ''}
-          {approval.scope.dispatchId ? ` · Dispatch ${approval.scope.dispatchId}` : ''}
+          {approval.approverIdentity
+            ? translate(
+                'auto.components.automations.AutomationCoordinatedHostRunControls.6a0a7da146',
+                ' by {{value0}}',
+                { value0: approval.approverIdentity }
+              )
+            : ''}
+          {approval.scope.childDefinitionId
+            ? translate(
+                'auto.components.automations.AutomationCoordinatedHostRunControls.acc3a32513',
+                ' · stage {{value0}}',
+                { value0: approval.scope.childDefinitionId }
+              )
+            : ''}
+          {approval.scope.dispatchId
+            ? translate(
+                'auto.components.automations.AutomationCoordinatedHostRunControls.2738a9404f',
+                ' · Dispatch {{value0}}',
+                { value0: approval.scope.dispatchId }
+              )
+            : ''}
           {approval.rejectionReason ? ` · ${approval.rejectionReason}` : ''}
         </li>
       ))}
@@ -123,12 +87,18 @@ export function CoordinatedHostRunControls({
   const hasApprovals = inspection.approvals.stage.length + inspection.approvals.parent.length > 0
   return (
     <section
-      aria-label="Run controls"
+      aria-label={translate(
+        'auto.components.automations.AutomationCoordinatedHostRunControls.6e0b6c0a38',
+        'Run controls'
+      )}
       className="space-y-2 rounded-md border border-border p-3 text-xs min-w-0"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-2xs font-semibold tracking-wider text-muted-foreground uppercase">
-          Run controls
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.6e0b6c0a38',
+            'Run controls'
+          )}
         </h4>
         <Button
           type="button"
@@ -138,29 +108,57 @@ export function CoordinatedHostRunControls({
           onClick={() => controls.onRequest({ kind: 'stop' })}
         >
           <Square aria-hidden="true" />
-          Stop run
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.7f65f56295',
+            'Stop run'
+          )}
         </Button>
       </div>
       <p className="text-muted-foreground">
-        Controls act on this run only. Child roles, prompts and models are edited in the definition
-        and apply to later runs; this run keeps its frozen revision.
+        {translate(
+          'auto.components.automations.AutomationCoordinatedHostRunControls.b03f4407d5',
+          'Controls act on this run only. Child roles, prompts and models are edited in the definition and apply to later runs; this run keeps its frozen revision.'
+        )}
       </p>
       {inspection.operatorStop ? (
         <p className="text-status-warning break-words">
-          Stop requested {new Date(inspection.operatorStop.at).toLocaleString(getIntlLocale())}
-          {inspection.operatorStop.reason ? ` (${inspection.operatorStop.reason})` : ''}. Worker
-          exit is not proven until the run settles.
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.c0989bc04d',
+            'Stop requested'
+          )}{' '}
+          {new Date(inspection.operatorStop.at).toLocaleString(getIntlLocale())}
+          {inspection.operatorStop.reason ? ` (${inspection.operatorStop.reason})` : ''}
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.c3d6dce52b',
+            '. Worker exit is not proven until the run settles.'
+          )}
         </p>
       ) : stopReason ? (
-        <p className="text-muted-foreground break-words">Stop unavailable: {stopReason}</p>
+        <p className="text-muted-foreground break-words">
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.281139a6e7',
+            'Stop unavailable:'
+          )}{' '}
+          {stopReason}
+        </p>
       ) : null}
       {!actions.retry.available ? (
         <p className="text-muted-foreground break-words">
-          Stage retry unavailable: {actions.retry.reason}
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.d187a6a704',
+            'Stage retry unavailable:'
+          )}{' '}
+          {actions.retry.reason}
         </p>
       ) : null}
       {controls.pendingGates.length ? (
-        <ul aria-label="Pending decisions" className="space-y-1.5">
+        <ul
+          aria-label={translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.5355da02bf',
+            'Pending decisions'
+          )}
+          className="space-y-1.5"
+        >
           {controls.pendingGates.map((gate) => (
             <li
               key={gate.key}
@@ -174,7 +172,11 @@ export function CoordinatedHostRunControls({
                 type="button"
                 size="xs"
                 variant="outline"
-                aria-label={`Resolve ${gate.scope} gate ${gate.gateId}`}
+                aria-label={translate(
+                  'auto.components.automations.AutomationCoordinatedHostRunControls.resolveGateAria',
+                  'Resolve {{value0}} gate {{value1}}',
+                  { value0: gate.scope, value1: gate.gateId }
+                )}
                 disabled={controls.busy || decisionReason !== null}
                 onClick={() =>
                   controls.onRequest(
@@ -184,14 +186,17 @@ export function CoordinatedHostRunControls({
                       scopeLabel: gateScopeLabel(gate, view),
                       eligibility: { canResolve: decisionReason === null, reason: decisionReason },
                       approveUnavailableReason: approveRefusal(view, gate),
-                      impactNote: GATE_IMPACT[gate.scope]
+                      impactNote: gateImpact()[gate.scope]
                     },
                     gate
                   )
                 }
               >
                 <ShieldCheck aria-hidden="true" />
-                Resolve
+                {translate(
+                  'auto.components.automations.AutomationCoordinatedHostRunControls.ec9d9c3c51',
+                  'Resolve'
+                )}
               </Button>
             </li>
           ))}
@@ -199,17 +204,43 @@ export function CoordinatedHostRunControls({
       ) : null}
       {decisionReason ? (
         <p className="text-muted-foreground break-words">
-          Human resolution unavailable: {decisionReason}
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.a5d786ac76',
+            'Human resolution unavailable:'
+          )}{' '}
+          {decisionReason}
         </p>
       ) : null}
       {hasApprovals ? (
         <div className="space-y-1">
-          <p className="text-muted-foreground">Recorded approvals</p>
-          <ApprovalList label="Stage approvals" approvals={inspection.approvals.stage} />
-          <ApprovalList label="Parent approvals" approvals={inspection.approvals.parent} />
+          <p className="text-muted-foreground">
+            {translate(
+              'auto.components.automations.AutomationCoordinatedHostRunControls.5464807751',
+              'Recorded approvals'
+            )}
+          </p>
+          <ApprovalList
+            label={translate(
+              'auto.components.automations.AutomationCoordinatedHostRunControls.146b1624be',
+              'Stage approvals'
+            )}
+            approvals={inspection.approvals.stage}
+          />
+          <ApprovalList
+            label={translate(
+              'auto.components.automations.AutomationCoordinatedHostRunControls.2f2665e552',
+              'Parent approvals'
+            )}
+            approvals={inspection.approvals.parent}
+          />
         </div>
       ) : (
-        <p className="text-muted-foreground">No approvals are recorded for this run.</p>
+        <p className="text-muted-foreground">
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.093d0e9b7d',
+            'No approvals are recorded for this run.'
+          )}
+        </p>
       )}
     </section>
   )
@@ -239,7 +270,10 @@ export function CoordinatedHostStageActions({
           onClick={() => controls.onOpenSession(stage)}
         >
           <SquareTerminal aria-hidden="true" />
-          Open worker terminal
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.66a1ad52b0',
+            'Open worker terminal'
+          )}
         </Button>
         <Button
           type="button"
@@ -249,21 +283,38 @@ export function CoordinatedHostStageActions({
           onClick={() => controls.onRequest({ kind: 'retry', stage })}
         >
           <RotateCcw aria-hidden="true" />
-          Retry stage
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.3149379a55',
+            'Retry stage'
+          )}
         </Button>
         {gate.pendingGateIds.length ? (
           <Badge variant="outline" className="max-w-full break-all whitespace-normal">
-            Awaiting decision: {gate.pendingGateIds.join(', ')}
+            {translate(
+              'auto.components.automations.AutomationCoordinatedHostRunControls.6d2e58a9cc',
+              'Awaiting decision:'
+            )}{' '}
+            {gate.pendingGateIds.join(', ')}
           </Badge>
         ) : null}
       </div>
       {sessionRefusal ? (
         <p className="text-muted-foreground break-words">
-          Worker session unavailable: {sessionRefusal}
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.184c1892b8',
+            'Worker session unavailable:'
+          )}{' '}
+          {sessionRefusal}
         </p>
       ) : null}
       {retryReason ? (
-        <p className="text-muted-foreground break-words">Retry unavailable: {retryReason}</p>
+        <p className="text-muted-foreground break-words">
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunControls.558d0f7261',
+            'Retry unavailable:'
+          )}{' '}
+          {retryReason}
+        </p>
       ) : null}
     </div>
   )

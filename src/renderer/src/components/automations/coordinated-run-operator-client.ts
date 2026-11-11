@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { AutomationRun } from '../../../../shared/automations-types'
 import type {
@@ -50,10 +51,21 @@ export class CoordinatedOperatorUnconfirmedError extends Error {}
 
 export function operatorActionLabel(action: CoordinatedRunOperatorAction): string {
   return action.kind === 'stop'
-    ? 'stop request'
+    ? translate(
+        'auto.components.automations.coordinated.run.operator.client.91ee9583a7',
+        'stop request'
+      )
     : action.kind === 'retry'
-      ? `retry of stage ${action.childDefinitionId}`
-      : `${action.decision} decision for ${action.scope} gate ${action.gateId}`
+      ? translate(
+          'auto.components.automations.coordinated.run.operator.client.0dca7ffd0b',
+          'retry of stage {{value0}}',
+          { value0: action.childDefinitionId }
+        )
+      : translate(
+          'auto.components.automations.coordinated.run.operator.client.19d5f08d7f',
+          '{{value0}} decision for {{value1}} gate {{value2}}',
+          { value0: action.decision, value1: action.scope, value2: action.gateId }
+        )
 }
 
 /** One host-reported pending decision; the same gate id may appear once per scope. */
@@ -85,10 +97,16 @@ export function operatorScopeRefusal(
 ): string | null {
   const authority = view.inspection.targetExecutionAuthority
   if (!authority) {
-    return 'The host reports no frozen execution authority for this run. Controls are unavailable.'
+    return translate(
+      'auto.components.automations.coordinated.run.operator.client.70e333a216',
+      'The host reports no frozen execution authority for this run. Controls are unavailable.'
+    )
   }
   if (snapshot && `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}` !== authority) {
-    return 'Run history names a different execution authority than the host. Controls are unavailable.'
+    return translate(
+      'auto.components.automations.coordinated.run.operator.client.60e31c51ad',
+      'Run history names a different execution authority than the host. Controls are unavailable.'
+    )
   }
   return null
 }
@@ -109,17 +127,33 @@ export function describePendingGates(
       const role = snapshot?.resolvedChildren
         .find((child) => child.childDefinitionId === gate.childDefinitionId)
         ?.stageAcceptance?.requiredApprovals?.find((entry) => entry.id === gate.gateId)?.role
-      label = `${stageName ?? 'Stage'} · ${role ? `${role} approval` : 'stage approval'}`
+      label = `${stageName ?? translate('auto.components.automations.coordinatedLabels.stage', 'Stage')} · ${role ? translate('auto.components.automations.coordinatedLabels.roleApproval', '{{role}} approval', { role }) : translate('auto.components.automations.coordinated.run.operator.client.fda1215d84', 'stage approval')}`
     } else if (gate.scope === 'parent') {
       const role = snapshot?.outcomeContract.requiredApprovals.find(
         (entry) => entry.id === gate.gateId
       )?.role
-      label = `Parent outcome · ${role ? `${role} approval` : 'approval'}`
+      label = translate(
+        'auto.components.automations.coordinated.run.operator.client.4a34338e67',
+        'Parent outcome · {{value0}}',
+        {
+          value0: role
+            ? translate(
+                'auto.components.automations.coordinatedLabels.roleApproval',
+                '{{role}} approval',
+                { role }
+              )
+            : translate('auto.components.automations.coordinatedLabels.approval', 'approval')
+        }
+      )
     } else {
       const escalation = escalations.find((entry) => entry.key === gate.gateId)
       label = escalation
         ? `${escalation.code}: ${escalation.detail}`
-        : `Escalation${stageName ? ` · ${stageName}` : ''}`
+        : translate(
+            'auto.components.automations.coordinatedLabels.escalation',
+            'Escalation{{stage}}',
+            { stage: stageName ? ` · ${stageName}` : '' }
+          )
     }
     return { ...gate, key: pendingGateKey(gate), label }
   })
@@ -156,7 +190,12 @@ function operatorParams(
   )
   if (action.kind === 'retry') {
     if (!stage?.taskId) {
-      throw new Error('The host no longer reports this stage with a Task. Nothing was submitted.')
+      throw new Error(
+        translate(
+          'auto.components.automations.coordinated.run.operator.client.0637b4dfd2',
+          'The host no longer reports this stage with a Task. Nothing was submitted.'
+        )
+      )
     }
     // Why: a replay of the identical natural key is answered by the host; a fresh retry must still be host-eligible.
     if (!replay) {
@@ -164,11 +203,20 @@ function operatorParams(
         throw new Error(view.actions.retry.reason)
       }
       if (!stage.retryEligibility.canRetry) {
-        throw new Error(stage.retryEligibility.reason ?? 'The host no longer admits this retry.')
+        throw new Error(
+          stage.retryEligibility.reason ??
+            translate(
+              'auto.components.automations.coordinated.run.operator.client.ac825048c0',
+              'The host no longer admits this retry.'
+            )
+        )
       }
       if (stage.retryEligibility.retryOfDispatchId !== action.retryOfDispatchId) {
         throw new Error(
-          'The stage has a newer attempt than the one confirmed. Nothing was submitted; review the current attempt first.'
+          translate(
+            'auto.components.automations.coordinated.run.operator.client.120525d0d4',
+            'The stage has a newer attempt than the one confirmed. Nothing was submitted; review the current attempt first.'
+          )
         )
       }
     }
@@ -206,7 +254,13 @@ export async function submitCoordinatedRunOperatorAction(
   const refusal = operatorScopeRefusal(current, matchingFrozenSnapshot(current, run))
   const authority = current.inspection.targetExecutionAuthority
   if (refusal || !authority) {
-    throw new Error(`${refusal} Nothing was submitted.`)
+    throw new Error(
+      translate(
+        'auto.components.automations.coordinated.run.operator.client.9f2cae37be',
+        '{{value0}} Nothing was submitted.',
+        { value0: refusal }
+      )
+    )
   }
   const { method, params } = operatorParams(
     binding,
@@ -223,14 +277,24 @@ export async function submitCoordinatedRunOperatorAction(
       { timeoutMs: REQUEST_TIMEOUT_MS }
     )
     if (response.disposition !== 'recorded' && response.disposition !== 'already_recorded') {
-      throw new Error('The host answered without saying whether the request was recorded.')
+      throw new Error(
+        translate(
+          'auto.components.automations.coordinated.run.operator.client.8d5ce4a5ea',
+          'The host answered without saying whether the request was recorded.'
+        )
+      )
     }
     const view = validateCoordinatedRunView(response.view, params, params.definitionRevision)
     if (
       view.inspection.targetExecutionAuthority !== authority ||
       view.inspection.orchestrationRunId !== params.orchestrationRunId
     ) {
-      throw new Error('The host answered for a different execution authority.')
+      throw new Error(
+        translate(
+          'auto.components.automations.coordinated.run.operator.client.991e276d12',
+          'The host answered for a different execution authority.'
+        )
+      )
     }
     return {
       action,

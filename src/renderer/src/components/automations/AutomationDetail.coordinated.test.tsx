@@ -179,9 +179,9 @@ describe('AutomationDetail coordinated automations & flag preservation', () => {
     const container = await renderDetail(sampleCoordinatedAutomation, [runWithSnapshot])
 
     // Switch to snapshot tab
-    const snapshotTabBtn = container.querySelector(
+    const snapshotTabBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Historical snapshot"]'
-    ) as HTMLButtonElement
+    )!
     expect(snapshotTabBtn).not.toBeNull()
 
     await act(async () => {

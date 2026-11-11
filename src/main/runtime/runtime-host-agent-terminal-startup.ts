@@ -1,3 +1,4 @@
+import type { OrcaRuntimeWithStateFields } from './construction/runtime-construction'
 import { resolveNativeStubTerminalOptions } from './native-stub-launch-options'
 import { requireNativeProviderLaunch } from './native-provider-execution-admission'
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
@@ -10,7 +11,7 @@ import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 
 type Host = Parameters<typeof resolveAgentTerminalCreateOptions>[2] & {
-  runtime: object
+  runtime: OrcaRuntimeWithStateFields
   accounts: Pick<RuntimeAccountController, 'prepareHostAgentLaunch' | 'hostLaunchEnvFor'>
 }
 

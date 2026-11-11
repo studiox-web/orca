@@ -1,3 +1,4 @@
+import type { OrcaRuntimeWithStateFields } from './construction/runtime-construction'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { resolveLocalLaunchScopeRuntime } from '../local-project-runtime-resolution'
 import { join } from 'node:path'
@@ -25,7 +26,7 @@ export type NativeStubSessionTestComposition = Readonly<{
   revoke(): void
 }>
 type Binding = {
-  runtime: { getRuntimeId?: () => string }
+  runtime: OrcaRuntimeWithStateFields
   store: RuntimeStore | null
   generation: () => string
   isLocalDesktop: () => boolean
@@ -45,7 +46,7 @@ type Composition = {
 }
 export type NativeStubLaunchRecord = {
   composition: Composition
-  runtime: object
+  runtime: OrcaRuntimeWithStateFields
   source: RuntimeSourceStamp
   workspace: Readonly<TerminalWorkspaceLaunchScope>
   env: Readonly<Record<string, string>>
@@ -192,7 +193,7 @@ export function bindNativeStubSessionTestComposition(
   assertBinding(composition, binding.runtime)
 }
 
-function assertBinding(composition: Composition, runtime: object): void {
+function assertBinding(composition: Composition, runtime: OrcaRuntimeWithStateFields): void {
   composition.assertCurrent()
   const binding = composition.binding
   if (
@@ -241,7 +242,7 @@ function assertFolder(composition: Composition, id: string) {
 
 export function requireNativeStubLaunch(
   permit: PreparedNativeStubLaunch,
-  runtime?: object
+  runtime?: OrcaRuntimeWithStateFields
 ): NativeStubLaunchRecord {
   const record = permits.get(permit)
   if (!record) {

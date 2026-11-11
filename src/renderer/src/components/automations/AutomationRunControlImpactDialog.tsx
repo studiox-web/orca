@@ -168,7 +168,10 @@ export function AutomationRunControlImpactDialog<
                 <ShieldCheck className="mr-2 size-4 text-foreground" aria-hidden="true" />
                 <span>
                   {request?.kind === 'resolve_run_gate'
-                    ? 'Resolve Run Decision — Impact Preview'
+                    ? translate(
+                        'auto.components.automations.AutomationRunControlImpactDialog.2204045196',
+                        'Resolve Run Decision — Impact Preview'
+                      )
                     : translate(
                         'auto.components.automations.runPanel.resolveGateImpactTitle',
                         'Resolve Stage Gate — Impact Preview'
@@ -186,31 +189,62 @@ export function AutomationRunControlImpactDialog<
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-semibold tracking-wider text-muted-foreground uppercase">
-                    Target Scope & Authority
+                    {translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.2e2e1312e1',
+                      'Target Scope & Authority'
+                    )}
                   </span>
                   <Badge variant="outline">{projectedRun.targetExecutionAuthority}</Badge>
                 </div>
                 <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
                   <div>
-                    <span>Run ID: </span>
+                    <span>
+                      {translate(
+                        'auto.components.automations.AutomationRunControlImpactDialog.a3287e4685',
+                        'Run ID:'
+                      )}{' '}
+                    </span>
                     <span className="font-mono text-foreground">
                       {projectedRun.automationRunId}
                     </span>
                   </div>
                   <div>
-                    <span>Orchestration Run: </span>
+                    <span>
+                      {translate(
+                        'auto.components.automations.AutomationRunControlImpactDialog.604f00e4c6',
+                        'Orchestration Run:'
+                      )}{' '}
+                    </span>
                     <span className="font-mono text-foreground">
-                      {projectedRun.orchestrationRunId ?? 'Not materialized'}
+                      {projectedRun.orchestrationRunId ??
+                        translate(
+                          'auto.components.automations.AutomationRunControlImpactDialog.6200fd5043',
+                          'Not materialized'
+                        )}
                     </span>
                   </div>
                   <div>
-                    <span>Frozen Revision: </span>
+                    <span>
+                      {translate(
+                        'auto.components.automations.AutomationRunControlImpactDialog.1557ffd756',
+                        'Frozen Revision:'
+                      )}{' '}
+                    </span>
                     <span className="font-mono text-foreground">
-                      Rev {projectedRun.definitionRevision}
+                      {translate(
+                        'auto.components.automations.AutomationRunControlImpactDialog.8a766cf23d',
+                        'Rev'
+                      )}{' '}
+                      {projectedRun.definitionRevision}
                     </span>
                   </div>
                   <div>
-                    <span>Workspace: </span>
+                    <span>
+                      {translate(
+                        'auto.components.automations.AutomationRunControlImpactDialog.d5bf9e2ba2',
+                        'Workspace:'
+                      )}{' '}
+                    </span>
                     <span className="font-mono text-foreground">{projectedRun.workspaceLabel}</span>
                   </div>
                 </div>
@@ -219,18 +253,37 @@ export function AutomationRunControlImpactDialog<
               {request?.kind === 'stop' ? (
                 <div className="space-y-1.5 text-xs text-foreground">
                   <p>
-                    Records a stop request for{' '}
-                    <span className="font-mono">{projectedRun.automationRunId}</span> on{' '}
-                    <span className="font-mono">{projectedRun.hostLabel}</span>. The host starts no
-                    further Dispatches and asks running workers to cancel.
+                    {translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.2cbfc9a9a9',
+                      'Records a stop request for'
+                    )}{' '}
+                    <span className="font-mono">{projectedRun.automationRunId}</span>{' '}
+                    {translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.632dd7c025',
+                      'on'
+                    )}{' '}
+                    <span className="font-mono">{projectedRun.hostLabel}</span>
+                    {translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.9c0768bf7c',
+                      '. The host starts no further Dispatches and asks running workers to cancel.'
+                    )}
                   </p>
                   <p>
-                    A stop request is not proof that a worker exited. The run stays uncertain until
-                    the host has exit evidence, and effects already in flight are not undone.
+                    {translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.6c5bf66212',
+                      'A stop request is not proof that a worker exited. The run stays uncertain until the host has exit evidence, and effects already in flight are not undone.'
+                    )}
                   </p>
                   <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">
-                    Definition isolation: Parent schedule, enablement, and reusable child worker
-                    definitions (Rev {projectedRun.currentAutomationRevision}) remain unchanged.
+                    {translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.0985f9281f',
+                      'Definition isolation: Parent schedule, enablement, and reusable child worker definitions (Rev'
+                    )}{' '}
+                    {projectedRun.currentAutomationRevision}
+                    {translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.d78a26937f',
+                      ') remain unchanged.'
+                    )}
                   </p>
                 </div>
               ) : null}
@@ -239,28 +292,63 @@ export function AutomationRunControlImpactDialog<
                 <div className="space-y-2 text-xs text-foreground">
                   <div className="space-y-1 rounded border border-border/50 bg-background p-2.5 text-2xs">
                     <div>
-                      <span className="text-muted-foreground">Stage: </span>
+                      <span className="text-muted-foreground">
+                        {translate(
+                          'auto.components.automations.AutomationRunControlImpactDialog.eb7bee2599',
+                          'Stage:'
+                        )}{' '}
+                      </span>
                       <span className="font-medium">{request.stage.name}</span>{' '}
                       <span className="font-mono text-3xs text-muted-foreground">
                         ({request.stage.childDefinitionId})
                       </span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Reused Native Task: </span>
-                      <span className="font-mono">{request.stage.taskId ?? 'None'}</span>
+                      <span className="text-muted-foreground">
+                        {translate(
+                          'auto.components.automations.AutomationRunControlImpactDialog.c0d4429a1f',
+                          'Reused Native Task:'
+                        )}{' '}
+                      </span>
+                      <span className="font-mono">
+                        {request.stage.taskId ??
+                          translate(
+                            'auto.components.automations.AutomationRunControlImpactDialog.dde8465787',
+                            'None'
+                          )}
+                      </span>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Retry Of Dispatch: </span>
+                      <span className="text-muted-foreground">
+                        {translate(
+                          'auto.components.automations.AutomationRunControlImpactDialog.618c29f70d',
+                          'Retry Of Dispatch:'
+                        )}{' '}
+                      </span>
                       <span className="font-mono">
-                        {request.stage.retryEligibility.retryOfDispatchId ?? 'None'}
+                        {request.stage.retryEligibility.retryOfDispatchId ??
+                          translate(
+                            'auto.components.automations.AutomationRunControlImpactDialog.dde8465787',
+                            'None'
+                          )}
                       </span>
                     </div>
                   </div>
                   <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">
-                    Definition isolation: Retrying reuses Task{' '}
-                    <span className="font-mono">{request.stage.taskId}</span> and creates a new
-                    Dispatch attempt against frozen Rev {projectedRun.definitionRevision}. It never
-                    mutates the reusable child worker definition.
+                    {translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.2883bb6049',
+                      'Definition isolation: Retrying reuses Task'
+                    )}{' '}
+                    <span className="font-mono">{request.stage.taskId}</span>{' '}
+                    {translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.4e6997a116',
+                      'and creates a new Dispatch attempt against frozen Rev'
+                    )}{' '}
+                    {projectedRun.definitionRevision}
+                    {translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.83199ae2c9',
+                      '. It never mutates the reusable child worker definition.'
+                    )}
                   </p>
                 </div>
               ) : null}
@@ -302,12 +390,24 @@ export function AutomationRunControlImpactDialog<
             onClick={handleConfirm}
           >
             {isPending
-              ? 'Submitting…'
+              ? translate(
+                  'auto.components.automations.AutomationRunControlImpactDialog.87fb08b662',
+                  'Submitting…'
+                )
               : request?.kind === 'stop'
-                ? 'Confirm Stop Run'
+                ? translate(
+                    'auto.components.automations.AutomationRunControlImpactDialog.8c9a2da719',
+                    'Confirm Stop Run'
+                  )
                 : request?.kind === 'retry'
-                  ? 'Confirm Retry Stage'
-                  : 'Confirm Gate Decision'}
+                  ? translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.eaeabef13f',
+                      'Confirm Retry Stage'
+                    )
+                  : translate(
+                      'auto.components.automations.AutomationRunControlImpactDialog.4dc04d862f',
+                      'Confirm Gate Decision'
+                    )}
           </Button>
         </DialogFooter>
       </DialogContent>

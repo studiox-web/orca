@@ -55,20 +55,13 @@ export function AutomationHistoricalSnapshotViewer({
             )}
           </h4>
           {runId ? (
-            <Badge
-              variant="secondary"
-              className="font-mono text-3xs truncate max-w-[200px]"
-              title={runId}
-            >
+            <Badge variant="secondary" className="max-w-[200px]" title={runId}>
               {translate('auto.components.automations.workers.runPrefix', 'Run: {{runId}}', {
                 runId
               })}
             </Badge>
           ) : null}
-          <Badge
-            variant="outline"
-            className="border-border/60 text-2xs text-muted-foreground shrink-0"
-          >
+          <Badge variant="outline" className="shrink-0">
             {translate('auto.components.automations.workers.readOnly', 'Read-only')}
           </Badge>
         </div>
@@ -95,8 +88,8 @@ export function AutomationHistoricalSnapshotViewer({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
-          className="h-6 gap-1 px-2 text-3xs text-muted-foreground hover:text-foreground shrink-0"
+          size="xs"
+          className="shrink-0"
           onClick={handleCopyDigest}
           aria-label={translate(
             'auto.components.automations.workers.copyDigest',
@@ -148,9 +141,7 @@ export function AutomationHistoricalSnapshotViewer({
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2 min-w-0">
-                  <Badge variant="secondary" className="font-medium text-3xs">
-                    {child.role}
-                  </Badge>
+                  <Badge variant="secondary">{child.role}</Badge>
                   <span className="font-semibold text-foreground truncate">{child.name}</span>
                   <span className="font-mono text-3xs text-muted-foreground truncate">
                     ({child.childDefinitionId})
@@ -169,12 +160,7 @@ export function AutomationHistoricalSnapshotViewer({
                       </span>
                     ) : null}
                   </div>
-                  <Badge
-                    variant="outline"
-                    className="border-border/50 text-3xs uppercase tracking-wider text-muted-foreground"
-                  >
-                    {child.mutationClass}
-                  </Badge>
+                  <Badge variant="outline">{child.mutationClass}</Badge>
                 </div>
               </div>
 
@@ -214,8 +200,14 @@ export function AutomationHistoricalSnapshotViewer({
                     {translate('auto.components.automations.workers.dependsOn', 'Depends on:')}
                   </span>
                   {child.dependencies.map((dep) => (
-                    <Badge key={dep.childId} variant="outline" className="font-mono text-3xs">
-                      {dep.childId} ({dep.condition ?? 'accepted'})
+                    <Badge key={dep.childId} variant="outline">
+                      {dep.childId} (
+                      {dep.condition ??
+                        translate(
+                          'auto.components.automations.AutomationHistoricalSnapshotViewer.6045e214ea',
+                          'accepted'
+                        )}
+                      )
                     </Badge>
                   ))}
                 </div>

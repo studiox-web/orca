@@ -1,3 +1,4 @@
+import type { OrcaRuntimeWithStateFields } from './construction/runtime-construction'
 import { realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -15,7 +16,7 @@ export type PreparedNativeProviderLaunch = Readonly<{
 }>
 
 type Binding = {
-  runtime: object
+  runtime: OrcaRuntimeWithStateFields
   store: RuntimeStore | null
   generation: () => string
   isLocalDesktop: () => boolean
@@ -32,7 +33,7 @@ type Admission = {
 }
 type Permit = {
   admission: Admission
-  runtime: object
+  runtime: OrcaRuntimeWithStateFields
   runId: string
   taskId: string
   dispatchId: string
@@ -123,7 +124,7 @@ function assertAdmissionCurrent(admission: Admission): void {
   }
 }
 
-function assertAdmissionBinding(admission: Admission, runtime: object): void {
+function assertAdmissionBinding(admission: Admission, runtime: OrcaRuntimeWithStateFields): void {
   assertAdmissionCurrent(admission)
   const binding = admission.binding
   if (
@@ -212,7 +213,7 @@ export function consumeNativeProviderLaunch(
 
 export function requireNativeProviderLaunch(
   candidate: PreparedNativeProviderLaunch,
-  runtime?: object
+  runtime?: OrcaRuntimeWithStateFields
 ): Permit {
   const permit = permits.get(candidate)
   if (

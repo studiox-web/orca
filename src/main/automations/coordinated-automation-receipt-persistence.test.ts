@@ -63,7 +63,7 @@ function makeWorkerResult(
     effects: [],
     blockers: [],
     ...overrides
-  } as StructuredWorkerResult
+  }
 }
 
 describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
@@ -227,7 +227,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     await closeTestStores()
 
     // Tamper with completion receipt in the persisted state file
-    const raw = JSON.parse(readPersistedStateJson()) as PersistedState
+    const raw: PersistedState = JSON.parse(readPersistedStateJson())
     const targetRun = raw.automationRuns.find((r) => r.id === run!.id)!
     targetRun.completionReceipt!.frozenConfigDigest = `sha256:${'f'.repeat(64)}`
     writePersistedStateJson(dataFile(), JSON.stringify(raw, null, 2))
@@ -263,7 +263,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     await closeTestStores()
 
     // Delete completionTrust from persisted state file
-    const raw = JSON.parse(readPersistedStateJson()) as PersistedState
+    const raw: PersistedState = JSON.parse(readPersistedStateJson())
     const targetRun = raw.automationRuns.find((r) => r.id === run!.id)!
     delete targetRun.completionTrust
     writePersistedStateJson(dataFile(), JSON.stringify(raw, null, 2))
@@ -351,7 +351,7 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
 
     // Missing receipt on a completed run must fail closed on replay
     await closeTestStores()
-    const raw = JSON.parse(readPersistedStateJson()) as PersistedState
+    const raw: PersistedState = JSON.parse(readPersistedStateJson())
     const targetRun = raw.automationRuns.find((r) => r.id === run!.id)!
     targetRun.completionReceipt = null
     delete targetRun.completionTrust

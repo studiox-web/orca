@@ -1,9 +1,9 @@
+import { AutomationCoordinatedRunLimits } from './AutomationCoordinatedRunLimits'
+import { parentSemanticMetadata } from './coordinated-run-status-metadata'
 import React from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
-  Clock,
-  DollarSign,
   Folder,
   GitBranch,
   HelpCircle,
@@ -11,18 +11,13 @@ import {
   RefreshCw,
   Server,
   ShieldAlert,
-  Sparkles,
-  Square,
-  Users
+  Square
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
-import type {
-  CoordinatedParentSemanticState,
-  ProjectedCoordinatedRun
-} from './coordinated-automation-run-projection'
+import type { ProjectedCoordinatedRun } from './coordinated-automation-run-projection'
+import { translate } from '@/i18n/i18n'
 
 export type AutomationCoordinatedRunHeaderAndLimitsProps = {
   projection: ProjectedCoordinatedRun
@@ -31,102 +26,13 @@ export type AutomationCoordinatedRunHeaderAndLimitsProps = {
   onInspectReceipt?: () => void
 }
 
-function formatDurationSeconds(seconds: number | null): string {
-  if (seconds === null) {
-    return '—'
-  }
-  if (seconds < 60) {
-    return `${seconds}s`
-  }
-  const mins = Math.floor(seconds / 60)
-  const rem = seconds % 60
-  return rem > 0 ? `${mins}m ${rem}s` : `${mins}m`
-}
-
-function formatUsd(amount: number | null): string {
-  if (amount === null) {
-    return '—'
-  }
-  return `$${amount.toFixed(2)}`
-}
-
-const SEMANTIC_STATE_META: Record<
-  CoordinatedParentSemanticState,
-  {
-    label: string
-    variant: 'default' | 'secondary' | 'outline' | 'destructive'
-    icon: React.ComponentType<{ className?: string }>
-  }
-> = {
-  completed: {
-    label: 'Semantic goal completed',
-    variant: 'secondary',
-    icon: CheckCircle2
-  },
-  ready_for_review: {
-    label: 'Ready for review',
-    variant: 'outline',
-    icon: CheckCircle2
-  },
-  ready_to_publish: {
-    label: 'Ready to publish',
-    variant: 'secondary',
-    icon: CheckCircle2
-  },
-  published_verified: {
-    label: 'Published & verified',
-    variant: 'secondary',
-    icon: CheckCircle2
-  },
-  waiting_for_approval: {
-    label: 'Waiting for approval',
-    variant: 'outline',
-    icon: AlertTriangle
-  },
-  in_progress: {
-    label: 'In progress',
-    variant: 'default',
-    icon: Sparkles
-  },
-  pending: {
-    label: 'Pending / Queued',
-    variant: 'outline',
-    icon: Clock
-  },
-  blocked: {
-    label: 'Blocked',
-    variant: 'destructive',
-    icon: AlertTriangle
-  },
-  failed: {
-    label: 'Failed',
-    variant: 'destructive',
-    icon: ShieldAlert
-  },
-  outcome_uncertain: {
-    label: 'Outcome uncertain',
-    variant: 'destructive',
-    icon: ShieldAlert
-  },
-  quarantined: {
-    label: 'Quarantined (fail-closed)',
-    variant: 'destructive',
-    icon: ShieldAlert
-  },
-  unaccepted: {
-    label: 'Unaccepted technical completion',
-    variant: 'outline',
-    icon: AlertTriangle
-  }
-}
-
 export function AutomationCoordinatedRunHeaderAndLimits({
   projection,
   isStopPending = false,
   onRequestStopRun,
   onInspectReceipt
 }: AutomationCoordinatedRunHeaderAndLimitsProps): React.JSX.Element {
-  const semanticMeta = SEMANTIC_STATE_META[projection.semanticOutcomeState]
+  const semanticMeta = parentSemanticMetadata()[projection.semanticOutcomeState]
   const SemanticIcon = semanticMeta.icon
   const budgets = projection.budgetsAndCeilings
   const scheduleLabel = formatUiAutomationSchedule(projection.scheduleState.rrule)
@@ -156,27 +62,51 @@ export function AutomationCoordinatedRunHeaderAndLimits({
               </Badge>
 
               <Badge variant="outline" data-testid="coordinated-run-technical-status-badge">
-                Technical: {projection.technicalRunStatus}
+                {translate(
+                  'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.352746f60d',
+                  'Technical:'
+                )}{' '}
+                {projection.technicalRunStatus}
               </Badge>
 
               {projection.materializationPhase ? (
-                <Badge variant="outline">Phase: {projection.materializationPhase}</Badge>
+                <Badge variant="outline">
+                  {translate(
+                    'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.9ade5a8d49',
+                    'Phase:'
+                  )}{' '}
+                  {projection.materializationPhase}
+                </Badge>
               ) : null}
 
-              <Badge variant="secondary">Frozen Rev {projection.definitionRevision}</Badge>
+              <Badge variant="secondary">
+                {translate(
+                  'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.8caa088029',
+                  'Frozen Rev'
+                )}{' '}
+                {projection.definitionRevision}
+              </Badge>
 
               {projection.replanOfAutomationRunId ? (
                 <Badge variant="outline">
                   <RefreshCw className="size-2.5" />
-                  Replanned from {projection.replanOfAutomationRunId}
+                  {translate(
+                    'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.d22364cc75',
+                    'Replanned from'
+                  )}{' '}
+                  {projection.replanOfAutomationRunId}
                 </Badge>
               ) : null}
             </div>
 
             <p className="text-xs text-muted-foreground">{projection.semanticOutcomeReason}</p>
             {projection.outcomeContract?.humanStatement ? (
-              <p className="text-[11px] font-medium text-foreground">
-                Outcome contract: {projection.outcomeContract.humanStatement}
+              <p className="text-2xs font-medium text-foreground">
+                {translate(
+                  'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.740469cb62',
+                  'Outcome contract:'
+                )}{' '}
+                {projection.outcomeContract.humanStatement}
               </p>
             ) : null}
           </div>
@@ -186,7 +116,10 @@ export function AutomationCoordinatedRunHeaderAndLimits({
             {projection.completionReceipt && onInspectReceipt ? (
               <Button type="button" variant="outline" size="xs" onClick={onInspectReceipt}>
                 <CheckCircle2 className="size-3.5 text-status-success" />
-                Inspect receipt
+                {translate(
+                  'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.44f9566e21',
+                  'Inspect receipt'
+                )}
               </Button>
             ) : null}
 
@@ -199,36 +132,65 @@ export function AutomationCoordinatedRunHeaderAndLimits({
               aria-busy={isStopPending}
               title={
                 isStopPending
-                  ? 'A stop request for this run is already being submitted.'
+                  ? translate(
+                      'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.3c352a0915',
+                      'A stop request for this run is already being submitted.'
+                    )
                   : (projection.stopEligibility.reason ??
-                    `Stop coordinated run ${projection.automationRunId}`)
+                    translate(
+                      'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.1b2d430950',
+                      'Stop coordinated run {{value0}}',
+                      { value0: projection.automationRunId }
+                    ))
               }
               onClick={onRequestStopRun}
             >
               <Square className="size-3" />
-              {isStopPending ? 'Submitting stop…' : 'Stop run'}
+              {isStopPending
+                ? translate(
+                    'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.07069a2bdc',
+                    'Submitting stop…'
+                  )
+                : translate(
+                    'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.6df79099a5',
+                    'Stop run'
+                  )}
             </Button>
           </div>
         </div>
 
         {/* 5 Independent State Facets Strip: Run ID, Authority/Host, Workspace, Lifecycle, Schedule */}
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-2 text-[11px] text-muted-foreground">
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 pt-2 text-2xs text-muted-foreground">
           <span>
-            Run: <code className="font-mono text-foreground">{projection.automationRunId}</code>
+            {translate(
+              'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.06f737f0de',
+              'Run:'
+            )}{' '}
+            <code className="font-mono text-foreground">{projection.automationRunId}</code>
           </span>
           {projection.orchestrationRunId ? (
             <span>
-              Orch:{' '}
+              {translate(
+                'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.5ca0e8c9e5',
+                'Orch:'
+              )}{' '}
               <code className="font-mono text-foreground">{projection.orchestrationRunId}</code>
             </span>
           ) : null}
           <span className="inline-flex items-center gap-1">
             <Server className="size-3 shrink-0" />
-            Authority:{' '}
-            <code className="font-mono text-foreground">
-              {projection.targetExecutionAuthority}
-            </code>{' '}
-            ({projection.hostLabel}){projection.isRemoteAuthority ? ' [Remote]' : ''}
+            {translate(
+              'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.d12923b0f7',
+              'Authority:'
+            )}{' '}
+            <code className="font-mono text-foreground">{projection.targetExecutionAuthority}</code>{' '}
+            ({projection.hostLabel})
+            {projection.isRemoteAuthority
+              ? translate(
+                  'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.45d420c76e',
+                  '[Remote]'
+                )
+              : ''}
           </span>
           <span className="inline-flex items-center gap-1">
             {projection.isFolderWorkspace ? (
@@ -236,16 +198,31 @@ export function AutomationCoordinatedRunHeaderAndLimits({
             ) : (
               <GitBranch className="size-3 shrink-0" />
             )}
-            Workspace:{' '}
+            {translate(
+              'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.0647e32707',
+              'Workspace:'
+            )}{' '}
             <strong className="font-medium text-foreground">{projection.workspaceLabel}</strong>
-            {projection.isFolderWorkspace ? ' (Folder workspace)' : ''}
+            {projection.isFolderWorkspace
+              ? translate(
+                  'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.5bfbfd31e4',
+                  '(Folder workspace)'
+                )
+              : ''}
           </span>
           <span>
-            Lifecycle:{' '}
+            {translate(
+              'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.470ff1d61c',
+              'Lifecycle:'
+            )}{' '}
             <strong className="font-medium text-foreground">{projection.lifecycleState}</strong>
           </span>
           <span>
-            Schedule: <strong className="font-medium text-foreground">{scheduleLabel}</strong>
+            {translate(
+              'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.1581386b57',
+              'Schedule:'
+            )}{' '}
+            <strong className="font-medium text-foreground">{scheduleLabel}</strong>
           </span>
         </div>
       </div>
@@ -261,7 +238,12 @@ export function AutomationCoordinatedRunHeaderAndLimits({
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" />
               <div>
-                <span className="font-semibold">Run quarantined (fail-closed): </span>
+                <span className="font-semibold">
+                  {translate(
+                    'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.1884adee93',
+                    'Run quarantined (fail-closed):'
+                  )}{' '}
+                </span>
                 {projection.quarantine.reason}
               </div>
             </div>
@@ -272,9 +254,17 @@ export function AutomationCoordinatedRunHeaderAndLimits({
               <ShieldAlert className="mt-0.5 size-4 shrink-0" />
               <div>
                 <span className="font-semibold">
-                  Uncertain external effect ({uncertainSummaries.length}):{' '}
+                  {translate(
+                    'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.faef94bbf1',
+                    'Uncertain external effect ('
+                  )}
+                  {uncertainSummaries.length}):{' '}
                 </span>
-                {uncertainSummaries.join(' · ')} — mutation lane paused until reconciled.
+                {uncertainSummaries.join(' · ')}{' '}
+                {translate(
+                  'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.5a5b42247f',
+                  '— mutation lane paused until reconciled.'
+                )}
               </div>
             </div>
           ) : null}
@@ -284,7 +274,11 @@ export function AutomationCoordinatedRunHeaderAndLimits({
               <HelpCircle className="mt-0.5 size-4 shrink-0" />
               <div>
                 <span className="font-semibold">
-                  Pending worker question ({pendingQuestions.length}):{' '}
+                  {translate(
+                    'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.e40fd58de1',
+                    'Pending worker question ('
+                  )}
+                  {pendingQuestions.length}):{' '}
                 </span>
                 {pendingQuestions.join(' · ')}
               </div>
@@ -295,7 +289,13 @@ export function AutomationCoordinatedRunHeaderAndLimits({
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <div>
-                <span className="font-semibold">Active blocker ({activeBlockers.length}): </span>
+                <span className="font-semibold">
+                  {translate(
+                    'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.eab17dc506',
+                    'Active blocker ('
+                  )}
+                  {activeBlockers.length}):{' '}
+                </span>
                 {activeBlockers.join(' · ')}
               </div>
             </div>
@@ -305,10 +305,19 @@ export function AutomationCoordinatedRunHeaderAndLimits({
             <div className="flex items-center gap-2 rounded-md border border-border bg-secondary/30 px-3 py-1.5 text-xs text-muted-foreground">
               <Lock className="size-3.5 shrink-0 text-status-warning" />
               <span>
-                Occupied single-writer mutation lanes:{' '}
+                {translate(
+                  'auto.components.automations.AutomationCoordinatedRunHeaderAndLimits.30e805af8f',
+                  'Occupied single-writer mutation lanes:'
+                )}{' '}
                 <code className="font-mono text-foreground">
                   {budgets.occupiedMutationLanes
-                    .map((lane) => `${lane.lane} (held by ${lane.holderChildName})`)
+                    .map((lane) =>
+                      translate(
+                        'auto.components.automations.coordinatedLabels.heldLane',
+                        '{{lane}} (held by {{holder}})',
+                        { lane: lane.lane, holder: lane.holderChildName }
+                      )
+                    )
                     .join(', ')}
                 </code>
               </span>
@@ -317,83 +326,7 @@ export function AutomationCoordinatedRunHeaderAndLimits({
         </div>
       ) : null}
 
-      {/* Time, Spend, Concurrency, and Circuit-Breaker Limits Strip */}
-      <div
-        className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-card/60 p-2.5 text-xs @md:grid-cols-3 @2xl:grid-cols-6"
-        data-testid="coordinated-run-limits-strip"
-      >
-        <div className="rounded border border-border/50 bg-background/50 px-2.5 py-1.5">
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Clock className="size-3" />
-            Wall-clock time
-          </div>
-          <div
-            className={cn(
-              'mt-0.5 font-mono text-xs font-medium',
-              budgets.wallClockExceeded ? 'text-destructive' : 'text-foreground'
-            )}
-          >
-            {formatDurationSeconds(budgets.elapsedSeconds)} /{' '}
-            {formatDurationSeconds(budgets.maxWallClockSeconds)}
-          </div>
-        </div>
-
-        <div className="rounded border border-border/50 bg-background/50 px-2.5 py-1.5">
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <DollarSign className="size-3" />
-            Spend ceiling
-          </div>
-          <div
-            className={cn(
-              'mt-0.5 font-mono text-xs font-medium',
-              budgets.costExceeded ? 'text-destructive' : 'text-foreground'
-            )}
-          >
-            {formatUsd(budgets.estimatedCostUsd)} / {formatUsd(budgets.maxEstimatedCostUsd)}
-          </div>
-        </div>
-
-        <div className="rounded border border-border/50 bg-background/50 px-2.5 py-1.5">
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <Users className="size-3" />
-            Concurrency
-          </div>
-          <div className="mt-0.5 font-mono text-xs font-medium text-foreground">
-            {budgets.activeConcurrency} / {budgets.maxConcurrency ?? '∞'} active
-          </div>
-        </div>
-
-        <div className="rounded border border-border/50 bg-background/50 px-2.5 py-1.5">
-          <div className="text-[10px] text-muted-foreground">Review loops</div>
-          <div
-            className={cn(
-              'mt-0.5 font-mono text-xs font-medium',
-              budgets.reviewLimitReached ? 'text-status-warning-text' : 'text-foreground'
-            )}
-          >
-            {budgets.maxReviewIterationsUsed} / {budgets.maxReviewIterationsCeiling ?? '∞'}
-          </div>
-        </div>
-
-        <div className="rounded border border-border/50 bg-background/50 px-2.5 py-1.5">
-          <div className="text-[10px] text-muted-foreground">Start failures</div>
-          <div
-            className={cn(
-              'mt-0.5 font-mono text-xs font-medium',
-              budgets.circuitBreakerTripped ? 'text-destructive' : 'text-foreground'
-            )}
-          >
-            {budgets.dispatchStartFailuresCount} / {budgets.maxDispatchStartFailuresCeiling}
-          </div>
-        </div>
-
-        <div className="rounded border border-border/50 bg-background/50 px-2.5 py-1.5">
-          <div className="text-[10px] text-muted-foreground">Active fixers</div>
-          <div className="mt-0.5 font-mono text-xs font-medium text-foreground">
-            {budgets.activeFixersCount} / {budgets.maxActiveFixersPerArtifact ?? '∞'}
-          </div>
-        </div>
-      </div>
+      <AutomationCoordinatedRunLimits budgets={budgets} />
     </div>
   )
 }

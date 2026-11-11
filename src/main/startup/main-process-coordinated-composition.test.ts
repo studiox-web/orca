@@ -22,12 +22,14 @@ import { _resetTerminalViewAttributesForTest } from '../runtime/terminal-view-at
 import * as invalidators from '../ipc/worktree-change-invalidators'
 import { initializeMainProcessAutomations } from './main-process-automations'
 import type { AutomationService } from '../automations/service'
+import { registerXosGoalHandlers } from '../xos/xos-goal-ipc'
 
 const startup = vi.hoisted(() => {
   const state: Record<string, unknown> = {}
   return { state }
 })
 vi.mock('./main-process-state', () => ({ mainProcessState: startup.state }))
+vi.mock('../xos/xos-goal-ipc', () => ({ registerXosGoalHandlers: vi.fn() }))
 vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => false } }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
@@ -105,6 +107,7 @@ it('keeps ordinary startup unconfigured and uses only the selected singleton ser
   const register = vi.spyOn(runtime, 'setAutomationService')
   const ordinary = initializeMainProcessAutomations()
   services.push(ordinary)
+  expect(registerXosGoalHandlers).toHaveBeenCalledWith(store, runtime)
   expect(ordinary.coordinatedRuns.availability).toMatchObject({
     available: false,
     state: 'unconfigured'

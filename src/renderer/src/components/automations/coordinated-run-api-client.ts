@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -43,7 +44,10 @@ export async function readCoordinatedRunHost(
 ): Promise<RuntimeStatus> {
   if (binding.owner.authority.kind !== 'desktop' || isWebClientLocation()) {
     throw new Error(
-      'This API requires an authenticated local caller. Remote and paired mobile test-run operations are unavailable.'
+      translate(
+        'auto.components.automations.coordinated.run.api.client.cb4164304f',
+        'This API requires an authenticated local caller. Remote and paired mobile test-run operations are unavailable.'
+      )
     )
   }
   if (
@@ -51,17 +55,28 @@ export async function readCoordinatedRunHost(
     binding.automation.executionTargetType !== 'local'
   ) {
     throw new Error(
-      'No-effect test runs require the owning host’s local Self target. SSH execution is unavailable.'
+      translate(
+        'auto.components.automations.coordinated.run.api.client.9fabb81157',
+        'No-effect test runs require the owning host’s local Self target. SSH execution is unavailable.'
+      )
     )
   }
   const status = await callHost<RuntimeStatus>(binding.owner, 'status.get')
   if (!status.capabilities?.includes(COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY)) {
-    throw new Error('This host does not support isolated no-effect test runs.')
+    throw new Error(
+      translate(
+        'auto.components.automations.coordinated.run.api.client.71f647cc0d',
+        'This host does not support isolated no-effect test runs.'
+      )
+    )
   }
   if (!status.coordinatedFakeRuns?.available) {
     throw new Error(
       status.coordinatedFakeRuns?.reason ??
-        'The host has not provided current test-run availability.'
+        translate(
+          'auto.components.automations.coordinated.run.api.client.9afe3611ef',
+          'The host has not provided current test-run availability.'
+        )
     )
   }
   return status
@@ -82,7 +97,10 @@ export function validateCoordinatedRunView(
     (expectedKey !== undefined && inspection.idempotencyKey !== expectedKey)
   ) {
     throw new Error(
-      'The host returned a different runtime, parent, run, revision, or request identity. Refresh to inspect the exact run.'
+      translate(
+        'auto.components.automations.coordinated.run.api.client.7fd2b3d028',
+        'The host returned a different runtime, parent, run, revision, or request identity. Refresh to inspect the exact run.'
+      )
     )
   }
   if (inspection.receipt.kind === 'available') {
@@ -105,7 +123,10 @@ export function validateCoordinatedRunView(
       )
     ) {
       throw new Error(
-        'The receipt identity does not match the selected host run. Evidence is unavailable.'
+        translate(
+          'auto.components.automations.coordinated.run.api.client.76cc2a16b8',
+          'The receipt identity does not match the selected host run. Evidence is unavailable.'
+        )
       )
     }
   }
@@ -163,7 +184,10 @@ export async function startCoordinatedTestRun(
     )
     if (matches.length > 1) {
       throw new Error(
-        'Multiple runs match the original request. Host reconciliation is required; no new run was started.'
+        translate(
+          'auto.components.automations.coordinated.run.api.client.f0cdbdbb54',
+          'Multiple runs match the original request. Host reconciliation is required; no new run was started.'
+        )
       )
     }
     if (matches[0]) {
@@ -178,13 +202,19 @@ export async function startCoordinatedTestRun(
     }
     if (status.runtimeId !== submitted.runtimeId) {
       throw new Error(
-        'The host restarted and the original request was not found. Its identity is retained; a fresh start could duplicate an uncertain run.'
+        translate(
+          'auto.components.automations.coordinated.run.api.client.6946118510',
+          'The host restarted and the original request was not found. Its identity is retained; a fresh start could duplicate an uncertain run.'
+        )
       )
     }
   } else {
     if (binding.automation.enabled || !binding.automation.definitionRevision) {
       throw new Error(
-        'Save a disabled coordinated definition with a confirmed revision before starting a test run.'
+        translate(
+          'auto.components.automations.coordinated.run.api.client.f5bb7106c5',
+          'Save a disabled coordinated definition with a confirmed revision before starting a test run.'
+        )
       )
     }
     request.start = {
@@ -228,7 +258,10 @@ export async function reconcileCoordinatedTestRun(
   const selection = selectionFor(binding, current.runtimeId, runId)
   if (request.reconcile && JSON.stringify(request.reconcile) !== JSON.stringify(selection)) {
     throw new Error(
-      'The original reconcile belongs to a different run or runtime. Inspect that run before retrying; its submitted identity is retained.'
+      translate(
+        'auto.components.automations.coordinated.run.api.client.8303fc2be1',
+        'The original reconcile belongs to a different run or runtime. Inspect that run before retrying; its submitted identity is retained.'
+      )
     )
   }
   request.reconcile ??= selection

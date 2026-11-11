@@ -180,7 +180,7 @@ function AutomationWorkerEditorForm({
   }
 
   return (
-    <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto scrollbar-sleek">
+    <DialogContent scrollable className="max-h-[90vh] max-w-lg ">
       <DialogHeader>
         <DialogTitle>
           {translate('auto.components.automations.workers.editWorkerTitle', 'Configure Worker')}
@@ -198,7 +198,10 @@ function AutomationWorkerEditorForm({
               id="worker-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Article Writer"
+              placeholder={translate(
+                'auto.components.automations.AutomationWorkerEditorDialog.2df734111e',
+                'Article Writer'
+              )}
             />
           </div>
           <div className="space-y-1">
@@ -209,7 +212,10 @@ function AutomationWorkerEditorForm({
               id="worker-role"
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              placeholder="content-writer"
+              placeholder={translate(
+                'auto.components.automations.AutomationWorkerEditorDialog.972c3e3f31',
+                'content-writer'
+              )}
             />
           </div>
         </div>
@@ -223,7 +229,10 @@ function AutomationWorkerEditorForm({
             id="worker-desc"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Produces editorial markdown drafts from research briefs"
+            placeholder={translate(
+              'auto.components.automations.AutomationWorkerEditorDialog.f85c54dc3f',
+              'Produces editorial markdown drafts from research briefs'
+            )}
           />
         </div>
 
@@ -283,7 +292,11 @@ function AutomationWorkerEditorForm({
             </Label>
             <Select
               value={mutationClass}
-              onValueChange={(val) => setMutationClass(val as MutationClass)}
+              onValueChange={(val) => {
+                if (val === 'read_only' || val === 'exclusive_writer' || val === 'shared_writer') {
+                  setMutationClass(val)
+                }
+              }}
             >
               <SelectTrigger id="mutation-class-select">
                 <SelectValue />
@@ -312,7 +325,10 @@ function AutomationWorkerEditorForm({
               id="worker-lane"
               value={mutationLane}
               onChange={(e) => setMutationLane(e.target.value)}
-              placeholder="content"
+              placeholder={translate(
+                'auto.components.automations.AutomationWorkerEditorDialog.4152a632e4',
+                'content'
+              )}
             />
           </div>
         </div>
@@ -320,7 +336,7 @@ function AutomationWorkerEditorForm({
         {/* Dependencies with disambiguated labels */}
         {otherWorkers.length > 0 ? (
           <div className="space-y-2 rounded-md border border-border/50 p-3">
-            <Label className="font-semibold">
+            <Label>
               {translate('auto.components.automations.workers.dependencies', 'Dependencies')}
             </Label>
             <div className="max-h-36 space-y-1.5 overflow-y-auto scrollbar-sleek">

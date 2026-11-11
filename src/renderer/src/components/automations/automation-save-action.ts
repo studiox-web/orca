@@ -41,7 +41,12 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
         }
       } catch (error) {
         toast.error(
-          error instanceof Error ? error.message : 'Failed to reconcile automation creation.'
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.automations.automation.save.action.f84026f595',
+                'Failed to reconcile automation creation.'
+              )
         )
       } finally {
         setIsSaving(false)

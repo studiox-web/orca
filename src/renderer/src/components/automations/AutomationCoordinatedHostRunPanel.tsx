@@ -21,6 +21,7 @@ import {
 } from './coordinated-run-operator-client'
 import { openCoordinatedStageSession } from './coordinated-stage-session-open'
 import { useCoordinatedRunApi } from './use-coordinated-run-api'
+import { translate } from '@/i18n/i18n'
 
 export function AutomationCoordinatedHostRunPanel(
   props: Parameters<typeof useCoordinatedRunApi>[0]
@@ -65,7 +66,10 @@ export function AutomationCoordinatedHostRunPanel(
       }
     : null
   const startReason = props.automation.enabled
-    ? 'Test runs require a disabled definition.'
+    ? translate(
+        'auto.components.automations.AutomationCoordinatedHostRunPanel.0c06d1eda0',
+        'Test runs require a disabled definition.'
+      )
     : view && !view.actions.start.available
       ? view.actions.start.reason
       : null
@@ -73,16 +77,41 @@ export function AutomationCoordinatedHostRunPanel(
     view && !view.actions.reconcile.available ? view.actions.reconcile.reason : null
   return (
     <section
-      aria-label={pinned ? 'Host run controls' : 'Coordinated test runs'}
+      aria-label={
+        pinned
+          ? translate(
+              'auto.components.automations.AutomationCoordinatedHostRunPanel.9123661199',
+              'Host run controls'
+            )
+          : translate(
+              'auto.components.automations.AutomationCoordinatedHostRunPanel.ef7556bba0',
+              'Coordinated test runs'
+            )
+      }
       className="space-y-3 rounded-lg border border-border p-4 min-w-0"
     >
       <h3 className="text-sm font-medium">
-        {pinned ? 'Host-observed run and controls' : 'No-effect test runs'}
+        {pinned
+          ? translate(
+              'auto.components.automations.AutomationCoordinatedHostRunPanel.52df24d43f',
+              'Host-observed run and controls'
+            )
+          : translate(
+              'auto.components.automations.AutomationCoordinatedHostRunPanel.2028e358fc',
+              'No-effect test runs'
+            )}
       </h3>
       <p className="text-xs text-muted-foreground">
         {pinned
-          ? `Bound to run ${selectedRunId}. Evidence and controls come from the owning host for this exact run and its frozen definition revision.`
-          : 'Manual isolated workers only. No live agents, publishing, or schedules. Each run keeps its saved definition revision.'}
+          ? translate(
+              'auto.components.automations.AutomationCoordinatedHostRunPanel.bf2744f5cb',
+              'Bound to run {{value0}}. Evidence and controls come from the owning host for this exact run and its frozen definition revision.',
+              { value0: selectedRunId }
+            )
+          : translate(
+              'auto.components.automations.AutomationCoordinatedHostRunPanel.895a30868b',
+              'Manual isolated workers only. No live agents, publishing, or schedules. Each run keeps its saved definition revision.'
+            )}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {pinned ? null : (
@@ -92,11 +121,27 @@ export function AutomationCoordinatedHostRunPanel(
             disabled={!state.ready || state.busy || Boolean(startReason)}
             onClick={() => void state.start()}
           >
-            {state.pendingStart ? 'Recover original test start' : 'Start no-effect test run'}
+            {state.pendingStart
+              ? translate(
+                  'auto.components.automations.AutomationCoordinatedHostRunPanel.14ece0f19f',
+                  'Recover original test start'
+                )
+              : translate(
+                  'auto.components.automations.AutomationCoordinatedHostRunPanel.fbf7305e30',
+                  'Start no-effect test run'
+                )}
           </Button>
         )}
         <Button size="sm" variant="outline" disabled={state.busy} onClick={state.refresh}>
-          {pinned ? 'Refresh run' : 'Refresh test runs'}
+          {pinned
+            ? translate(
+                'auto.components.automations.AutomationCoordinatedHostRunPanel.afd872db2e',
+                'Refresh run'
+              )
+            : translate(
+                'auto.components.automations.AutomationCoordinatedHostRunPanel.6d450f055c',
+                'Refresh test runs'
+              )}
         </Button>
         <Button
           size="sm"
@@ -104,7 +149,15 @@ export function AutomationCoordinatedHostRunPanel(
           disabled={!state.ready || !view || state.busy || Boolean(reconcileReason)}
           onClick={() => void state.reconcile()}
         >
-          {pinned ? 'Reconcile run' : 'Reconcile selected test run'}
+          {pinned
+            ? translate(
+                'auto.components.automations.AutomationCoordinatedHostRunPanel.87b95d5c5b',
+                'Reconcile run'
+              )
+            : translate(
+                'auto.components.automations.AutomationCoordinatedHostRunPanel.d1c62536a6',
+                'Reconcile selected test run'
+              )}
         </Button>
       </div>
       {startReason && !pinned ? (
@@ -113,13 +166,23 @@ export function AutomationCoordinatedHostRunPanel(
       {reconcileReason ? <p className="text-xs text-muted-foreground">{reconcileReason}</p> : null}
       {state.pendingStart && !pinned ? (
         <p className="text-xs text-muted-foreground">
-          Recovery uses submitted revision {state.pendingStart.expectedDefinitionRevision}. Later
-          definition edits are not part of that request.
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunPanel.aaf713a1c0',
+            'Recovery uses submitted revision'
+          )}{' '}
+          {state.pendingStart.expectedDefinitionRevision}
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunPanel.aaf19d5e75',
+            '. Later definition edits are not part of that request.'
+          )}
         </p>
       ) : null}
       {runIds.length ? (
         <label className="flex min-w-0 flex-col gap-1 text-xs">
-          Selected test run
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunPanel.3807d1b0b4',
+            'Selected test run'
+          )}
           <select
             className="w-full min-w-0 rounded-md border border-input bg-background p-2 text-xs"
             value={selectedRunId ?? ''}
@@ -135,7 +198,10 @@ export function AutomationCoordinatedHostRunPanel(
       ) : null}
       {state.busy ? (
         <p role="status" className="text-xs text-muted-foreground">
-          Checking the exact submitted operation…
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunPanel.9abe5b0327',
+            'Checking the exact submitted operation…'
+          )}
         </p>
       ) : null}
       {state.notice ? (
@@ -145,13 +211,28 @@ export function AutomationCoordinatedHostRunPanel(
       ) : null}
       {!state.ready && !state.notice && !state.busy ? (
         <p role="status" className="text-xs text-muted-foreground">
-          Checking host availability…
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunPanel.c75ac07ab9',
+            'Checking host availability…'
+          )}
         </p>
       ) : null}
       {unconfirmed ? (
         <p role="alert" className="text-xs text-status-warning break-words">
-          An earlier {unconfirmed.label} for this run was submitted without a confirmed answer (
-          {unconfirmed.detail}). Its effect is unknown.
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunPanel.2622aa4917',
+            'An earlier'
+          )}{' '}
+          {unconfirmed.label}{' '}
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunPanel.cea74f130c',
+            'for this run was submitted without a confirmed answer ('
+          )}
+          {unconfirmed.detail}
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunPanel.bb27818de7',
+            '). Its effect is unknown.'
+          )}
         </p>
       ) : null}
       {unconfirmed ? (
@@ -162,11 +243,16 @@ export function AutomationCoordinatedHostRunPanel(
             disabled={!state.ready || state.busy}
             onClick={() => void state.replayUnconfirmed()}
           >
-            Ask host about this request
+            {translate(
+              'auto.components.automations.AutomationCoordinatedHostRunPanel.cde9ab909a',
+              'Ask host about this request'
+            )}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Resends the identical request. The host answers whether it was already recorded and
-            records it at most once.
+            {translate(
+              'auto.components.automations.AutomationCoordinatedHostRunPanel.e0870c1d3a',
+              'Resends the identical request. The host answers whether it was already recorded and records it at most once.'
+            )}
           </p>
         </div>
       ) : null}
@@ -180,7 +266,10 @@ export function AutomationCoordinatedHostRunPanel(
         <AutomationHistoricalSnapshotViewer snapshot={snapshot} />
       ) : view ? (
         <p className="text-xs text-muted-foreground">
-          Frozen definition details are unavailable until matching run history is refreshed.
+          {translate(
+            'auto.components.automations.AutomationCoordinatedHostRunPanel.fdaf762a3c',
+            'Frozen definition details are unavailable until matching run history is refreshed.'
+          )}
         </p>
       ) : null}
       {view && controls ? (
@@ -191,7 +280,10 @@ export function AutomationCoordinatedHostRunPanel(
                   ...request,
                   evidence: pending.candidate.heldReport ? (
                     <CoordinatedHeldReport
-                      name="Report under review"
+                      name={translate(
+                        'auto.components.automations.AutomationCoordinatedHostRunPanel.790ed0c96c',
+                        'Report under review'
+                      )}
                       held={pending.candidate.heldReport}
                     />
                   ) : undefined
@@ -202,7 +294,10 @@ export function AutomationCoordinatedHostRunPanel(
             targetExecutionAuthority:
               pending?.candidate?.base.targetExecutionAuthority ??
               view.inspection.targetExecutionAuthority ??
-              'Authority unavailable',
+              translate(
+                'auto.components.automations.AutomationCoordinatedHostRunPanel.e798fe5bac',
+                'Authority unavailable'
+              ),
             automationRunId:
               pending?.candidate?.base.automationRunId ?? view.inspection.automationRunId,
             orchestrationRunId:
@@ -211,8 +306,19 @@ export function AutomationCoordinatedHostRunPanel(
               pending?.candidate?.base.definitionRevision ?? view.inspection.definitionRevision,
             currentAutomationRevision:
               props.automation.definitionRevision ?? view.inspection.definitionRevision,
-            workspaceLabel: run?.workspaceDisplayName ?? run?.workspaceId ?? 'Not recorded',
-            hostLabel: props.hostEntry?.label ?? 'the owning host',
+            workspaceLabel:
+              run?.workspaceDisplayName ??
+              run?.workspaceId ??
+              translate(
+                'auto.components.automations.AutomationCoordinatedHostRunPanel.305cc3649e',
+                'Not recorded'
+              ),
+            hostLabel:
+              props.hostEntry?.label ??
+              translate(
+                'auto.components.automations.AutomationCoordinatedHostRunPanel.3bf43ff593',
+                'the owning host'
+              ),
             stopEligibility: {
               canStop: view.actions.stop.available && scopeRefusal === null,
               reason: !view.actions.stop.available ? view.actions.stop.reason : scopeRefusal

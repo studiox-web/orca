@@ -27,9 +27,9 @@ export function AutomationWorkerDeleteConfirmDialog({
 }: AutomationWorkerDeleteConfirmDialogProps): React.JSX.Element {
   return (
     <Dialog open={worker !== null} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent className="max-w-md">
+      <DialogContent surface="security" className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-destructive">
+          <DialogTitle className="flex items-center">
             <AlertTriangle className="size-4 shrink-0" />
             <span>
               {translate(
@@ -59,8 +59,8 @@ export function AutomationWorkerDeleteConfirmDialog({
             </div>
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={onCancel}>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onCancel}>
             {translate('auto.components.automations.workers.cancel', 'Cancel')}
           </Button>
           <Button variant="destructive" data-testid="confirm-delete-worker" onClick={onConfirm}>

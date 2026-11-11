@@ -1,22 +1,20 @@
+import { AutomationCoordinatedAttemptHistory } from './AutomationCoordinatedAttemptHistory'
 import React from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
-  ExternalLink,
   FileCode2,
   HelpCircle,
-  History,
   Lock,
   ShieldAlert,
   XCircle
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type {
   ProjectedCoordinatedAttempt,
   ProjectedCoordinatedStage
 } from './coordinated-automation-run-projection'
+import { translate } from '@/i18n/i18n'
 
 type AutomationCoordinatedRunStageEvidenceProps = {
   stage: ProjectedCoordinatedStage
@@ -38,7 +36,12 @@ export function AutomationCoordinatedRunStageEvidence({
         >
           <HelpCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <div className="font-semibold">Waiting for operator / coordinator answer</div>
+            <div className="font-semibold">
+              {translate(
+                'auto.components.automations.AutomationCoordinatedRunStageEvidence.43ea7a1618',
+                'Waiting for operator / coordinator answer'
+              )}
+            </div>
             <p className="mt-0.5 text-xs break-words">{stage.pendingQuestion.preview}</p>
           </div>
         </div>
@@ -54,11 +57,16 @@ export function AutomationCoordinatedRunStageEvidence({
           <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <div className="min-w-0 flex-1 space-y-1">
             <div className="font-semibold">
-              Uncertain external effect — mutation lane stopped for reconciliation
+              {translate(
+                'auto.components.automations.AutomationCoordinatedRunStageEvidence.7ee0d3f453',
+                'Uncertain external effect — mutation lane stopped for reconciliation'
+              )}
             </div>
             <p className="text-2xs">
-              Automatic and blind manual retries are blocked. Inspect the durable receipt and
-              external state before resolving.
+              {translate(
+                'auto.components.automations.AutomationCoordinatedRunStageEvidence.bacb568c80',
+                'Automatic and blind manual retries are blocked. Inspect the durable receipt and external state before resolving.'
+              )}
             </p>
             {stage.effects
               .filter((e) => e.status === 'uncertain' || e.status === 'denied')
@@ -93,7 +101,13 @@ export function AutomationCoordinatedRunStageEvidence({
                 <span className="break-words">{blocker.message}</span>
               </div>
               {blocker.resolvableBy ? (
-                <Badge variant="outline">resolvable by: {blocker.resolvableBy}</Badge>
+                <Badge variant="outline">
+                  {translate(
+                    'auto.components.automations.AutomationCoordinatedRunStageEvidence.5e2d04b233',
+                    'resolvable by:'
+                  )}{' '}
+                  {blocker.resolvableBy}
+                </Badge>
               ) : null}
             </div>
           ))}
@@ -110,18 +124,34 @@ export function AutomationCoordinatedRunStageEvidence({
           <div className="flex items-center justify-between gap-1 text-3xs font-semibold tracking-wider text-muted-foreground uppercase">
             <span className="flex items-center gap-1">
               <FileCode2 className="size-3" aria-hidden="true" />
-              Artifacts
+              {translate(
+                'auto.components.automations.AutomationCoordinatedRunStageEvidence.7d29b198f0',
+                'Artifacts'
+              )}
             </span>
             <span>
               {stage.artifacts.length}
-              {stage.requiredArtifacts.length > 0 ? `/${stage.requiredArtifacts.length} req` : ''}
+              {stage.requiredArtifacts.length > 0
+                ? translate(
+                    'auto.components.automations.AutomationCoordinatedRunStageEvidence.7d7087e4c9',
+                    '/{{value0}} req',
+                    { value0: stage.requiredArtifacts.length }
+                  )
+                : ''}
             </span>
           </div>
           {stage.artifacts.length === 0 ? (
             <p className="text-3xs text-muted-foreground">
               {stage.requiredArtifacts.length > 0
-                ? `Awaiting ${stage.requiredArtifacts.map((a) => a.kind).join(', ')}`
-                : 'No artifacts recorded'}
+                ? translate(
+                    'auto.components.automations.AutomationCoordinatedRunStageEvidence.f2e202f93a',
+                    'Awaiting {{value0}}',
+                    { value0: stage.requiredArtifacts.map((a) => a.kind).join(', ') }
+                  )
+                : translate(
+                    'auto.components.automations.AutomationCoordinatedRunStageEvidence.e29ce06e31',
+                    'No artifacts recorded'
+                  )}
             </p>
           ) : (
             <div className="space-y-1">
@@ -156,15 +186,29 @@ export function AutomationCoordinatedRunStageEvidence({
           data-testid={`stage-checks-${stage.childDefinitionId}`}
         >
           <div className="flex items-center justify-between gap-1 text-3xs font-semibold tracking-wider text-muted-foreground uppercase">
-            <span>Checks & Findings</span>
+            <span>
+              {translate(
+                'auto.components.automations.AutomationCoordinatedRunStageEvidence.0ab139f325',
+                'Checks & Findings'
+              )}
+            </span>
             {stage.reviewIteration !== null ? (
               <span className="font-mono">
-                Rev loop {stage.reviewIteration}/{stage.maxReviewIterations ?? '—'}
+                {translate(
+                  'auto.components.automations.AutomationCoordinatedRunStageEvidence.10feb532dd',
+                  'Rev loop'
+                )}{' '}
+                {stage.reviewIteration}/{stage.maxReviewIterations ?? '—'}
               </span>
             ) : null}
           </div>
           {stage.checks.length === 0 && stage.unmetCriteria.length === 0 ? (
-            <p className="text-3xs text-muted-foreground">No checks or review findings reported.</p>
+            <p className="text-3xs text-muted-foreground">
+              {translate(
+                'auto.components.automations.AutomationCoordinatedRunStageEvidence.b31b34dfb1',
+                'No checks or review findings reported.'
+              )}
+            </p>
           ) : (
             <div className="space-y-1">
               {stage.checks.map((chk) => (
@@ -207,7 +251,11 @@ export function AutomationCoordinatedRunStageEvidence({
                   key={unmet}
                   className="rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-3xs text-destructive"
                 >
-                  Unmet: {unmet}
+                  {translate(
+                    'auto.components.automations.AutomationCoordinatedRunStageEvidence.621e9c57df',
+                    'Unmet:'
+                  )}{' '}
+                  {unmet}
                 </div>
               ))}
             </div>
@@ -222,12 +270,20 @@ export function AutomationCoordinatedRunStageEvidence({
           <div className="flex items-center justify-between gap-1 text-3xs font-semibold tracking-wider text-muted-foreground uppercase">
             <span className="flex items-center gap-1">
               <Lock className="size-3" aria-hidden="true" />
-              Approvals
+              {translate(
+                'auto.components.automations.AutomationCoordinatedRunStageEvidence.cef20f5734',
+                'Approvals'
+              )}
             </span>
             <span>{stage.approvals.length}</span>
           </div>
           {stage.approvals.length === 0 ? (
-            <p className="text-3xs text-muted-foreground">No stage-level approval gates.</p>
+            <p className="text-3xs text-muted-foreground">
+              {translate(
+                'auto.components.automations.AutomationCoordinatedRunStageEvidence.10ee31095b',
+                'No stage-level approval gates.'
+              )}
+            </p>
           ) : (
             <div className="space-y-1">
               {stage.approvals.map((app) => (
@@ -251,12 +307,19 @@ export function AutomationCoordinatedRunStageEvidence({
                   </div>
                   {app.disallowAuthorApproval ? (
                     <div className="mt-0.5 text-status-warning-text">
-                      Distinct non-author approver required
+                      {translate(
+                        'auto.components.automations.AutomationCoordinatedRunStageEvidence.0df6124070',
+                        'Distinct non-author approver required'
+                      )}
                     </div>
                   ) : null}
                   {app.approverIdentity ? (
                     <div className="mt-0.5 font-mono text-muted-foreground">
-                      By: {app.approverIdentity}
+                      {translate(
+                        'auto.components.automations.AutomationCoordinatedRunStageEvidence.310a4fe20d',
+                        'By:'
+                      )}{' '}
+                      {app.approverIdentity}
                     </div>
                   ) : null}
                   {app.rejectionReason ? (
@@ -269,89 +332,7 @@ export function AutomationCoordinatedRunStageEvidence({
         </div>
       </div>
 
-      {/* Dispatch Attempts Lineage */}
-      {stage.attempts.length > 0 ? (
-        <div
-          className="space-y-1.5 rounded border border-border/50 bg-muted/15 p-2.5"
-          data-testid={`stage-attempts-${stage.childDefinitionId}`}
-        >
-          <div className="flex items-center justify-between text-3xs font-semibold tracking-wider text-muted-foreground uppercase">
-            <span className="flex items-center gap-1">
-              <History className="size-3" aria-hidden="true" />
-              Dispatch Attempts ({stage.attempts.length}
-              {stage.supersededAttemptsCount > 0
-                ? ` · ${stage.supersededAttemptsCount} superseded`
-                : ''}
-              )
-            </span>
-            <span className="font-mono">Task: {stage.taskId ?? 'unmapped'}</span>
-          </div>
-          <div className="space-y-1">
-            {stage.attempts.map((attempt) => (
-              <div
-                key={attempt.dispatchId}
-                className={`flex flex-wrap items-center justify-between gap-2 rounded border px-2.5 py-1.5 text-3xs ${
-                  attempt.isActive
-                    ? 'border-border/70 bg-background'
-                    : 'border-border/40 bg-muted/30 opacity-75'
-                }`}
-                data-testid={`dispatch-attempt-${attempt.dispatchId}`}
-              >
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <span className="font-mono font-semibold text-foreground">
-                    #{attempt.attemptNumber} · {attempt.dispatchId}
-                  </span>
-                  {attempt.retryOfDispatchId ? (
-                    <Badge variant="outline">retry-of: {attempt.retryOfDispatchId}</Badge>
-                  ) : null}
-                  <Badge variant={attempt.isActive ? 'secondary' : 'outline'}>
-                    {attempt.isActive ? 'Active' : 'Superseded'}
-                  </Badge>
-                  <Badge variant="outline">tech: {attempt.technicalStatus}</Badge>
-                  {attempt.workerReportOutcome ? (
-                    <Badge variant="outline">report: {attempt.workerReportOutcome}</Badge>
-                  ) : null}
-                  <Badge variant="outline">{attempt.agentKind}</Badge>
-                  {attempt.summary ? (
-                    <span className="max-w-[260px] truncate text-muted-foreground">
-                      — {attempt.summary}
-                    </span>
-                  ) : null}
-                </div>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        disabled={!attempt.canOpenWorker}
-                        onClick={() => onOpenAttempt(attempt)}
-                        aria-label={`Open attempt ${attempt.dispatchId}`}
-                        data-testid={`open-attempt-${attempt.dispatchId}`}
-                      >
-                        <ExternalLink className="size-3" />
-                        <span>
-                          Open{' '}
-                          {attempt.crewRow?.openTarget?.kind
-                            ? `(${attempt.crewRow.openTarget.kind})`
-                            : 'attempt'}
-                        </span>
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  {!attempt.canOpenWorker && attempt.openWorkerUnavailableReason ? (
-                    <TooltipContent side="top" sideOffset={4}>
-                      {attempt.openWorkerUnavailableReason}
-                    </TooltipContent>
-                  ) : null}
-                </Tooltip>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      <AutomationCoordinatedAttemptHistory stage={stage} onOpenAttempt={onOpenAttempt} />
     </div>
   )
 }

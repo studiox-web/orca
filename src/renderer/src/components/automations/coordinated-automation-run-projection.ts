@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { scopedCoordinatedEvidence } from './coordinated-run-observation-scope'
 import type {
   Automation,
@@ -132,7 +133,15 @@ export function projectCoordinatedAutomationRun(input: {
     options?.workspaceLabel ??
     run.workspaceDisplayName ??
     run.workspaceId ??
-    (automation.workspaceMode === 'new_per_run' ? 'New workspace per run' : 'Default workspace')
+    (automation.workspaceMode === 'new_per_run'
+      ? translate(
+          'auto.components.automations.coordinated.automation.run.projection.09b3511f8a',
+          'New workspace per run'
+        )
+      : translate(
+          'auto.components.automations.coordinated.automation.run.projection.5ea6fa8583',
+          'Default workspace'
+        ))
 
   const childMappings = run.childMappings ?? run.completionReceipt?.identityChain.taskMappings ?? []
   const mappingByChild = new Map(childMappings.map((m) => [m.childDefinitionId, m]))
@@ -219,13 +228,26 @@ export function projectCoordinatedAutomationRun(input: {
     stageCounts.active > 0
   const stopAvailability = operatorActions?.stopRun?.availability
   const stopReason = !isFeatureFlagEnabled
-    ? 'Coordinated automations feature flag is disabled.'
+    ? translate(
+        'auto.components.automations.coordinated.automation.run.projection.0f27295e39',
+        'Coordinated automations feature flag is disabled.'
+      )
     : quarantine
-      ? 'Run is quarantined due to integrity validation failure.'
+      ? translate(
+          'auto.components.automations.coordinated.automation.run.projection.9d0b915442',
+          'Run is quarantined due to integrity validation failure.'
+        )
       : !isRunInFlight
-        ? 'Run is already settled and has no active workers to stop.'
+        ? translate(
+            'auto.components.automations.coordinated.automation.run.projection.7f6ad37f78',
+            'Run is already settled and has no active workers to stop.'
+          )
         : !stopAvailability?.supported || !operatorActions?.stopRun?.onStopRun
-          ? (stopAvailability?.reason ?? 'Host stop-run operation binding is not yet connected.')
+          ? (stopAvailability?.reason ??
+            translate(
+              'auto.components.automations.coordinated.automation.run.projection.08fc36ae58',
+              'Host stop-run operation binding is not yet connected.'
+            ))
           : null
 
   return {

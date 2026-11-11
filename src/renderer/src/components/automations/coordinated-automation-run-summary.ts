@@ -1,12 +1,10 @@
+export { deriveParentSemanticOutcome } from './coordinated-parent-semantic-outcome'
 import type {
   Automation,
   AutomationRun,
-  CoordinatedAutomationCeilings,
-  CoordinatedRunQuarantineSummary
+  CoordinatedAutomationCeilings
 } from '../../../../shared/automations-types'
 import type {
-  CoordinatedApprovalObservation,
-  CoordinatedParentSemanticState,
   CoordinatedRunLiveObservation,
   FrozenStageSource,
   OccupiedMutationLaneObservation,
@@ -112,72 +110,6 @@ export function extractStageSources(
     requiredChecks: child.stageAcceptance?.requiredChecks ?? [],
     requiredApprovals: child.stageAcceptance?.requiredApprovals ?? []
   }))
-}
-
-export function deriveParentSemanticOutcome(input: {
-  run: AutomationRun
-  quarantine: CoordinatedRunQuarantineSummary | null
-  stages: readonly ProjectedCoordinatedStage[]
-  parentApprovals: readonly CoordinatedApprovalObservation[]
-}): { state: CoordinatedParentSemanticState; reason: string } {
-  const { run, quarantine, stages, parentApprovals } = input
-  if (quarantine) {
-    return { state: 'quarantined', reason: `Quarantined: ${quarantine.reason}` }
-  }
-  if (run.completionReceipt) {
-    return {
-      state: run.completionReceipt.finalState,
-      reason: `Verified completion receipt (${run.completionReceipt.finalState}).`
-    }
-  }
-  if (stages.some((s) => s.hasUncertainEffect || s.stageExecutionStatus === 'uncertain')) {
-    return {
-      state: 'outcome_uncertain',
-      reason:
-        'Mutation lane stopped: an external effect returned uncertain and requires reconciliation.'
-    }
-  }
-  if (run.status === 'completed') {
-    return {
-      state: 'unaccepted',
-      reason:
-        'Technical process completed, but no verified semantic completion receipt is persisted.'
-    }
-  }
-  if (
-    stages.some((s) => s.stageExecutionStatus === 'waiting_for_approval') ||
-    parentApprovals.some((a) => a.status === 'pending')
-  ) {
-    return {
-      state: 'waiting_for_approval',
-      reason: 'Waiting for required human or distinct-reviewer approval.'
-    }
-  }
-  if (stages.some((s) => s.stageExecutionStatus === 'blocked')) {
-    return { state: 'blocked', reason: 'One or more worker stages are blocked.' }
-  }
-  if (
-    run.status === 'dispatch_failed' ||
-    run.materializationPhase === 'materialization_failed' ||
-    run.materializationPhase === 'compensation_failed' ||
-    stages.some((s) => s.stageExecutionStatus === 'failed')
-  ) {
-    return {
-      state: 'failed',
-      reason: run.error ?? run.materializationError ?? 'One or more worker stages failed.'
-    }
-  }
-  if (
-    run.status === 'dispatching' ||
-    run.status === 'dispatched' ||
-    stages.some((s) => s.stageExecutionStatus === 'active')
-  ) {
-    return {
-      state: 'in_progress',
-      reason: 'Specialist workers are executing in native orchestration.'
-    }
-  }
-  return { state: 'pending', reason: 'Run is queued or awaiting stage materialization.' }
 }
 
 export function computeCoordinatedBudgetsAndCounts(input: {

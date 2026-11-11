@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type { CoordinatedRunView } from '../../../../shared/coordinated-automation-run-view'
@@ -50,15 +51,27 @@ export function useCoordinatedRunApi(input: {
   const { automation, capturedOwner, hostEntry, requests, pinnedRun } = input
   const owner = capturedOwner?.owner
   const unavailable = !input.enabled
-    ? 'Coordinated automations are disabled.'
+    ? translate(
+        'auto.components.automations.use.coordinated.run.api.6642e4ca4c',
+        'Coordinated automations are disabled.'
+      )
     : pinnedRun && pinnedRun.automationId !== automation.id
-      ? 'This run belongs to a different Automation. It is read-only here.'
+      ? translate(
+          'auto.components.automations.use.coordinated.run.api.f8dc2d424a',
+          'This run belongs to a different Automation. It is read-only here.'
+        )
       : (input.historyUnavailable ??
         (!owner || !hostEntry?.owner || ownerKey(owner) !== ownerKey(hostEntry.owner)
-          ? 'Refresh the automation list to confirm its owning host.'
+          ? translate(
+              'auto.components.automations.use.coordinated.run.api.105c50c8f5',
+              'Refresh the automation list to confirm its owning host.'
+            )
           : hostEntry.catalogState !== 'authoritative' ||
               !['fresh', 'refreshing'].includes(hostEntry.authorityHealth)
-            ? 'The owning host is unavailable. Refresh its connection before inspecting or starting a run.'
+            ? translate(
+                'auto.components.automations.use.coordinated.run.api.453b7f5582',
+                'The owning host is unavailable. Refresh its connection before inspecting or starting a run.'
+              )
             : null))
   const binding = useMemo<CoordinatedRunBinding | null>(
     () => (owner ? { automation, owner } : null),
@@ -222,8 +235,16 @@ export function useCoordinatedRunApi(input: {
         view: null,
         notice:
           kind === 'operator'
-            ? `${detail} The host did not confirm this request, so no outcome change is claimed. Refresh to inspect the exact run before submitting again.`
-            : `${detail} Submitted request identities are retained. Refresh, then retry to inspect the original operation before replay.`,
+            ? translate(
+                'auto.components.automations.use.coordinated.run.api.6a1043ebc9',
+                '{{value0}} The host did not confirm this request, so no outcome change is claimed. Refresh to inspect the exact run before submitting again.',
+                { value0: detail }
+              )
+            : translate(
+                'auto.components.automations.use.coordinated.run.api.78ddf3f2f8',
+                '{{value0}} Submitted request identities are retained. Refresh, then retry to inspect the original operation before replay.',
+                { value0: detail }
+              ),
         ready: false
       })
     } finally {

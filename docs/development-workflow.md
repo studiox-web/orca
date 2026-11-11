@@ -80,6 +80,7 @@ Native `worker_done` settles a worker assignment; a progress note, input-accepte
 - Separate source/unit tests, component captures, the combined app journey, and installed behavior. Each answers a different question.
 - For Orca UI, follow AGENTS.md: `ORCA_BACKGROUND_LAUNCH=1`, required Electron skill and hidden-renderer Playwright/CDP checks, and no desktop-focus changes. Resolve a missing required method explicitly before launching; screenshots of components do not replace the app journey.
 - Use focused checks with bounded workers during development. Before any separately authorized push, run the required final `check:changed` gate after the last edit/rebase; never bypass hooks.
+- When integrating a long-lived feature into XOS, validate the complete delta against the actual destination branch early. HEAD-only or per-worker incremental quality checks can miss earlier styling, localization and type-rule violations. Run the combined gate after integration as well; preserve generated handoff evidence outside the tracked source selection.
 - For documentation-only edits, formatting, link checks, and `git diff --check` are appropriate. Disclose that product tests were not run.
 
 ## Capture lessons without moving the finish line

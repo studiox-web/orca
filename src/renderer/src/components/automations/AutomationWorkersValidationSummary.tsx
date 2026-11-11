@@ -45,18 +45,15 @@ export function AutomationWorkersValidationSummary({
       </div>
 
       <ul className="mt-2 space-y-1.5 text-xs">
-        {errors.map((error, index) => {
-          const key = `${error.code}-${error.childId ?? 'global'}-${index}`
+        {errors.map((error) => {
+          const key = JSON.stringify([error.code, error.childId, error.path, error.message])
           return (
             <li
               key={key}
               className="flex flex-col @md:flex-row @md:items-center justify-between gap-2 rounded bg-background/50 px-2.5 py-2 text-foreground"
             >
               <div className="flex min-w-0 items-start gap-2">
-                <Badge
-                  variant="outline"
-                  className="mt-0.5 shrink-0 border-destructive/40 text-destructive text-3xs uppercase tracking-wider"
-                >
+                <Badge variant="outline" className="mt-0.5 shrink-0">
                   {formatErrorCode(error.code)}
                 </Badge>
                 <div className="min-w-0">
@@ -73,8 +70,8 @@ export function AutomationWorkersValidationSummary({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="h-6 shrink-0 self-start @md:self-center gap-1 px-1.5 text-2xs text-muted-foreground hover:text-foreground"
+                  size="xs"
+                  className="shrink-0 self-start @md:self-center"
                   onClick={() => onSelectChild(error.childId!)}
                   aria-label={translate(
                     'auto.components.automations.workers.jumpToChild',

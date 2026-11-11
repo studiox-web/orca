@@ -55,14 +55,19 @@ export function AutomationCoordinatedEditorFields({
             const name = event.target.value
             onDraftChange((curr) => ({ ...curr, name }))
           }}
-          placeholder="Publish weekly article"
-          className="text-xs"
+          placeholder={translate(
+            'auto.components.automations.AutomationCoordinatedEditorFields.e6b4886725',
+            'Publish weekly article'
+          )}
         />
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="automation-outcome-statement" variant="settings">
-          Outcome statement
+          {translate(
+            'auto.components.automations.AutomationCoordinatedEditorFields.1013d6bcca',
+            'Outcome statement'
+          )}
         </Label>
         <Textarea
           id="automation-outcome-statement"
@@ -82,15 +87,20 @@ export function AutomationCoordinatedEditorFields({
               }
             }))
           }}
-          placeholder="Describe the desired end-to-end outcome that specialist workers must achieve..."
+          placeholder={translate(
+            'auto.components.automations.AutomationCoordinatedEditorFields.234417c321',
+            'Describe the desired end-to-end outcome that specialist workers must achieve...'
+          )}
           rows={2}
-          className="text-xs"
         />
       </div>
 
       <div className="space-y-1.5">
         <Label htmlFor="automation-coordinated-brief" variant="settings">
-          Coordinator brief
+          {translate(
+            'auto.components.automations.AutomationCoordinatedEditorFields.d417ba00df',
+            'Coordinator brief'
+          )}
         </Label>
         <Textarea
           id="automation-coordinated-brief"
@@ -101,9 +111,11 @@ export function AutomationCoordinatedEditorFields({
             const prompt = event.target.value
             onDraftChange((curr) => ({ ...curr, prompt }))
           }}
-          placeholder="Shared context every worker receives, such as the publication, audience, and house rules."
+          placeholder={translate(
+            'auto.components.automations.AutomationCoordinatedEditorFields.2b90f9c6b8',
+            'Shared context every worker receives, such as the publication, audience, and house rules.'
+          )}
           rows={3}
-          className="text-xs"
         />
       </div>
 

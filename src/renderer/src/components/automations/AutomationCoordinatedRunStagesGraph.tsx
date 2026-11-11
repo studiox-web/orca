@@ -1,31 +1,17 @@
+import { graphStageStatusMetadata } from './coordinated-stage-graph-status'
 import React, { useMemo } from 'react'
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  FileSearch,
-  HelpCircle,
-  Lock,
-  PauseCircle,
-  Play,
-  RefreshCw,
-  ShieldAlert,
-  Sparkles,
-  XCircle
-} from 'lucide-react'
+import { ArrowRight, ExternalLink, FileSearch, HelpCircle, Lock, ShieldAlert } from 'lucide-react'
 import type { CoordinatedAutomationChildDefinition } from '../../../../shared/coordinated-automation-types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { computeWorkerGraphLayout } from './automation-workers-graph-layout'
 import type {
-  CoordinatedStageExecutionStatus,
   OccupiedMutationLaneObservation,
   ProjectedCoordinatedAttempt,
   ProjectedCoordinatedStage
 } from './coordinated-automation-run-projection'
+import { translate } from '@/i18n/i18n'
 
 export type AutomationCoordinatedRunStagesGraphProps = {
   stages: readonly ProjectedCoordinatedStage[]
@@ -35,67 +21,6 @@ export type AutomationCoordinatedRunStagesGraphProps = {
   onInspectChildDefinition?: (childDefinitionId: string) => void
   onInspectFrozenSnapshot?: (childDefinitionId: string) => void
   onOpenAttempt: (attempt: ProjectedCoordinatedAttempt) => void
-}
-
-const STATUS_BADGE_STYLES: Record<
-  CoordinatedStageExecutionStatus,
-  {
-    label: string
-    variant: 'default' | 'secondary' | 'outline' | 'destructive'
-    icon: React.ComponentType<{ className?: string }>
-  }
-> = {
-  unknown: { label: 'Unobserved', variant: 'outline', icon: Clock },
-  ready: {
-    label: 'Ready',
-    variant: 'outline',
-    icon: Play
-  },
-  queued: {
-    label: 'Queued',
-    variant: 'outline',
-    icon: Clock
-  },
-  active: {
-    label: 'Active',
-    variant: 'secondary',
-    icon: Sparkles
-  },
-  waiting_for_approval: {
-    label: 'Approval gate',
-    variant: 'outline',
-    icon: PauseCircle
-  },
-  blocked: {
-    label: 'Blocked',
-    variant: 'destructive',
-    icon: AlertTriangle
-  },
-  accepted: {
-    label: 'Accepted',
-    variant: 'secondary',
-    icon: CheckCircle2
-  },
-  superseded: {
-    label: 'Superseded',
-    variant: 'outline',
-    icon: RefreshCw
-  },
-  failed: {
-    label: 'Failed',
-    variant: 'destructive',
-    icon: XCircle
-  },
-  uncertain: {
-    label: 'Uncertain',
-    variant: 'destructive',
-    icon: ShieldAlert
-  },
-  skipped: {
-    label: 'Skipped',
-    variant: 'outline',
-    icon: Clock
-  }
 }
 
 const EMPTY_OCCUPIED_LANES: readonly OccupiedMutationLaneObservation[] = []
@@ -135,7 +60,10 @@ export function AutomationCoordinatedRunStagesGraph({
   if (stages.length === 0) {
     return (
       <div className="rounded-lg border border-dashed border-border bg-card/50 p-6 text-center text-xs text-muted-foreground">
-        No execution stages recorded in this run.
+        {translate(
+          'auto.components.automations.AutomationCoordinatedRunStagesGraph.e2a04c28fc',
+          'No execution stages recorded in this run.'
+        )}
       </div>
     )
   }
@@ -144,7 +72,10 @@ export function AutomationCoordinatedRunStagesGraph({
     <div
       className="space-y-3"
       role="region"
-      aria-label="Coordinated run execution stage graph"
+      aria-label={translate(
+        'auto.components.automations.AutomationCoordinatedRunStagesGraph.c2e942c6c7',
+        'Coordinated run execution stage graph'
+      )}
       data-testid="coordinated-run-stages-graph"
     >
       <div className="overflow-x-auto rounded-lg border border-border bg-card/40 p-4">
@@ -158,8 +89,12 @@ export function AutomationCoordinatedRunStagesGraph({
               ) : null}
 
               <div className="flex flex-col justify-center gap-3">
-                <div className="text-center text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
-                  Stage {layer.layerIndex + 1}
+                <div className="text-center text-3xs font-medium tracking-wider text-muted-foreground uppercase">
+                  {translate(
+                    'auto.components.automations.AutomationCoordinatedRunStagesGraph.508f0b82cf',
+                    'Stage'
+                  )}{' '}
+                  {layer.layerIndex + 1}
                 </div>
 
                 {layer.nodes.map((node) => {
@@ -167,7 +102,7 @@ export function AutomationCoordinatedRunStagesGraph({
                   if (!stage) {
                     return null
                   }
-                  const statusMeta = STATUS_BADGE_STYLES[stage.stageExecutionStatus]
+                  const statusMeta = graphStageStatusMetadata()[stage.stageExecutionStatus]
                   const StatusIcon = statusMeta.icon
                   const isSelected = selectedStageId === stage.childDefinitionId
                   const activeAttempt = stage.activeAttempt
@@ -182,7 +117,16 @@ export function AutomationCoordinatedRunStagesGraph({
                       role="group"
                       data-testid={`coordinated-run-graph-node-${stage.childDefinitionId}`}
                       data-current={isSelected}
-                      aria-label={`Stage ${stage.name}, status ${statusMeta.label}, technical ${stage.technicalStatusLabel}, acceptance ${stage.semanticAcceptanceStatus}`}
+                      aria-label={translate(
+                        'auto.components.automations.AutomationCoordinatedRunStagesGraph.stageSummaryAria',
+                        'Stage {{value0}}, status {{value1}}, technical {{value2}}, acceptance {{value3}}',
+                        {
+                          value0: stage.name,
+                          value1: statusMeta.label,
+                          value2: stage.technicalStatusLabel,
+                          value3: stage.semanticAcceptanceStatus
+                        }
+                      )}
                       className={cn(
                         'w-64 rounded-lg border bg-card p-3 text-left transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                         isSelected
@@ -203,28 +147,53 @@ export function AutomationCoordinatedRunStagesGraph({
                         variant="ghost"
                         size="xs"
                         className="mt-1.5 max-w-full justify-start text-left whitespace-normal"
-                        aria-label={`Select stage ${stage.name} (${stage.childDefinitionId})`}
+                        aria-label={translate(
+                          'auto.components.automations.AutomationCoordinatedRunStagesGraph.acf2696545',
+                          'Select stage {{value0}} ({{value1}})',
+                          { value0: stage.name, value1: stage.childDefinitionId }
+                        )}
                         aria-pressed={isSelected}
                         onClick={() => onSelectStage(stage.childDefinitionId)}
                       >
                         {stage.name}
                       </Button>
-                      <div className="truncate font-mono text-[10px] text-muted-foreground">
-                        {stage.taskId ?? 'unmapped'} · {stage.activeDispatchId ?? 'no-dispatch'}
+                      <div className="truncate font-mono text-3xs text-muted-foreground">
+                        {stage.taskId ??
+                          translate(
+                            'auto.components.automations.AutomationCoordinatedRunStagesGraph.ac89d05c88',
+                            'unmapped'
+                          )}{' '}
+                        ·{' '}
+                        {stage.activeDispatchId ??
+                          translate(
+                            'auto.components.automations.AutomationCoordinatedRunStagesGraph.d842cf2baa',
+                            'no-dispatch'
+                          )}
                       </div>
 
                       {stage.definitionDrift !== 'unchanged' ? (
-                        <div className="mt-1 truncate text-[10px] text-status-warning-text">
+                        <div className="mt-1 truncate text-3xs text-status-warning-text">
                           {stage.definitionDrift === 'tombstoned'
-                            ? 'Removed in current definition'
-                            : `Renamed: ${stage.currentDefinitionName}`}
+                            ? translate(
+                                'auto.components.automations.AutomationCoordinatedRunStagesGraph.1e7610785f',
+                                'Removed in current definition'
+                              )
+                            : translate(
+                                'auto.components.automations.AutomationCoordinatedRunStagesGraph.9f149c94ca',
+                                'Renamed: {{value0}}',
+                                { value0: stage.currentDefinitionName }
+                              )}
                         </div>
                       ) : null}
 
                       {/* Separate Technical vs Semantic Acceptance pills */}
-                      <div className="mt-2 flex flex-wrap items-center gap-1 text-[10px]">
+                      <div className="mt-2 flex flex-wrap items-center gap-1 text-3xs">
                         <span className="rounded border border-border/70 bg-secondary/40 px-1.5 py-0.5 font-mono text-muted-foreground">
-                          Tech: {stage.technicalStatusLabel}
+                          {translate(
+                            'auto.components.automations.AutomationCoordinatedRunStagesGraph.ed9835a021',
+                            'Tech:'
+                          )}{' '}
+                          {stage.technicalStatusLabel}
                         </span>
                         <span
                           className={cn(
@@ -238,32 +207,57 @@ export function AutomationCoordinatedRunStagesGraph({
                                 : 'border-status-warning-border bg-status-warning-background text-status-warning-text'
                           )}
                         >
-                          Acc: {stage.semanticAcceptanceStatus}
+                          {translate(
+                            'auto.components.automations.AutomationCoordinatedRunStagesGraph.8eacb7beb3',
+                            'Acc:'
+                          )}{' '}
+                          {stage.semanticAcceptanceStatus}
                         </span>
                       </div>
 
                       {/* Evidence & hazard indicators */}
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                        <span>Attempts: {stage.attempts.length}</span>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-3xs text-muted-foreground">
+                        <span>
+                          {translate(
+                            'auto.components.automations.AutomationCoordinatedRunStagesGraph.536affbcf4',
+                            'Attempts:'
+                          )}{' '}
+                          {stage.attempts.length}
+                        </span>
                         {stage.artifacts.length > 0 ? (
-                          <span>· Artifacts: {stage.artifacts.length}</span>
+                          <span>
+                            {translate(
+                              'auto.components.automations.AutomationCoordinatedRunStagesGraph.bb00568229',
+                              '· Artifacts:'
+                            )}{' '}
+                            {stage.artifacts.length}
+                          </span>
                         ) : null}
                         {stage.pendingQuestion ? (
                           <span className="inline-flex items-center gap-0.5 text-status-warning-text">
                             <HelpCircle className="size-3" />
-                            Question
+                            {translate(
+                              'auto.components.automations.AutomationCoordinatedRunStagesGraph.f2ef8a4079',
+                              'Question'
+                            )}
                           </span>
                         ) : null}
                         {stage.hasUncertainEffect ? (
                           <span className="inline-flex items-center gap-0.5 text-destructive">
                             <ShieldAlert className="size-3" />
-                            Uncertain
+                            {translate(
+                              'auto.components.automations.AutomationCoordinatedRunStagesGraph.52b371bc7c',
+                              'Uncertain'
+                            )}
                           </span>
                         ) : null}
                         {isLaneOccupied ? (
                           <span className="inline-flex items-center gap-0.5 text-status-warning-text">
                             <Lock className="size-3" />
-                            Lane busy
+                            {translate(
+                              'auto.components.automations.AutomationCoordinatedRunStagesGraph.d0d15572b8',
+                              'Lane busy'
+                            )}
                           </span>
                         ) : null}
                       </div>
@@ -284,7 +278,10 @@ export function AutomationCoordinatedRunStagesGraph({
                           }
                           title={
                             stage.definitionDrift !== 'tombstoned' && !onInspectChildDefinition
-                              ? 'Definition navigation is unavailable in this view.'
+                              ? translate(
+                                  'auto.components.automations.AutomationCoordinatedRunStagesGraph.d63c27646f',
+                                  'Definition navigation is unavailable in this view.'
+                                )
                               : undefined
                           }
                           onClick={() => {
@@ -296,7 +293,15 @@ export function AutomationCoordinatedRunStagesGraph({
                           }}
                         >
                           <FileSearch className="size-3" />
-                          {stage.definitionDrift === 'tombstoned' ? 'Snapshot' : 'Definition'}
+                          {stage.definitionDrift === 'tombstoned'
+                            ? translate(
+                                'auto.components.automations.AutomationCoordinatedRunStagesGraph.7da14efceb',
+                                'Snapshot'
+                              )
+                            : translate(
+                                'auto.components.automations.AutomationCoordinatedRunStagesGraph.7231e3266d',
+                                'Definition'
+                              )}
                         </Button>
 
                         <Button
@@ -306,7 +311,10 @@ export function AutomationCoordinatedRunStagesGraph({
                           disabled={!activeAttempt || !activeAttempt.canOpenWorker}
                           title={
                             activeAttempt?.openWorkerUnavailableReason ??
-                            'No active dispatch attempt'
+                            translate(
+                              'auto.components.automations.AutomationCoordinatedRunStagesGraph.7c091be3f6',
+                              'No active dispatch attempt'
+                            )
                           }
                           onClick={() => {
                             if (activeAttempt) {
@@ -315,7 +323,10 @@ export function AutomationCoordinatedRunStagesGraph({
                           }}
                         >
                           <ExternalLink className="size-3" />
-                          Open worker
+                          {translate(
+                            'auto.components.automations.AutomationCoordinatedRunStagesGraph.1000809b96',
+                            'Open worker'
+                          )}
                         </Button>
                       </div>
                     </div>

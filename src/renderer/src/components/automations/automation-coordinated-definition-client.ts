@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 /** Coordinated definition writes go only through the host's dedicated
  * `automation.createCoordinated` / `automation.updateCoordinated` RPCs. The host
  * keeps every record disabled and refuses non-local owners; this client refuses
@@ -35,12 +36,18 @@ import {
   type AutomationDispatchResult
 } from './automation-row-action-dispatch'
 
-export const COORDINATED_DEFINITION_REMOTE_UNSUPPORTED_MESSAGE =
+export const COORDINATED_DEFINITION_REMOTE_UNSUPPORTED_MESSAGE = translate(
+  'auto.components.automations.automation.coordinated.definition.client.89cd4b67e2',
   'Coordinated automations can only be saved on this computer for now. Remote and SSH hosts are not supported yet.'
-export const COORDINATED_DEFINITION_CAPABILITY_MISSING_MESSAGE =
+)
+export const COORDINATED_DEFINITION_CAPABILITY_MISSING_MESSAGE = translate(
+  'auto.components.automations.automation.coordinated.definition.client.eca1bfd2b8',
   'This Orca host is not accepting coordinated automation definitions. Enable the experimental coordinated automations setting in a development build and try again.'
-export const COORDINATED_DEFINITION_UNCAPTURED_OWNER_MESSAGE =
+)
+export const COORDINATED_DEFINITION_UNCAPTURED_OWNER_MESSAGE = translate(
+  'auto.components.automations.automation.coordinated.definition.client.a679143fec',
   'This coordinated automation has no confirmed local owner yet. Refresh the list and try again.'
+)
 
 /** Only the definition fields a client may author; host-managed fields
  * (revision, tombstones, fingerprint) are never sent. */

@@ -57,11 +57,7 @@ ehthumbs.db
 desktop.ini
 
 .oxlintcache
-/.cache/vite/
-/.cache/vite.lock/
-/.cache/typecheck/
-/.cache/fixtures/
-/.cache/check-changed.json
+/.cache/
 
 *.log
 *.log.*

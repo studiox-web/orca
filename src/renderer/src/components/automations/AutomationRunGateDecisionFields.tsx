@@ -6,6 +6,7 @@ import type {
   RunControlActionRequest,
   RunControlImpactStage
 } from './AutomationRunControlImpactDialog'
+import { translate } from '@/i18n/i18n'
 
 type Decision = 'approve' | 'reject' | 'escalate'
 
@@ -26,19 +27,35 @@ export function AutomationRunGateDecisionFields<S extends RunControlImpactStage>
     <div className="space-y-3 text-xs text-foreground">
       <div className="space-y-1 rounded border border-border/50 bg-background p-2.5 text-2xs">
         <div>
-          <span className="text-muted-foreground">Gate ID: </span>
+          <span className="text-muted-foreground">
+            {translate(
+              'auto.components.automations.AutomationRunGateDecisionFields.11c2acb32a',
+              'Gate ID:'
+            )}{' '}
+          </span>
           <span className="font-mono font-medium">{request.gateId}</span>
         </div>
         <div>
           <span className="text-muted-foreground">
-            {request.kind === 'resolve_gate' ? 'Stage Scope: ' : 'Scope: '}
+            {request.kind === 'resolve_gate'
+              ? translate(
+                  'auto.components.automations.AutomationRunGateDecisionFields.94d440ea59',
+                  'Stage Scope:'
+                )
+              : translate(
+                  'auto.components.automations.AutomationRunGateDecisionFields.07453f82d0',
+                  'Scope:'
+                )}
           </span>
           <span className="font-mono">
             {request.kind === 'resolve_run_gate'
               ? request.scopeLabel
               : `${request.stage.childDefinitionId} / ${request.stage.taskId ?? 'no-task'} / ${
                   request.stage.activeDispatchId === undefined
-                    ? 'Dispatch bound by host'
+                    ? translate(
+                        'auto.components.automations.AutomationRunGateDecisionFields.e2038e6fa1',
+                        'Dispatch bound by host'
+                      )
                     : (request.stage.activeDispatchId ?? 'no-dispatch')
                 }`}
           </span>
@@ -46,10 +63,10 @@ export function AutomationRunGateDecisionFields<S extends RunControlImpactStage>
       </div>
 
       <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">
-        For an approval requirement, approve records an operator approval and reject closes the
-        decision for this candidate. Escalate records an audit event and leaves the requirement
-        pending. An escalation notice is acknowledged only; its halt remains in place. Decisions are
-        recorded in this run’s history.
+        {translate(
+          'auto.components.automations.AutomationRunGateDecisionFields.8df99d2726',
+          'For an approval requirement, approve records an operator approval and reject closes the decision for this candidate. Escalate records an audit event and leaves the requirement pending. An escalation notice is acknowledged only; its halt remains in place. Decisions are recorded in this run’s history.'
+        )}
       </p>
       {request.kind === 'resolve_run_gate' && request.impactNote ? (
         <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">
@@ -58,10 +75,18 @@ export function AutomationRunGateDecisionFields<S extends RunControlImpactStage>
       ) : null}
       {request.kind === 'resolve_run_gate' ? request.evidence : null}
       <div className="space-y-2">
-        <Label>Decision</Label>
+        <Label>
+          {translate(
+            'auto.components.automations.AutomationRunGateDecisionFields.c6921b45d2',
+            'Decision'
+          )}
+        </Label>
         <RadioGroup
           className="flex flex-wrap"
-          aria-label="Gate decision"
+          aria-label={translate(
+            'auto.components.automations.AutomationRunGateDecisionFields.ce38b1bd55',
+            'Gate decision'
+          )}
           value={decision}
           onValueChange={(value) => {
             if (value === 'approve' || value === 'reject' || value === 'escalate') {
@@ -88,12 +113,20 @@ export function AutomationRunGateDecisionFields<S extends RunControlImpactStage>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="gate-resolution-note">Audit note / evidence reference</Label>
+        <Label htmlFor="gate-resolution-note">
+          {translate(
+            'auto.components.automations.AutomationRunGateDecisionFields.0409fb6731',
+            'Audit note / evidence reference'
+          )}
+        </Label>
         <Input
           id="gate-resolution-note"
           value={note}
           onChange={(e) => onNote(e.target.value)}
-          placeholder="Optional audit note or receipt reference"
+          placeholder={translate(
+            'auto.components.automations.AutomationRunGateDecisionFields.846e039360',
+            'Optional audit note or receipt reference'
+          )}
         />
       </div>
     </div>

@@ -202,6 +202,10 @@
         "usage": {
           "tokensAndCost_one": "{{tokens}} token · {{cost}}",
           "tokensAndCost_other": "{{tokens}} tokens · {{cost}}"
+        },
+        "workers": {
+          "validationSummaryTitle_one": "Definition validation issue (1)",
+          "validationSummaryTitle_other": "Definition validation issues ({{count}})"
         }
       },
       "browser-pane": {

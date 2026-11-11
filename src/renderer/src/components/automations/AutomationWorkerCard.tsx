@@ -70,7 +70,11 @@ export function AutomationWorkerCard({
       role="listitem"
       id={`worker-card-${child.id}`}
       tabIndex={-1}
-      aria-label={`Worker: ${child.name}`}
+      aria-label={translate(
+        'auto.components.automations.AutomationWorkerCard.8478d2b1c5',
+        'Worker: {{value0}}',
+        { value0: child.name }
+      )}
       data-testid={`worker-card-${child.id}`}
       data-child-id={child.id}
       className={`@container relative rounded-lg border transition-all ${
@@ -86,12 +90,7 @@ export function AutomationWorkerCard({
       {/* Header row */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <Badge
-            variant={child.enabled ? 'secondary' : 'outline'}
-            className="font-semibold text-2xs uppercase tracking-wider"
-          >
-            {child.role}
-          </Badge>
+          <Badge variant={child.enabled ? 'secondary' : 'outline'}>{child.role}</Badge>
           <span
             className="truncate font-semibold text-sm text-foreground max-w-[200px]"
             title={child.name}
@@ -102,7 +101,7 @@ export function AutomationWorkerCard({
             ({child.id})
           </span>
           {!child.enabled ? (
-            <Badge variant="outline" className="text-3xs text-muted-foreground">
+            <Badge variant="outline">
               {translate('auto.components.automations.workers.disabled', 'Disabled')}
             </Badge>
           ) : null}
@@ -118,7 +117,7 @@ export function AutomationWorkerCard({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={translate(
-                    'auto.components.automations.workers.moveUp',
+                    'auto.components.automations.workers.moveUpAria',
                     'Move worker up'
                   )}
                   disabled={index === 0}
@@ -139,7 +138,7 @@ export function AutomationWorkerCard({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={translate(
-                    'auto.components.automations.workers.moveDown',
+                    'auto.components.automations.workers.moveDownAria',
                     'Move worker down'
                   )}
                   disabled={index === totalCount - 1}
@@ -217,7 +216,7 @@ export function AutomationWorkerCard({
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    className="text-destructive hover:bg-destructive/10"
+
                     aria-label={translate(
                       'auto.components.automations.workers.removeWorker',
                       'Remove worker {{name}}',
@@ -244,8 +243,11 @@ export function AutomationWorkerCard({
       {/* Errors for this worker */}
       {hasErrors ? (
         <div className="mt-2 space-y-1 rounded border border-destructive/40 bg-destructive/10 p-2 text-2xs text-destructive">
-          {childErrors.map((err, i) => (
-            <div key={i} className="flex items-center gap-1.5 font-medium">
+          {childErrors.map((err) => (
+            <div
+              key={JSON.stringify([err.code, err.path, err.message])}
+              className="flex items-center gap-1.5 font-medium"
+            >
               <AlertTriangle className="size-3 shrink-0" aria-hidden="true" />
               <span>{err.message}</span>
             </div>
@@ -301,15 +303,21 @@ export function AutomationWorkerCard({
           <div className="flex items-center gap-1 font-medium text-muted-foreground">
             <Layers className="size-3.5 shrink-0" aria-hidden="true" />
             <span>
-              {translate('auto.components.automations.workers.dependencies', 'Dependencies:')}
+              {translate('auto.components.automations.workers.dependenciesLabel', 'Dependencies:')}
             </span>
           </div>
           {child.dependencies.map((dep) => {
             const depChild = childMap.get(dep.childId)
             const depName = depChild ? depChild.name : dep.childId
             return (
-              <Badge key={dep.childId} variant="outline" className="font-mono text-3xs">
-                {depName} ({dep.condition ?? 'accepted'})
+              <Badge key={dep.childId} variant="outline">
+                {depName} (
+                {dep.condition ??
+                  translate(
+                    'auto.components.automations.AutomationWorkerCard.4c985b600d',
+                    'accepted'
+                  )}
+                )
               </Badge>
             )
           })}
@@ -327,45 +335,39 @@ export function AutomationWorkerCard({
             {translate('auto.components.automations.workers.stageAcceptance', 'Stage Acceptance')}
           </div>
           <div className="mt-1.5 flex flex-wrap gap-2 text-muted-foreground">
-            {child.stageAcceptance.criteria?.map((crit, idx) => (
-              <div
-                key={crit.id ?? `crit-${idx}`}
-                className="flex items-center gap-1 text-foreground"
-              >
+            {child.stageAcceptance.criteria?.map((crit) => (
+              <div key={crit.id} className="flex items-center gap-1 text-foreground">
                 <CheckCircle className="size-3 shrink-0 text-status-success" aria-hidden="true" />
                 <span className="font-medium text-xs">{crit.description}</span>
               </div>
             ))}
-            {child.stageAcceptance.requiredChecks?.map((chk, idx) => (
-              <div
-                key={chk.id ?? `chk-${idx}`}
-                className="flex items-center gap-1 font-mono text-3xs"
-              >
+            {child.stageAcceptance.requiredChecks?.map((chk) => (
+              <div key={chk.id} className="flex items-center gap-1 font-mono text-3xs">
                 <span className="text-muted-foreground">
                   {translate('auto.components.automations.workers.checkPrefix', 'check:')}
                 </span>
                 <span className="text-foreground">{chk.description || chk.id}</span>
               </div>
             ))}
-            {child.stageAcceptance.requiredArtifacts?.map((art, idx) => (
-              <div key={`art-${idx}`} className="flex items-center gap-1">
+            {child.stageAcceptance.requiredArtifacts?.map((art) => (
+              <div
+                key={JSON.stringify([art.kind, art.pathPattern])}
+                className="flex items-center gap-1"
+              >
                 <span className="font-medium text-foreground">
                   {translate('auto.components.automations.workers.artifactLabel', 'Artifact:')}
                 </span>
                 <span className="font-mono text-3xs">{art.kind}</span>
               </div>
             ))}
-            {child.stageAcceptance.requiredApprovals?.map((app, idx) => (
-              <div key={`app-${idx}`} className="flex items-center gap-1">
+            {child.stageAcceptance.requiredApprovals?.map((app) => (
+              <div key={app.id} className="flex items-center gap-1">
                 <span className="font-medium text-foreground">
                   {translate('auto.components.automations.workers.approvalLabel', 'Approval:')}
                 </span>
                 <span className="font-mono text-3xs">{app.role}</span>
                 {app.disallowAuthorApproval ? (
-                  <Badge
-                    variant="outline"
-                    className="text-3xs text-status-warning border-status-warning-border"
-                  >
+                  <Badge variant="outline">
                     {translate('auto.components.automations.workers.nonAuthor', 'non-author')}
                   </Badge>
                 ) : null}

@@ -5,6 +5,7 @@
   "printWidth": 100,
   "trailingComma": "none",
   "ignorePatterns": [
+    ".cache/**",
     "cloud/**",
     "resources/licenses/**",
     "resources/plugins/launch/*/**",

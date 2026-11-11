@@ -68,7 +68,7 @@ export function AutomationWorkerStageAcceptanceFields({
 
   return (
     <div className="space-y-3 rounded-md border border-border/50 p-3">
-      <Label className="font-semibold text-xs">
+      <Label>
         {translate('auto.components.automations.workers.stageAcceptanceTitle', 'Stage Acceptance')}
       </Label>
 
@@ -83,7 +83,7 @@ export function AutomationWorkerStageAcceptanceFields({
         <div className="space-y-1">
           {criteria.map((crit, idx) => (
             <div
-              key={crit.id ?? idx}
+              key={crit.id}
               className="flex items-center justify-between gap-2 rounded bg-muted/30 px-2 py-1 text-2xs"
             >
               <span className="truncate">{crit.description}</span>
@@ -91,7 +91,7 @@ export function AutomationWorkerStageAcceptanceFields({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                className="h-4 w-4 text-destructive"
+
                 onClick={() => handleRemoveCriterion(idx)}
                 aria-label={translate(
                   'auto.components.automations.workers.removeCriterion',
@@ -105,21 +105,24 @@ export function AutomationWorkerStageAcceptanceFields({
           ))}
           <div className="flex items-center gap-1.5 pt-1">
             <Input
+              density="compact"
               id="worker-new-criterion-input"
               value={newCriterion}
               onChange={(e) => setNewCriterion(e.target.value)}
-              placeholder="e.g. Validated schema and zero lint warnings"
+              placeholder={translate(
+                'auto.components.automations.AutomationWorkerStageAcceptanceFields.e1b9d573f4',
+                'e.g. Validated schema and zero lint warnings'
+              )}
               aria-label={translate(
                 'auto.components.automations.workers.newCriterionLabel',
                 'New acceptance criterion'
               )}
-              className="text-xs h-7"
             />
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="h-7 text-2xs"
+              size="xs"
+
               onClick={handleAddCriterion}
             >
               <Plus className="size-3 mr-1" />
@@ -140,7 +143,7 @@ export function AutomationWorkerStageAcceptanceFields({
         <div className="space-y-1">
           {requiredChecks.map((chk, idx) => (
             <div
-              key={chk.id ?? idx}
+              key={chk.id}
               className="flex items-center justify-between gap-2 rounded bg-muted/30 px-2 py-1 text-2xs"
             >
               <span className="font-mono truncate">{chk.description || chk.id}</span>
@@ -148,7 +151,7 @@ export function AutomationWorkerStageAcceptanceFields({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                className="h-4 w-4 text-destructive"
+
                 onClick={() => handleRemoveCheck(idx)}
                 aria-label={translate(
                   'auto.components.automations.workers.removeCheck',
@@ -162,21 +165,25 @@ export function AutomationWorkerStageAcceptanceFields({
           ))}
           <div className="flex items-center gap-1.5 pt-1">
             <Input
+              density="compact"
+              variant="code"
               id="worker-new-check-input"
               value={newCheck}
               onChange={(e) => setNewCheck(e.target.value)}
-              placeholder="e.g. pnpm test:contracts"
+              placeholder={translate(
+                'auto.components.automations.AutomationWorkerStageAcceptanceFields.5aa39a2e1f',
+                'e.g. pnpm test:contracts'
+              )}
               aria-label={translate(
                 'auto.components.automations.workers.newCheckLabel',
                 'New automated check'
               )}
-              className="font-mono text-xs h-7"
             />
             <Button
               type="button"
               variant="outline"
-              size="sm"
-              className="h-7 text-2xs"
+              size="xs"
+
               onClick={handleAddCheck}
             >
               <Plus className="size-3 mr-1" />

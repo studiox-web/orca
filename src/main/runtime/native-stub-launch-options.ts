@@ -1,3 +1,4 @@
+import type { OrcaRuntimeWithStateFields } from './construction/runtime-construction'
 import { isDeepStrictEqual } from 'node:util'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
@@ -20,7 +21,10 @@ const createKeys = new Set([
   'onPtySpawnDispatched'
 ])
 
-export function assertNativeStubCreateOptions(runtime: object, opts: TerminalCreateOptions): void {
+export function assertNativeStubCreateOptions(
+  runtime: OrcaRuntimeWithStateFields,
+  opts: TerminalCreateOptions
+): void {
   requireNativeStubLaunch(opts.preparedNativeStub!, runtime)
   if (
     Object.keys(opts).some((key) => !createKeys.has(key)) ||
@@ -33,7 +37,7 @@ export function assertNativeStubCreateOptions(runtime: object, opts: TerminalCre
 }
 
 export function beginNativeStubTerminal(
-  runtime: object,
+  runtime: OrcaRuntimeWithStateFields,
   selector: string | undefined,
   opts: TerminalCreateOptions
 ): void {
@@ -49,7 +53,7 @@ export function beginNativeStubTerminal(
 }
 
 export function resolveNativeStubTerminalOptions(
-  runtime: object,
+  runtime: OrcaRuntimeWithStateFields,
   workspace: TerminalWorkspaceLaunchScope,
   opts: TerminalCreateOptions
 ): TerminalCreateOptions {
@@ -100,7 +104,10 @@ export function nativeStubSpawnEnvironment(
   })
 }
 
-export function assertNativeStubRuntimeSpawn(args: RuntimePtySpawnArgs, runtime?: object): void {
+export function assertNativeStubRuntimeSpawn(
+  args: RuntimePtySpawnArgs,
+  runtime?: OrcaRuntimeWithStateFields
+): void {
   const record = requireNativeStubLaunch(args.preparedNativeStub!, runtime)
   const surface = record.surface
   if (

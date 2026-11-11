@@ -62,7 +62,7 @@ function makeWorkerResult(
     effects: [],
     blockers: [],
     ...overrides
-  } as StructuredWorkerResult
+  }
 }
 
 describe('Coordinated Automation Semantic Acceptance & Hardening', () => {

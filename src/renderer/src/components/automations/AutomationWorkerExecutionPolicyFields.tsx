@@ -49,9 +49,13 @@ export function AutomationWorkerExecutionPolicyFields({
                 'auto.components.automations.workers.timeoutInputLabel',
                 'Timeout override in minutes'
               )}
-              className="text-xs"
             />
-            <span className="text-2xs text-muted-foreground">min</span>
+            <span className="text-2xs text-muted-foreground">
+              {translate(
+                'auto.components.automations.AutomationWorkerExecutionPolicyFields.1a7159efdd',
+                'min'
+              )}
+            </span>
           </div>
         ) : (
           <div className="text-2xs text-muted-foreground italic">
@@ -87,6 +91,7 @@ export function AutomationWorkerExecutionPolicyFields({
           </div>
           {state.overrideRetries ? (
             <Input
+              density="compact"
               id="worker-retries-override-input"
               type="number"
               min="0"
@@ -101,7 +106,6 @@ export function AutomationWorkerExecutionPolicyFields({
                 'auto.components.automations.workers.retriesInputLabel',
                 'Max retries override'
               )}
-              className="text-xs h-7"
             />
           ) : (
             <div className="text-2xs text-muted-foreground italic">
@@ -140,6 +144,7 @@ export function AutomationWorkerExecutionPolicyFields({
           </div>
           {state.overrideReviewIterations ? (
             <Input
+              density="compact"
               id="worker-reviews-override-input"
               type="number"
               min="0"
@@ -154,7 +159,6 @@ export function AutomationWorkerExecutionPolicyFields({
                 'auto.components.automations.workers.reviewsInputLabel',
                 'Max review iterations override'
               )}
-              className="text-xs h-7"
             />
           ) : (
             <div className="text-2xs text-muted-foreground italic">

@@ -28,7 +28,10 @@ export type AutomationRunDetailsCoordinatedHost = {
 // Why: the saved-history projection guesses eligibility from the renderer; only the host-checked controls may submit.
 const HOST_CHECKED_CONTROLS = {
   supported: false,
-  reason: 'Run controls use host-checked eligibility. Use “Host-observed run and controls” below.'
+  reason: translate(
+    'auto.components.automations.AutomationRunDetailsPage.b2bd1d7d32',
+    'Run controls use host-checked eligibility. Use “Host-observed run and controls” below.'
+  )
 }
 const SAVED_PROJECTION_ACTIONS: CoordinatedRunOperatorActions = {
   stopRun: { availability: HOST_CHECKED_CONTROLS },

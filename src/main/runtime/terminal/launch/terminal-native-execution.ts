@@ -1,3 +1,4 @@
+import type { OrcaRuntimeWithStateFields } from '../../construction/runtime-construction'
 import { beginNativeStubTerminal, bindNativeStubSurface } from '../../native-stub-launch-options'
 import { requireNativeStubLaunch } from '../../native-stub-session-test-host'
 import { beginNativeProviderTerminal } from '../../native-provider-launch-options'
@@ -5,7 +6,7 @@ import { requireNativeProviderLaunch } from '../../native-provider-execution-adm
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
 
 export function begin(
-  runtime: object,
+  runtime: OrcaRuntimeWithStateFields,
   selector: string | undefined,
   opts: TerminalCreateOptions
 ): TerminalCreateOptions {
@@ -20,7 +21,10 @@ export function begin(
   return opts
 }
 
-export function assertCurrent(runtime: object, opts: TerminalCreateOptions): void {
+export function assertCurrent(
+  runtime: OrcaRuntimeWithStateFields,
+  opts: TerminalCreateOptions
+): void {
   if (opts.preparedNativeStub) {
     requireNativeStubLaunch(opts.preparedNativeStub, runtime)
   }

@@ -17,9 +17,9 @@ import { OrchestrationDb } from '../runtime/orchestration/db'
 import {
   CoordinatedAutomationAdapter,
   CoordinatedAutomationLaunchRefusedError,
-  type CoordinatedWorkerIdentity,
-  type CoordinatedWorkerProvider
+  type CoordinatedWorkerIdentity
 } from './coordinated-automation-adapter'
+import { validateStructuredWorkerResult } from './coordinated-automation-result-validation'
 import type { StructuredWorkerResult } from '../../shared/coordinated-automation-receipt-types'
 import {
   deterministicCoordinatedRunId,
@@ -372,6 +372,33 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
   })
 
   describe('structured worker result validation: fail-closed semantics', () => {
+    it('rejects non-object input without throwing before schema validation', () => {
+      const store = createStore()
+      const automation = store.createCoordinatedAutomation(
+        coordinatedCreateInput({ children: [child('step_1')] })
+      )
+      const { run } = store.createCoordinatedAutomationRun({
+        automationId: automation.id,
+        scheduledFor: 1000
+      })
+      const snapshot = run!.resolvedSnapshot!
+      for (const report of [null, undefined, false, 42, 'report', []]) {
+        expect(
+          validateStructuredWorkerResult(report, {
+            automationRunId: run!.id,
+            orchestrationRunId: 'run-test',
+            definitionRevision: snapshot.definitionRevision,
+            childDefinitionId: 'step_1',
+            taskId: 'task-test',
+            dispatchId: 'dispatch-test',
+            canonicalDigest: snapshot.canonicalDigest,
+            child: snapshot.resolvedChildren[0],
+            snapshot
+          })
+        ).toEqual({ valid: false, error: expect.stringContaining('schema invalid') })
+      }
+    })
+
     it('fails closed when result schema is malformed and does not unblock dependents', async () => {
       const store = createStore()
       const automation = store.createCoordinatedAutomation(
@@ -395,9 +422,9 @@ describe('CoordinatedAutomationAdapter Failure Injection & Resilience', () => {
         orchestrationDb: db,
         workerProvider: {
           capability: 'fake_no_effects',
-          run: (async () => ({
+          run: async () => ({
             not: 'a valid schema'
-          })) as unknown as CoordinatedWorkerProvider['run']
+          })
         }
       })
 

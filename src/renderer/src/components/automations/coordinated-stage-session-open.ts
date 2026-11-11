@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { openOrchestrationCrewAgent } from '@/lib/open-agent-message-sender'
 import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
 import type { CoordinatedStageInspection } from '../../../../shared/coordinated-automation-run-inspection'
@@ -13,10 +14,16 @@ export function stageSessionOpenRefusal(stage: CoordinatedStageInspection): stri
     return target.reason
   }
   if (target.childDefinitionId !== stage.childDefinitionId || target.taskId !== stage.taskId) {
-    return 'The host session target names a different stage or Task. It was not opened.'
+    return translate(
+      'auto.components.automations.coordinated.stage.session.open.5df3b0d0c1',
+      'The host session target names a different stage or Task. It was not opened.'
+    )
   }
   if (stage.native.kind !== 'available' || stage.native.latestDispatchId !== target.dispatchId) {
-    return 'The host session target is not the stage’s current attempt. Refresh to inspect the exact run.'
+    return translate(
+      'auto.components.automations.coordinated.stage.session.open.bafc55ae63',
+      'The host session target is not the stage’s current attempt. Refresh to inspect the exact run.'
+    )
   }
   return null
 }
