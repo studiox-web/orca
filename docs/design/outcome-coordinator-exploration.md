@@ -966,3 +966,13 @@ tracked source, stored evidence or operational safeguard was removed. The final
 combined app/gate and push verification remain coordinator-owned and are recorded
 in `.cache/xos-final-*` logs. These overlapping worker counts are not additive.
 The final gate must compare the full feature to XOS after the last edit/commit.
+
+The rebuilt hidden app journeys also passed on cleanup commit `eac88f4f187` (2
+tests, exit 0), and the screenshots were inspected. The combined gate then passed
+31 of 32 checks, including the complete 85-file unit selection. Its sole failure
+was the Node-only typecheck following a cross-layer test into renderer localization.
+The unchanged gate-flow assertions were moved from `src/main/runtime/` into the
+existing combined harness as `coordinated-run-gate-flow-rpc.unit.test.ts`, with only
+relative imports adjusted. All 17 cases, Node typechecking and the E2E typecheck
+ratchet passed there (exit 0). This changes test placement, not app behavior or its
+accepted source. The full gate is rerun after this final correction before push.

@@ -1,24 +1,24 @@
-import './rpc/unused-default-rpc-methods.test-fixture'
+import '../../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 // The operator gate flow through the real host and RPC transport over a staged fake fixture:
 // the worker delivers a valid report, the stage holds it for a person, and only an approval of
 // the exact displayed Dispatch and report digest lets it through. No process is started.
 
 import { afterEach, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
-import { testState } from '../persistence/persistence-test-harness'
-import { createFileCoordinatedRunProgressStore } from '../automations/coordinated-automation-progress-store'
-import { COORDINATED_PROGRESS_DIRECTORY } from '../automations/coordinated-automation-run-host'
-import { child } from '../persistence/scheduling-automations/coordinated-automation-persistence.test-support'
-import type { CoordinatedRunView } from '../../shared/coordinated-automation-run-view'
-import { createCoordinatedRunRpcFixture } from './coordinated-run-rpc.test-support'
+import { testState } from '../../../src/main/persistence/persistence-test-harness'
+import { createFileCoordinatedRunProgressStore } from '../../../src/main/automations/coordinated-automation-progress-store'
+import { COORDINATED_PROGRESS_DIRECTORY } from '../../../src/main/automations/coordinated-automation-run-host'
+import { child } from '../../../src/main/persistence/scheduling-automations/coordinated-automation-persistence.test-support'
+import type { CoordinatedRunView } from '../../../src/shared/coordinated-automation-run-view'
+import { createCoordinatedRunRpcFixture } from '../../../src/main/runtime/coordinated-run-rpc.test-support'
 import {
   captureCoordinatedGateCandidate,
   coordinatedGateParams
-} from '../../renderer/src/components/automations/coordinated-run-gate-candidate'
+} from '../../../src/renderer/src/components/automations/coordinated-run-gate-candidate'
 
 vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => false } }))
-vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
-vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
+vi.mock('../../../src/main/telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../../src/main/telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 let fixture: Awaited<ReturnType<typeof createCoordinatedRunRpcFixture>> | undefined
 
