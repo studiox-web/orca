@@ -723,6 +723,7 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-params'
 import { WorktreeAdoptProvisionedRoot } from './worktree-provisioned-root-params'
+import { XosCronReplace, XosGoalRun, XosGoalSchedule, XosGoalStop, XosNoParams } from './xos-params'
 import { RepoIconDataUrlsParams } from '../sidebar-list/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/sidebar-inputs-feed-contract'
 import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
@@ -1569,7 +1570,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.set': WorktreeSet,
   'worktree.show': WorktreeSelectorOfWorktreeParams,
   'worktree.sleep': WorktreeSleepParams,
-  'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
+  'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams,
+  'xos.cron.replace': XosCronReplace,
+  'xos.goal.run': XosGoalRun,
+  'xos.goal.schedule': XosGoalSchedule,
+  'xos.goal.stop': XosGoalStop,
+  'xos.usage.limits': XosNoParams
 } as const
 
 // Why: these methods bind a schema the shared contract cannot hold because its value

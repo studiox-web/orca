@@ -16,8 +16,8 @@ export function formatExternalDate(value: string | null, now: number): string {
   return formatAutomationDateTimeWithRelative(parsed, now)
 }
 
-export function getExternalProviderLabel(_manager: ExternalAutomationManager): string {
-  return 'OpenClaw'
+export function getExternalProviderLabel(manager: ExternalAutomationManager): string {
+  return manager.provider === 'crontab' ? 'Cron' : 'OpenClaw'
 }
 
 export function getExternalTargetKindLabel(manager: ExternalAutomationManager): string {

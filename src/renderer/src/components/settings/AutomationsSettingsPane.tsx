@@ -32,6 +32,35 @@ export function AutomationsSettingsPane({
           })
         }
       />
+      <SettingsSwitchRow
+        label={translate('auto.components.settings.automations.unifiedGoals', 'Unified Goals list')}
+        description={translate(
+          'auto.components.settings.automations.unifiedGoalsDescription',
+          'Opt in to the read-only Goals, automations, scripts, and external jobs list.'
+        )}
+        checked={settings.unifiedAutomationSurface === true}
+        onChange={() =>
+          void updateSettings({
+            unifiedAutomationSurface: settings.unifiedAutomationSurface !== true
+          })
+        }
+      />
+      <SettingsSwitchRow
+        label={translate(
+          'auto.components.settings.automations.unifiedEditors',
+          'Unified create chooser'
+        )}
+        description={translate(
+          'auto.components.settings.automations.unifiedEditorsDescription',
+          'Offer safe create routes from the unified list while keeping its records read-only.'
+        )}
+        checked={settings.unifiedAutomationEditors === true}
+        onChange={() =>
+          void updateSettings({
+            unifiedAutomationEditors: settings.unifiedAutomationEditors !== true
+          })
+        }
+      />
       <section className="space-y-4 py-5">
         <div className="space-y-1">
           <h3 className="text-sm font-medium">

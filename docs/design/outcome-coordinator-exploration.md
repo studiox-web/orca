@@ -1,12 +1,12 @@
 # Outcome-oriented parent/child automations
 
-Status: isolated source implementation and the identified blocking corrections are complete; app and physical-runtime acceptance remain pending. See [Source milestone closure](#source-milestone-closure-november-11), [Implementation completion plan](#implementation-completion-plan), and [Lessons and deferred upgrades](#lessons-and-deferred-upgrades).
+Status: isolated source implementation, the identified blocking corrections, and the hidden combined XOS app journey are complete; physical native/provider and installed-runtime acceptance remain pending. See [Source milestone closure](#source-milestone-closure-november-11), [Implementation completion plan](#implementation-completion-plan), and [Lessons and deferred upgrades](#lessons-and-deferred-upgrades).
 
 Date: 2026-11-08
 
 Decision owner: Graham
 
-Original design authorization: implementation, migration, scheduling, and execution were **not granted**. Graham subsequently authorized isolated implementation using Orca workers. Live migration, scheduling changes, publishing, deployment, push, and merge remain unauthorized. Runtime observations and boundary statements in the original design below describe the design investigation, not the subsequent worker build.
+Original design authorization: implementation, migration, scheduling, and execution were **not granted**. Graham subsequently authorized isolated implementation using Orca workers. Graham subsequently approved the isolated hidden Playwright/CDP app tests and integration, commit and push to `xos` on November 11. Live migration, scheduling changes, publishing and deployment remain unauthorized. Runtime observations and boundary statements in the original design below describe the design investigation, not the subsequent worker build.
 
 ## Recommendation
 
@@ -889,3 +889,46 @@ The full review and narrow verification reports, final correction reports and ex
 **Copy-paste next-step prompt — conditional on Graham approving the substitute app-test method; not permission to run now:**
 
 > In the existing outcome-coordinator-exploration worktree, verify the accepted source beginning at `52df5ce4a3f` with the prepared isolated hidden-window Playwright/CDP app journey only after Graham explicitly approves that method in place of the missing Electron skill. Read AGENTS.md and the current `tests/e2e/coordinated-automation-harness/coordinated-app-checkpoint.md`, verify Node 24/pnpm 12.14.0, and inspect the isolated entry/config before running its explicit build and tests. Use ORCA_BACKGROUND_LAUNCH=1, a disposable profile/HOME, fixed viewport and hidden renderers; never launch the ordinary installed profile, real workers/providers, publisher or schedules. Capture exact exit evidence and failures; fix only scoped app integration defects if found. Report which behaviors were actually exercised and keep native physical/provider acceptance, the DJVibe shadow pilot and live adoption separate. No new worktrees, push, merge, deployment, backup changes or live content effects.
+
+### Combined XOS app acceptance and integration, November 11
+
+Graham authorized continued testing, merge into `xos`, commit and push so he can
+build and test locally. This supersedes the earlier pending substitute-method and
+no-merge/no-push checkpoint. The unavailable Electron skill was replaced, with his
+approval, by the repository's prepared isolated hidden Playwright/CDP method.
+The original no-live-operation, no-new-worktree and independent-backup boundaries
+remain in force.
+
+`origin/xos` was refreshed at `9a312989cab7ed6eb612e695fd7336f852311bfd` and integrated
+in this existing checkout. Three conflicts combined the runtime registrations,
+RPC registries and Automation detail. Existing XOS fallback controls stay on single
+automations; coordinated children keep their own frozen policies and controls.
+The primary XOS checkout's unrelated `AGENTS.md` edit is excluded and preserved.
+
+The fixture package was corrected to select the isolated compiled entry explicitly.
+The prior helper derived the ordinary package root from a supplied main filename,
+so a custom filename alone did not select the custom app. A separate generated
+fixture package preserves the app version and entry, with no ordinary-entry change.
+The renderer journey also enters the native list through XOS's existing navigation.
+Its revision assertion now changes the outcome contract: a coordinator brief alone
+is descriptive metadata and does not alter the resolved execution definition.
+
+The combined source passed `pnpm tc`, RPC catalog verification and the isolated
+fixture TypeScript check (exit 0). The explicit fixture bundle and Electron runtime
+preparation passed (exit 0). Both hidden Electron journeys passed (2 tests, exit 0):
+real RPC persistence/restart/idempotency and real DOM create/edit/save/reopen/run
+inspection/reconciliation/frozen revision. Tests assert hidden windows, disposable
+HOME/profile, disabled definitions and unavailable fake-worker session navigation.
+The renderer viewport is 1280 by 900 in dark theme. See the reproducible commands
+and precise boundaries in [the app checkpoint](../../tests/e2e/coordinated-automation-harness/coordinated-app-checkpoint.md).
+These results complement, rather than add to, the earlier overlapping source test
+counts. The required final `check:changed` gate runs after the integration commit;
+its exact log and push verification are retained in this checkout's `.cache/`.
+
+This remains an experimental, default-off source milestone. An ordinary packaged
+build does not admit coordinated definition writes or activate providers merely
+because the UI flag is on. The isolated fixture proves the no-effect app journey;
+actual native worker/PTY/provider execution, installed behavior and cross-OS runtime
+still need their separate acceptance. DJVibe repackaging and the non-publishing
+shadow comparison remain future work. No live automations, schedules, publishing,
+content, independent backups or installed application are changed by this acceptance.

@@ -7,6 +7,7 @@ import { AI_VAULT_METHODS } from './ai-vault'
 import { AUTOMATION_METHODS } from './automations'
 import { COORDINATED_AUTOMATION_RUN_METHODS } from './coordinated-automation-runs'
 import { COORDINATED_AUTOMATION_METHODS } from './coordinated-automations'
+import { XOS_GOAL_METHODS } from './xos-goals'
 import { REPO_METHODS } from './repo'
 import { WORKTREE_METHODS } from './worktree'
 import { REFERENCE_METHODS } from './reference'
@@ -83,6 +84,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-s
 // Keep registration order and the full RPC/security surface visible in one manifest.
 export const ALL_RPC_METHODS = [
   ...STATUS_METHODS,
+  ...XOS_GOAL_METHODS,
   ...ORCAD_TERMINAL_CENSUS_METHODS,
   ...ORCAD_MIGRATION_METHODS,
   ...SESSION_TERMINAL_SCROLLBACK_METHODS,

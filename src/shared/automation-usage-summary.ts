@@ -12,6 +12,7 @@ export type AutomationUsageSummary = {
   /** Newest retained run's status, so list filters never fetch run history. Optional: older projections omit it. */
   lastRunStatus?: AutomationRunStatus | null
   lastRunAt?: number | null
+  lastRunId?: string | null
 }
 
 /** Bounded aggregate over an authority's retained runs; never fetches history. */
@@ -60,6 +61,9 @@ export function summarizeAutomationRunUsage(
     totalTokens,
     estimatedCostUsd: hasKnownCost ? estimatedCostUsd : null,
     lastRunStatus: latest?.status ?? null,
-    lastRunAt: latest ? (latest.dispatchedAt ?? latest.startedAt ?? latest.createdAt ?? null) : null
+    lastRunAt: latest
+      ? (latest.dispatchedAt ?? latest.startedAt ?? latest.createdAt ?? null)
+      : null,
+    lastRunId: latest?.id ?? null
   }
 }

@@ -158,6 +158,8 @@ export function buildDefaultSettings(args: {
     showTitlebarAppName: true,
     showTasksButton: true,
     showAutomationsButton: true,
+    unifiedAutomationSurface: false,
+    unifiedAutomationEditors: false,
     artifactsEnabled: true,
     artifactSharingEnabled: false,
     agentSkillSharingEnabled: false,

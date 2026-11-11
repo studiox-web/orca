@@ -1,5 +1,6 @@
 import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automation-owner-precondition'
+import { xosGrantInheritedLane } from '../../../xos/xos-run-gate'
 import { defineMethod, type RpcContext } from '../core'
 import {
   AutomationCreate,
@@ -78,12 +79,17 @@ export const AUTOMATION_METHODS = [
     name: 'automation.runNow',
     permission: 'workspace',
     params: AutomationId,
-    handler: async (params, context) => ({
-      run: await context.runtime.runAutomationNow(
-        params.id,
-        mutationOwner(params.id, params.expectedOwner, context)
-      )
-    })
+    handler: async (params, context) => {
+      if (params.inheritedLane) {
+        xosGrantInheritedLane(params.id, params.inheritedLane)
+      }
+      return {
+        run: await context.runtime.runAutomationNow(
+          params.id,
+          mutationOwner(params.id, params.expectedOwner, context)
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'automation.runs',

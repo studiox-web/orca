@@ -172,7 +172,9 @@ export const AutomationList = z.object({ selector: ListScopeSelector.optional() 
 
 export const AutomationId = z.object({
   id: requiredString('Missing automation id'),
-  expectedOwner: ExpectedOwner
+  expectedOwner: ExpectedOwner,
+  /** XOS fork RT13: the lane the calling run holds (its CASCADE_ACTIVE_LOCK_LANE). */
+  inheritedLane: OptionalString
 })
 
 export const AutomationRuns = z.object({

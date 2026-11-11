@@ -23,6 +23,7 @@ import { closeEarlierHookReviewRunTerminals } from './hook-review-blocked-run-te
 import { getAppEnvironment, hasAppEnvironment } from '../../shared/app-environment'
 import { createCoordinatedRunHostBinding } from './coordinated-automation-run-host-binding'
 import type { CoordinatedRunHostInjection } from './coordinated-automation-run-host-types'
+import { bindRuntimeAutomationXosHost } from './runtime-automation-xos-host'
 
 const MAX_REMEMBERED_LAUNCHES = 256
 
@@ -199,6 +200,7 @@ export function createRuntimeAutomationService(input: {
   })
   coordinated.attach(service)
   runtime.setAutomationService(service)
+  bindRuntimeAutomationXosHost({ store, runtime, service, launchedHandles })
   if (input.headless) {
     bindHeadlessRunTerminalRetention(service, store, runtime)
   }

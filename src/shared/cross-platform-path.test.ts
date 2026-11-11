@@ -8,8 +8,17 @@ import {
   isWslUncPathForLinuxMountedPath,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot,
-  resolveRuntimePath
+  resolveRuntimePath,
+  runtimePathDisplayName
 } from './cross-platform-path'
+
+describe('runtimePathDisplayName', () => {
+  it('uses the final path segment across supported path flavors', () => {
+    expect(runtimePathDisplayName('/home/ada/djvibe.com/')).toBe('djvibe.com')
+    expect(runtimePathDisplayName('C:\\repos\\orca-fork')).toBe('orca-fork')
+    expect(runtimePathDisplayName(null)).toBeNull()
+  })
+})
 
 describe('local Windows WSL aliases', () => {
   it('matches UNC aliases and mounted drives without folding Linux path case', () => {

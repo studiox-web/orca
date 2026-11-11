@@ -9,14 +9,13 @@ import type { Automation, AutomationRun } from '../../../src/shared/automations-
 import type { RuntimeStatus } from '../../../src/shared/runtime-types'
 import { COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY as FAKE } from '../../../src/shared/automation-runtime-capabilities'
 
-// Prepared for the accepted isolated entry; launching remains a separate supervised checkpoint.
 test('renderer creates, edits, reopens and inspects a frozen no-effect run through the public API', async ({
   testRepoPath
 }, testInfo) => {
   const session = createRestartSession(
     testInfo,
     {},
-    { mainPath: resolve('out-coordinated/main/index.js') }
+    { mainPath: resolve('out-coordinated/main/index.js'), appRoot: resolve('out-coordinated/main') }
   )
   const profile = getE2ECompletedOnboardingProfile()
   writeFileSync(
@@ -58,6 +57,7 @@ test('renderer creates, edits, reopens and inspects a frozen no-effect run throu
       await store.getState().fetchAllWorktrees()
       store.getState().openAutomationsPage()
     })
+    await page.getByRole('button', { name: 'Automations list', exact: true }).click()
     await page.getByRole('button', { name: 'New Automation', exact: true }).click()
     const editor = page.getByRole('dialog', { name: 'Create automation' })
     await editor.getByRole('radio', { name: 'Coordinated workers mode' }).click()
@@ -96,7 +96,17 @@ test('renderer creates, edits, reopens and inspects a frozen no-effect run throu
     await page.getByRole('button', { name: /^Renderer no-effect checkpoint/ }).click()
     await page.getByRole('button', { name: 'Edit automation', exact: true }).click()
     const edit = page.getByRole('dialog', { name: 'Edit automation' })
+    await expect(edit).toBeVisible()
+    await page.screenshot({
+      path: testInfo.outputPath('coordinated-editor.png'),
+      animations: 'disabled'
+    })
+    await testInfo.attach('coordinated-editor', {
+      path: testInfo.outputPath('coordinated-editor.png'),
+      contentType: 'image/png'
+    })
     await edit.getByLabel('Coordinator brief').fill('Updated isolated brief')
+    await edit.getByLabel('Outcome statement').fill('Verify the updated isolated outcome')
     await edit.getByRole('button', { name: 'Save Changes', exact: true }).click()
     await expect(edit).toHaveCount(0)
     await page.getByRole('button', { name: 'Edit automation', exact: true }).click()
@@ -105,6 +115,7 @@ test('renderer creates, edits, reopens and inspects a frozen no-effect run throu
     const parent = (await definitions()).find(
       (entry) => entry.name === 'Renderer no-effect checkpoint'
     )!
+    expect(parent.prompt).toBe('Updated isolated brief')
     expect(parent.definitionRevision).toBe(2)
     expect(parent.enabled).toBe(false)
     const panel = page.getByRole('region', { name: 'Coordinated test runs' })
@@ -126,15 +137,37 @@ test('renderer creates, edits, reopens and inspects a frozen no-effect run throu
     await expect(panel).toContainText('Semantic receipt: completed')
     await page.getByRole('button', { name: 'Edit automation', exact: true }).click()
     await edit.getByLabel('Coordinator brief').fill('Future revision only')
+    await edit.getByLabel('Outcome statement').fill('A future outcome with its own revision')
     await edit.getByRole('button', { name: 'Save Changes', exact: true }).click()
     await expect(edit).toHaveCount(0)
     await expect(panel).toContainText('Frozen revision: 2')
-    expect((await definitions()).find((entry) => entry.id === parent.id)?.enabled).toBe(false)
+    expect((await definitions()).find((entry) => entry.id === parent.id)).toMatchObject({
+      enabled: false,
+      definitionRevision: 3
+    })
+    await panel.scrollIntoViewIfNeeded()
+    await page.screenshot({
+      path: testInfo.outputPath('coordinated-run-receipt.png'),
+      animations: 'disabled'
+    })
+    await testInfo.attach('coordinated-run-receipt', {
+      path: testInfo.outputPath('coordinated-run-receipt.png'),
+      contentType: 'image/png'
+    })
     expect(
       await app.evaluate(({ BrowserWindow }) =>
         BrowserWindow.getAllWindows().every((window) => !window.isVisible())
       )
     ).toBe(true)
+  } catch (error) {
+    const page = app?.windows()[0]
+    if (page && !page.isClosed()) {
+      await testInfo.attach('coordinated-renderer-failure', {
+        body: await page.locator('body').innerText(),
+        contentType: 'text/plain'
+      })
+    }
+    throw error
   } finally {
     await session.dispose(app)
   }

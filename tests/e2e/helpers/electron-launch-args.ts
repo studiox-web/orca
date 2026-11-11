@@ -5,9 +5,13 @@ export function getElectronIsolatedKeychainArgs(): string[] {
   return process.platform === 'darwin' ? ['--password-store=basic', '--use-mock-keychain'] : []
 }
 
-export function getOrcaElectronLaunchArgs(mainPath: string, headful: boolean): string[] {
+export function getOrcaElectronLaunchArgs(
+  mainPath: string,
+  headful: boolean,
+  appRoot?: string
+): string[] {
   // Launch through package.json so app version and resource paths match a packaged app.
-  const appPath = dirname(dirname(dirname(mainPath)))
+  const appPath = appRoot ?? dirname(dirname(dirname(mainPath)))
   const keychainArgs = getElectronIsolatedKeychainArgs()
   if (process.platform === 'darwin') {
     // Crash tests must not block later launches on AppKit's saved-window recovery dialog.

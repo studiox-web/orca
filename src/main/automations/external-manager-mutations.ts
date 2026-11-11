@@ -7,9 +7,9 @@ import { assertExternalAutomationJobId } from './external-manager-job-id'
 import { runLocalAutomationCommand } from './external-manager-local-command'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
-const PROVIDER_ACTION_COMMANDS: Record<
-  ExternalAutomationProvider,
-  Record<ExternalAutomationAction, string>
+// Why Partial: crontab jobs are listed read-only; Orca never rewrites the user's crontab.
+const PROVIDER_ACTION_COMMANDS: Partial<
+  Record<ExternalAutomationProvider, Record<ExternalAutomationAction, string>>
 > = {
   openclaw: { pause: 'disable', resume: 'enable', run: 'run', delete: 'rm' }
 }
@@ -20,7 +20,7 @@ function providerActionCommand(
   action: ExternalAutomationAction
 ): string {
   const commands = Object.hasOwn(PROVIDER_ACTION_COMMANDS, provider)
-    ? PROVIDER_ACTION_COMMANDS[provider]
+    ? (PROVIDER_ACTION_COMMANDS[provider] ?? null)
     : null
   const command = commands && Object.hasOwn(commands, action) ? commands[action] : null
   if (typeof command !== 'string') {

@@ -8,10 +8,12 @@ import type {
 } from '../../shared/automations-types'
 import { mapOpenClawJobs } from './external-job-mappers'
 import { isExternalAutomationCommandOnPath } from './external-manager-local-command'
+import { listLocalCrontabManager } from './external-crontab-manager'
 
 const OPENCLAW_JOBS_FILE = join(homedir(), '.openclaw', 'cron', 'jobs.json')
 const PROVIDER_LABELS: Record<ExternalAutomationProvider, string> = {
-  openclaw: 'OpenClaw'
+  openclaw: 'OpenClaw',
+  crontab: 'Cron'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -30,6 +32,9 @@ async function readLocalOpenClawJobs(): Promise<unknown[]> {
 export async function listLocalManager(
   provider: ExternalAutomationProvider
 ): Promise<ExternalAutomationManager | null> {
+  if (provider === 'crontab') {
+    return await listLocalCrontabManager(PROVIDER_LABELS.crontab)
+  }
   const [availableResult, jobsResult] = await Promise.allSettled([
     isExternalAutomationCommandOnPath(provider),
     readLocalOpenClawJobs()

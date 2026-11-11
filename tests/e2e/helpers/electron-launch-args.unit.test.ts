@@ -40,6 +40,19 @@ describe('getOrcaElectronLaunchArgs', () => {
     }
   )
 
+  it.each(['darwin', 'linux', 'win32'])(
+    'selects the isolated fixture package on %s',
+    (platform) => {
+      vi.stubGlobal('process', { ...process, platform })
+      const mainPath = join('workspace', 'orca', 'out-coordinated', 'main', 'index.js')
+      const appRoot = join('workspace', 'orca', 'out-coordinated', 'main')
+      expect(getOrcaElectronLaunchArgs(mainPath, false, appRoot)).toContain(appRoot)
+      expect(getOrcaElectronLaunchArgs(mainPath, false, appRoot)).not.toContain(
+        join('workspace', 'orca')
+      )
+    }
+  )
+
   it('launches the package root that owns the compiled main entry', () => {
     const root = join('workspace', 'orca')
     const mainPath = join(root, 'out', 'main', 'index.js')

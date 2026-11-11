@@ -3,8 +3,6 @@ import { isBuiltin } from 'node:module'
 import { join } from 'node:path'
 import type { Plugin, Rollup } from 'vite'
 
-type NormalizedInputOptions = Rollup.NormalizedInputOptions
-type NormalizedOutputOptions = Rollup.NormalizedOutputOptions
 type OutputBundle = Rollup.OutputBundle
 type OutputChunk = Rollup.OutputChunk
 
@@ -21,19 +19,15 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'macos-tree-clone',
   'orcad/orcad-stale-lock-reclaim',
   'plugins/plugin-authoring-checks',
-  ...[
-    'access',
-    'active-location',
-    'storage-classification',
-    'offline-settings',
-    'backup-path',
-    'database-recovery',
-    'domain-reader',
-    'recovery-command'
-  ].map((module) => `persistence/profile-state/profile-state-${module}`),
+  ...'access,active-location,storage-classification,offline-settings,backup-path,database-recovery,domain-reader,recovery-command'
+    .split(',')
+    .map((m) => `persistence/profile-state/profile-state-${m}`),
   'persistence/profile-state/legacy-json/profile-state-export-path',
   'persistence/profile-state/legacy-json/profile-state-recovery',
-  'startup/http1-compatibility-marker'
+  'startup/http1-compatibility-marker',
+  ...'xos-project-home,xos-project-import,xos-cron-migration,xos-crontab,xos-goal-authority,xos-goal-briefing,xos-goal-files,xos-github-cli,xos-native-receipts,xos-notifications,xos-trigger-projects,xos-runtime-store,xos-takeover-session,xos-goal-board,xos-live-registry,xos-goal-crud,xos-goal-cli,xos-usage-models-cli,xos-work-items,xos-work-items-crud,xos-item-claims'
+    .split(',')
+    .map((m) => `xos/${m}`)
 ] as const
 
 // Plain-Node processes and CLI modules cannot load Electron's API.
@@ -76,7 +70,7 @@ type EntryRuntime = 'plain-Node process' | 'worker thread'
 const ELECTRON_REQUIRE_RE = /require\(\s*["'`]electron(?:\/[^"'`]+)?["'`]\s*\)/
 
 // Pin guarded names to Rollup inputs or renames silently remove entries from the guard.
-function assertEntryNamesAreRollupInputs(input: NormalizedInputOptions['input']): void {
+function assertEntryNamesAreRollupInputs(input: Rollup.NormalizedInputOptions['input']): void {
   if (typeof input === 'string' || Array.isArray(input)) {
     return
   }
@@ -286,10 +280,10 @@ export function createPlainNodeEntryGuardPlugin(
 
   return {
     name: 'orca-plain-node-entry-guard',
-    buildStart(options: NormalizedInputOptions) {
+    buildStart(options: Rollup.NormalizedInputOptions) {
       assertEntryNamesAreRollupInputs(options.input)
     },
-    writeBundle(options: NormalizedOutputOptions, bundle: OutputBundle) {
+    writeBundle(options: Rollup.NormalizedOutputOptions, bundle: OutputBundle) {
       // Skip dev-watch smoke or every rebuild respawns daemon-entry; gate produced builds only.
       if (this.meta.watchMode) {
         return

@@ -16,6 +16,7 @@ import {
 import { automationRunOperationId, AUTOMATION_AGENT_CALLER } from './automation-run-operation'
 import { createAutomationDispatchToken } from './dispatch-tokens'
 import { tuiAgentDisplayName } from '../../shared/tui-agent-display-names'
+import { readXosModelArgs } from '../../shared/xos-model-args'
 
 export type AutomationChatAgentLaunch = HeadlessAutomationDispatchLaunch & {
   terminalHandle: string | null
@@ -58,6 +59,11 @@ async function launchChat(
     }
   }
   const operationId = automationRunOperationId(run, 'fresh-launch')
+  const { model, effort } = readXosModelArgs(automation.agentId, automation.extraAgentArgs ?? '')
+  const sessionOptions = {
+    ...(model ? { model } : {}),
+    ...(effort ? { effort } : {})
+  }
   try {
     const result = await launchAgentOnHost(
       {
@@ -66,6 +72,7 @@ async function launchChat(
         surface: 'chat',
         presentation: 'background',
         prompt: { text: automation.prompt, delivery: 'submit' },
+        ...(Object.keys(sessionOptions).length > 0 ? { sessionOptions } : {}),
         target:
           automation.workspaceMode === 'existing'
             ? { kind: 'existing', worktree: `id:${automation.workspaceId}` }

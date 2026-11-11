@@ -22,7 +22,7 @@ test('isolated desktop exposes real fake-run RPCs and retains exact run evidence
   const session = createRestartSession(
     testInfo,
     {},
-    { mainPath: resolve('out-coordinated/main/index.js') }
+    { mainPath: resolve('out-coordinated/main/index.js'), appRoot: resolve('out-coordinated/main') }
   )
   const profile = getE2ECompletedOnboardingProfile()
   writeFileSync(

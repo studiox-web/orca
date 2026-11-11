@@ -44,7 +44,8 @@ describe('summarizeAutomationRunUsage', () => {
       totalTokens: 42,
       estimatedCostUsd: 0.25,
       lastRunStatus: null,
-      lastRunAt: null
+      lastRunAt: null,
+      lastRunId: 'run-1'
     })
   })
 
@@ -65,17 +66,25 @@ describe('summarizeAutomationRunUsage', () => {
       totalTokens: 0,
       estimatedCostUsd: null,
       lastRunStatus: null,
-      lastRunAt: null
+      lastRunAt: null,
+      lastRunId: null
     })
   })
 
   it('projects the newest retained run so list filters never fetch history', () => {
     const summary = summarizeAutomationRunUsage([
       { ...makeRun(makeUsage()), createdAt: 1, status: 'completed', dispatchedAt: 11 },
-      { ...makeRun(makeUsage()), createdAt: 3, status: 'dispatch_failed', dispatchedAt: 33 },
+      {
+        ...makeRun(makeUsage()),
+        id: 'run-3',
+        createdAt: 3,
+        status: 'dispatch_failed',
+        dispatchedAt: 33
+      },
       { ...makeRun(makeUsage()), createdAt: 2, status: 'completed', dispatchedAt: 22 }
     ])
     expect(summary.lastRunStatus).toBe('dispatch_failed')
     expect(summary.lastRunAt).toBe(33)
+    expect(summary.lastRunId).toBe('run-3')
   })
 })

@@ -20,6 +20,7 @@ import { createAccountRuntimeTargetSettingsSync } from './rate-limits/account-ru
 import { normalizeCodexRuntimeSelection } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import type { ClaudeStatusLineRateLimits } from '../shared/claude-statusline-rate-limits'
+import { registerXosQuotaSource } from './xos/xos-quota'
 
 export type ProviderAccountServices = {
   rateLimits: RateLimitService
@@ -39,6 +40,8 @@ export function createProviderAccountServices(
   const agentView = getClaudeAgentViewService()
   void agentView.reconcile(store.getSettings())
   const rateLimits = new RateLimitService()
+  // XOS fork: Auto mode reads live quota from this service.
+  registerXosQuotaSource(rateLimits)
   const codexRuntimeHome = new CodexRuntimeHomeService(store)
   const codexAccounts = new CodexAccountService(
     store,

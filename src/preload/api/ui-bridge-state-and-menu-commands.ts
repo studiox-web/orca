@@ -71,6 +71,11 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:openFeatureTour', listener)
     return () => ipcRenderer.removeListener('ui:openFeatureTour', listener)
   },
+  onOpenGoals: (callback: () => void): (() => void) => {
+    const listener = () => callback()
+    ipcRenderer.on('ui:openGoals', listener)
+    return () => ipcRenderer.removeListener('ui:openGoals', listener)
+  },
   onOpenCrashReport: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('ui:openCrashReport', listener)

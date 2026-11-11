@@ -21,6 +21,7 @@ import {
   type AutomationRunTargetResult
 } from './run-target-resolution'
 import { writeAutomationRunUsage } from './run-usage-collection'
+import { xosAfterRunFinished } from '../xos/xos-run-gate'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import { clearAutomationDispatchTokens } from './dispatch-tokens'
@@ -155,7 +156,10 @@ export class AutomationService {
     this.timer = null
   }
 
-  async runNow(automationId: string): Promise<AutomationRun> {
+  async runNow(
+    automationId: string,
+    trigger: AutomationRun['trigger'] = 'manual'
+  ): Promise<AutomationRun> {
     const generation = this.dispatchGeneration
     const listed = this.store.listAutomations().find((entry) => entry.id === automationId)
     if (!listed) {
@@ -163,7 +167,7 @@ export class AutomationService {
     }
     const automation = captureLegacyRunTarget(this.store, listed, this.allowRemoteHostScheduling)
     const target = this.resolveTarget(automation)
-    const run = await this.runs.createRun(automation, Date.now(), 'manual')
+    const run = await this.runs.createRun(automation, Date.now(), trigger)
     return await this.requestDispatch(automation, run, target, generation)
   }
 
@@ -195,6 +199,8 @@ export class AutomationService {
       return run
     }
     this.completionWatcher?.forget(run.id)
+    // XOS fork: release lane locks, then usage-limit classification and fallback (stage A).
+    xosAfterRunFinished(run)
     // Duplicate completion effects must not recalculate usage with a later attribution window.
     if (run.usage) {
       return run

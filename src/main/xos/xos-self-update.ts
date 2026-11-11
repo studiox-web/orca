@@ -1,0 +1,219 @@
+// XOS fork: Help → Check for Updates builds and installs the fork from the local `xos` checkout,
+// so updating needs no shell. Build runs xos/build.sh in the background; install quits Orca and a
+// detached helper runs xos/switch-to-fork.sh once every Orca window process has exited.
+import { existsSync, mkdirSync, openSync, closeSync, readFileSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { app, dialog, Notification } from 'electron'
+import { runProcess, spawnProcess } from '@orca/process-host'
+import { xosHome } from './xos-crontab'
+import { XosUpdateWindow } from './xos-update-window'
+
+type BuildState = { sha: string; builtAt: string; durationMs?: number }
+
+/** Used for the first estimate, before any build has recorded its duration. */
+const DEFAULT_BUILD_MS = 3 * 60_000
+/** The app releases its profile lock within seconds of quitting; past this, the install refuses. */
+const INSTALL_WAIT_SECONDS = 120
+
+let busy = false
+let progress: XosUpdateWindow | null = null
+
+function repoDir(): string {
+  return process.env.ORCA_XOS_REPO ?? join(homedir(), 'projects', 'orca-fork')
+}
+
+function stateDir(): string {
+  const dir = join(xosHome(), 'update')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+async function git(args: string[]): Promise<string | null> {
+  try {
+    const res = await runProcess({
+      program: 'git',
+      args: ['-C', repoDir(), ...args],
+      timeoutMs: 15_000
+    })
+    return res.code === 0 ? res.stdout.trim() : null
+  } catch {
+    return null
+  }
+}
+
+/** The commit this build was made from, from the `<release>+xos.<sha>` version stamp. */
+function runningSha(): string | null {
+  return /\+xos\.([0-9a-f]+)/.exec(app.getVersion())?.[1] ?? null
+}
+
+function readBuildState(): BuildState | null {
+  try {
+    return JSON.parse(readFileSync(join(stateDir(), 'last-build.json'), 'utf8')) as BuildState
+  } catch {
+    return null
+  }
+}
+
+function notify(body: string): void {
+  if (Notification.isSupported()) {
+    new Notification({ title: 'Orca XOS update', body }).show()
+  }
+}
+
+async function ask(message: string, detail: string, buttons: string[]): Promise<number> {
+  const result = await dialog.showMessageBox({
+    type: 'info',
+    title: 'Orca XOS update',
+    message,
+    detail,
+    buttons,
+    defaultId: 0,
+    cancelId: buttons.length - 1
+  })
+  return result.response
+}
+
+function runBuild(sha: string, logPath: string): Promise<{ ok: boolean; logPath: string }> {
+  const startedAt = Date.now()
+  const fd = openSync(logPath, 'a')
+  return new Promise((resolve) => {
+    const child = spawnProcess({
+      program: '/bin/bash',
+      args: [join(repoDir(), 'xos', 'build.sh')],
+      cwd: repoDir(),
+      stdio: ['ignore', fd, fd]
+    })
+    child.on('close', (code) => {
+      closeSync(fd)
+      if (code === 0) {
+        const state: BuildState = {
+          sha,
+          builtAt: new Date().toISOString(),
+          durationMs: Date.now() - startedAt
+        }
+        writeFileSync(join(stateDir(), 'last-build.json'), JSON.stringify(state))
+      }
+      resolve({ ok: code === 0, logPath })
+    })
+    child.on('error', () => resolve({ ok: false, logPath }))
+  })
+}
+
+/** Quit, then a detached switch-to-fork.sh waits for the profile lock to free and installs. */
+function installAndRestart(): void {
+  const logPath = join(stateDir(), 'install.log')
+  const script = join(repoDir(), 'xos', 'switch-to-fork.sh')
+  const fd = openSync(logPath, 'a')
+  const child = spawnProcess({
+    program: '/bin/bash',
+    args: [script, `--wait=${INSTALL_WAIT_SECONDS}`],
+    env: { ...process.env, ORCA_USER_DATA_PATH: app.getPath('userData') },
+    detached: true,
+    stdio: ['ignore', fd, fd]
+  })
+  child.unref()
+  closeSync(fd)
+  app.quit()
+}
+
+async function offerInstall(sha: string): Promise<void> {
+  const choice = await ask(
+    `Build ${sha} is ready to install.`,
+    'Orca will close, back up your profile, install the new build, and reopen. Running agent terminals keep running.',
+    ['Restart and install', 'Later']
+  )
+  if (choice === 0) {
+    installAndRestart()
+  }
+}
+
+async function checkAndUpdate(): Promise<void> {
+  const repo = repoDir()
+  if (!existsSync(join(repo, 'xos', 'build.sh'))) {
+    await ask(
+      'No XOS checkout found.',
+      `Expected the fork at ${repo} (set ORCA_XOS_REPO to change it).`,
+      ['OK']
+    )
+    return
+  }
+  const branch = await git(['branch', '--show-current'])
+  const head = await git(['rev-parse', '--short=10', 'HEAD'])
+  if (!head) {
+    await ask('Could not read the XOS checkout.', `git failed in ${repo}.`, ['OK'])
+    return
+  }
+  const running = runningSha()
+  const built = readBuildState()
+  if (running && head.startsWith(running)) {
+    const choice = await ask(
+      'Orca XOS is up to date.',
+      `Running ${running}, the latest commit on ${branch ?? 'the checkout'}.`,
+      ['OK', 'Rebuild anyway']
+    )
+    if (choice !== 1) {
+      return
+    }
+  } else if (built?.sha === head) {
+    await offerInstall(head)
+    return
+  } else {
+    const log = running ? await git(['log', '--oneline', '-8', `${running}..HEAD`]) : null
+    const dirty = await git(['status', '--porcelain'])
+    const choice = await ask(
+      `A newer XOS build is available (${head}).`,
+      [
+        running ? `Running ${running}. New on ${branch}:` : `Branch ${branch}:`,
+        log || '(commit list unavailable)',
+        branch !== 'xos' ? `\nNote: the checkout is on "${branch}", not "xos".` : '',
+        dirty ? '\nNote: the checkout has uncommitted changes; they will be included.' : '',
+        '\nBuilding takes a few minutes. A small window shows the progress; you can hide it and keep working.'
+      ].join('\n'),
+      ['Build and install', 'Cancel']
+    )
+    if (choice !== 0) {
+      return
+    }
+  }
+  await buildWithProgress(head, built?.durationMs ?? DEFAULT_BUILD_MS)
+}
+
+/** Runs the build behind a progress window that turns into the install prompt. */
+async function buildWithProgress(sha: string, expectedMs: number): Promise<void> {
+  const logPath = join(stateDir(), `build-${new Date().toISOString().replace(/[:.]/g, '-')}.log`)
+  const window = new XosUpdateWindow(sha, logPath, expectedMs, (action) => {
+    window.close()
+    progress = null
+    if (action === 'install') {
+      installAndRestart()
+    }
+  })
+  progress = window
+  window.start()
+  const result = await runBuild(sha, logPath)
+  window.finish(result.ok)
+  notify(
+    result.ok ? `Build ${sha} is ready to install.` : 'The XOS build failed. See the update window.'
+  )
+}
+
+/** Handles the fork's update menu item; returns false outside packaged Linux fork builds. */
+export function startXosSelfUpdate(): boolean {
+  if (!app.isPackaged || process.platform !== 'linux' || !runningSha()) {
+    return false
+  }
+  if (busy || progress) {
+    if (progress) {
+      progress.show()
+    } else {
+      notify('An XOS update is already in progress.')
+    }
+    return true
+  }
+  busy = true
+  void checkAndUpdate().finally(() => {
+    busy = false
+  })
+  return true
+}

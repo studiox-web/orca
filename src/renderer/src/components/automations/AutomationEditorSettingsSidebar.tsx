@@ -17,6 +17,7 @@ import { AutomationSessionField } from './AutomationSessionField'
 import { AutomationSetupDecisionField } from './AutomationSetupDecisionField'
 import { AutomationWorkspaceField } from './AutomationWorkspaceField'
 import { AutomationDestinationField } from './AutomationDestinationField'
+import { XosAutomationModelField } from '../xos-goals/XosAutomationModelField'
 import { AutomationExtraAgentArgsField } from './AutomationExtraAgentArgsField'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { AutomationDraft } from './AutomationEditorDialog'
@@ -94,7 +95,11 @@ export function AutomationEditorSettingsSidebar({
             onDraftChange={onDraftChange}
           />
           {surface === 'terminal' ? (
-            <AutomationExtraAgentArgsField draft={draft} onDraftChange={onDraftChange} />
+            <>
+              {/* XOS fork: structured model + effort over the extra arguments below. */}
+              <XosAutomationModelField draft={draft} onDraftChange={onDraftChange} />
+              <AutomationExtraAgentArgsField draft={draft} onDraftChange={onDraftChange} />
+            </>
           ) : null}
         </div>
         {destination ? (

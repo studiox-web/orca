@@ -4,6 +4,7 @@ import { JIRA_HANDLER_GROUP } from './jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from './linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from './reference-handler-group'
 import { PLUGIN_HANDLER_GROUPS } from './plugin-handler-groups'
+import { XOS_HANDLER_GROUPS } from './xos-handler-groups'
 
 export type HandlerGroup = {
   name: string
@@ -61,6 +62,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     ],
     load: async () => (await import('./handlers/automations.js')).AUTOMATION_HANDLERS
   },
+  ...XOS_HANDLER_GROUPS,
   {
     name: 'project',
     keys: [

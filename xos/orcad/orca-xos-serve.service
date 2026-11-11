@@ -1,0 +1,18 @@
+[Unit]
+Description=Orca XOS headless runtime (runs automation schedules with the UI closed)
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/orca-xos/orca-xos-serve.sh
+Restart=on-failure
+RestartSec=30
+# Agent CLIs (claude, codex, gemini) and node live here; cron jobs used the same PATH.
+Environment=PATH=%h/.local/bin:%h/.nvm/versions/node/v20.20.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=ORCA_SERVE_GPU=0
+# Let in-flight agent terminals detach cleanly; they live in Orca's PTY daemon, not this process.
+KillMode=mixed
+TimeoutStopSec=60
+
+[Install]
+WantedBy=default.target

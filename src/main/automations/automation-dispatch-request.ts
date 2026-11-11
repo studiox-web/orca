@@ -6,7 +6,7 @@ import type {
   AutomationRun,
   AutomationPrecheckResult
 } from '../../shared/automations-types'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { Store } from '../persistence/loading-store/store'
 import type { AutomationRunWriter } from './automation-run-writer'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
@@ -28,6 +28,7 @@ import {
 } from '../../shared/automation-run-failure-copy'
 import { isOrcadFencedAutomation, ORCAD_FENCED_AUTOMATION } from './orcad-fenced-automation'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
+import { xosBeforeLaunch } from '../xos/xos-run-gate'
 
 export type AutomationRendererChannel = Pick<WebContents, 'isDestroyed' | 'send'>
 
@@ -153,12 +154,34 @@ export async function requestAutomationDispatch(
   if (lateRefusal || !target.ok) {
     return refuse(lateRefusal ?? automationRunFailure('noDispatchHost'))
   }
+  // XOS fork: lane locks, run timeout, and the model for this run (fallback retries).
+  const gate = await xosBeforeLaunch(automation, run, {
+    repoRoot: target.repo.path,
+    cwd: target.cwd,
+    local: getRepoExecutionHostId(target.repo) === LOCAL_EXECUTION_HOST_ID
+  })
+  if ('refusal' in gate) {
+    return ctx.runs.updateRun({
+      runId: run.id,
+      status: gate.precheck ? 'skipped_precheck' : 'skipped_unavailable',
+      workspaceId: automation.workspaceId,
+      error: gate.refusal
+    })
+  }
+  if ('script' in gate) {
+    return ctx.runs.updateRun({
+      runId: run.id,
+      status: 'dispatched',
+      workspaceId: automation.workspaceId
+    })
+  }
+  const launchAutomation = gate.automation
   const renderer = automation.surface === 'chat' ? null : ctx.getRenderer()
   if (renderer) {
     return sendRendererDispatch(
       renderer,
       {
-        automation,
+        automation: launchAutomation,
         run,
         dispatchToken: createAutomationDispatchToken(automation.id, run.id)
       },
@@ -172,7 +195,7 @@ export async function requestAutomationDispatch(
   }
   return runHeadlessAutomationDispatch({
     ...ctx,
-    automation,
+    automation: launchAutomation,
     run,
     target,
     dispatcher: (request) => {

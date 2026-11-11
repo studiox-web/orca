@@ -107,7 +107,7 @@ function createRestartLaunchIsolation(
 export function createRestartSession(
   testInfo: TestInfo,
   extraEnv: Record<string, string> = {},
-  entry: { mainPath?: string } = {}
+  entry: { mainPath?: string; appRoot?: string } = {}
 ): RestartSession {
   const mainPath = entry.mainPath ?? path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
@@ -146,7 +146,10 @@ export function createRestartSession(
   const launch = async (options?: LaunchOptions): Promise<LaunchedOrca> => {
     runtimeWsPort ??= await reserveRestartRuntimeWsPort()
     const app = await electron.launch({
-      args: [...getOrcaElectronLaunchArgs(mainPath, headful), ...(options?.extraArgs ?? [])],
+      args: [
+        ...getOrcaElectronLaunchArgs(mainPath, headful, entry.appRoot),
+        ...(options?.extraArgs ?? [])
+      ],
       env: {
         ...homeIsolation.env,
         ...options?.extraEnv,
@@ -187,7 +190,7 @@ export function createRestartSession(
     runtimeWsPort ??= await reserveRestartRuntimeWsPort()
     return runProcess({
       program: executablePath,
-      args: getOrcaElectronLaunchArgs(mainPath, false),
+      args: getOrcaElectronLaunchArgs(mainPath, false, entry.appRoot),
       env: {
         ...homeIsolation.env,
         ORCA_BACKGROUND_LAUNCH: '1',

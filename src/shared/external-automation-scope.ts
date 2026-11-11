@@ -13,7 +13,8 @@ import type {
 } from './automations-types'
 
 export const EXTERNAL_AUTOMATION_PROVIDERS = [
-  'openclaw'
+  'openclaw',
+  'crontab'
 ] as const satisfies readonly ExternalAutomationProvider[]
 
 export function isExternalAutomationProvider(value: unknown): value is ExternalAutomationProvider {

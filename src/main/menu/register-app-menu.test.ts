@@ -15,6 +15,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  BaseWindow: class {},
   BrowserWindow: {
     getFocusedWindow: getFocusedWindowMock
   },
@@ -34,6 +35,7 @@ vi.mock('electron', () => ({
   }
 }))
 
+import { BaseWindow, MenuItem } from 'electron'
 import { getNextDefaultOnAppearanceSettingValue, registerAppMenu } from './register-app-menu'
 import { markNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
 
@@ -46,6 +48,7 @@ function buildMenuOptions() {
     onOpenSetupGuide: vi.fn(),
     onOpenFeatureTour: vi.fn(),
     onOpenCrashReport: vi.fn(),
+    onOpenGoals: vi.fn(),
     onBeforeReload: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
@@ -76,6 +79,18 @@ function getSubmenu(
 }
 
 describe('registerAppMenu', () => {
+  it('routes Goals from the native View menu through its callback', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+    const targetWindow = new BaseWindow()
+    const click = getSubmenu(getTemplate(), 'View').find((item) => item.label === 'Goals')?.click
+    expect(click).toBeTypeOf('function')
+    if (typeof click === 'function') {
+      click(new MenuItem({}), targetWindow, {})
+    }
+    expect(options.onOpenGoals).toHaveBeenCalledWith(targetWindow)
+  })
+
   it.each(['linux', 'win32', 'darwin'] as const)(
     'leaves Ctrl+M to the terminal while preserving macOS minimize on %s',
     (platform) => {

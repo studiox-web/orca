@@ -261,6 +261,9 @@ module.exports = {
     '!config{,/**/*}',
     // Cloud services deploy separately; their sources are not desktop runtime resources.
     '!cloud{,/**/*}',
+    // Alternate output directories must not pull older packages or local tooling into app.asar.
+    '!{dist,.tmp,.cache}{,/**/*}',
+    '!.mcp.json',
     // Release archives and other build staging are not runtime resources.
     '!.build{,/**/*}',
     // Worktree-local Vite dependency caches are development inputs.
@@ -352,6 +355,7 @@ module.exports = {
     'out/main/parcel-watcher-process-entry.js',
     'out/main/orcad/orcad-local-serve-selection-entry.js',
     'out/main/orcad/orcad-stale-lock-reclaim.js',
+    'out/main/xos/**',
     'out/main/chunks/**',
     'out/renderer/**',
     'out/mobile-web/**',

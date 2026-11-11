@@ -1,38 +1,58 @@
 # Isolated coordinated desktop checkpoint
 
+Graham approved the prepared hidden Playwright/CDP method on November 11, 2026 in
+place of the unavailable `electron` skill, followed by integration and push to XOS.
+This authorization does not enable live execution or install the app.
+
+## Verified combined app journey
+
+The combined XOS source passed both hidden Electron tests (exit 0):
+
+- `coordinated-app-lifecycle.spec.ts`: real local RPC creates a disabled parent,
+  completes one no-effect run, restarts the disposable profile, preserves exact
+  run/receipt identities, and replays the same request without another run.
+- `coordinated-app-renderer.spec.ts`: the actual DOM moves from XOS's organization
+  view to the native list, creates a parent and child, edits/saves/reopens it,
+  starts a no-effect run, inspects and reconciles the completed receipt, then
+  changes the definition while the existing run retains frozen revision 2.
+  The updated definition reaches revision 3 and stays disabled. A coordinator
+  brief alone is descriptive metadata; the test changes the outcome contract
+  to exercise execution revision advancement.
+
+Both assert that Electron windows remain hidden. The renderer uses 1280 by 900,
+dark theme; screenshots are saved under the test output directory. This journey
+is desktop Linux evidence, not a claim about installed, mobile or cross-OS runtime.
+
+## Isolation and entry selection
+
 The ordinary entry calls `startMainProcess()` without a composition. The separate
-`coordinated-app-entry.ts` calls that same bootstrap with typed dependencies after the
-active profile Store has been admitted. It uses the runtime-owned orchestration DB and
-the existing `state.automations` service, startup recovery, parent lanes and quit hook.
+`coordinated-app-entry.ts` calls the same bootstrap with typed dependencies after
+active-profile Store admission. It uses the existing runtime orchestration DB,
+Automation service, startup recovery, parent lanes and quit hook.
+
+The build emits its own package manifest under `out-coordinated/main` with the
+repository name/version and fixture main entry. The restart helper explicitly
+selects that package root; merely passing a custom main filename to the original
+helper selected the ordinary repository package instead. The default launch path
+for all other tests is unchanged.
 
 Only the disposable fixture profile enables `experimentalCoordinatedAutomations`.
-The fixture requires an unpackaged, hidden local desktop and an isolated HOME under its
-user-data directory. The host additionally checks the independent startup-selected active
-profile against both the injected root and Store directory on every admission. Missing,
-foreign or revoked profile authority refuses. Ordinary settings and composition are unchanged.
+The fixture requires an unpackaged, hidden local desktop and isolated HOME inside
+its temporary user-data directory. Admission checks the independent startup-selected
+profile, injected root and Store directory. Missing or foreign authority refuses.
 
-Workers use the existing in-process `fake_no_effects` provider. Effects are denied, and
-mutation lane acquisition refuses; this app fixture accepts read-only child definitions.
-It never calls a real provider, publisher or schedule. Stop, retry, human resolution and
-native session destinations remain unavailable. A Task/Dispatch identifier is not a session:
-the existing stub-agent `orchestration.workerStart` path creates its own Dispatch, so it
-cannot be substituted for a coordinated Dispatch without a reviewed attachment contract.
+The injected `fake_no_effects` provider accepts read-only child definitions. Effects
+are denied and mutation-lane acquisition refuses. No real provider, publisher or
+schedule runs. The fake run has no real worker session; unavailable controls remain
+unavailable. Native provider/PTY execution and real worker session navigation need
+separate physical-runtime acceptance. Ordinary packaged definition writes and
+provider execution remain disabled; a normal user build does not activate them.
 
-## Evidence and remaining check
+## Reproduce
 
-Node tests exercise the actual Store/runtime/service composition and pending-run recovery
-before admission. The custom main/preload/renderer bundle compiles to `out-coordinated/`,
-separate from ordinary output. These checks do not establish Electron startup or rendered UI.
-
-Electron was **not launched** for this checkpoint: the required `electron` skill was absent
-from installed skill roots, and the installed Orca CLI returned `Unknown skill topic "electron"`.
-Restore that instruction source before running the prepared hidden lifecycle spec. No
-focus or visible-window exception has been requested or applied.
-
-## Next hidden app journey
-
-Use Node 24.22.2 / pnpm 12.14.0 in this checkout after integrating the reviewed source and
-restoring the required skill. Build the explicit fixture root, then run only its own config:
+Use Node 24 and pnpm 12.14.0. The accepted run used Node 24.22.2. These commands
+build only `out-coordinated/`, select Electron-native dependencies, and run one
+hidden app at a time with disposable profiles. They do not use an installed profile.
 
 ```sh
 ORCA_BACKGROUND_LAUNCH=1 pnpm exec electron-vite build --mode e2e \
@@ -42,19 +62,7 @@ ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
   --config tests/e2e/coordinated-automation-harness/playwright.config.ts --workers=1
 ```
 
-`coordinated-app-lifecycle.spec.ts` owns a temporary profile/HOME through `createRestartSession`,
-uses a hidden 1280×900 renderer, and calls the actual local RPC transport. It checks dynamic
-fake-run availability, disabled parent creation, a read-only fake run and accepted receipt,
-then closes and reopens the same profile and checks exact historical identities/receipt and
-idempotent replay. It asserts all Electron windows remain hidden. The custom Playwright
-config does not build or launch the ordinary entry and runs one app at a time.
-
-After that passes, the renderer owner can add the create/edit/save/reopen journey against
-this same entry and profile fixture, using real DOM actions and assertions plus hidden CDP
-screenshots. Native worker navigation remains a separate missing contract; do not mark it
-complete from the fake Dispatch alone.
-
-The staged spec can be typechecked without launching Electron:
+Typecheck the fixture without launching Electron:
 
 ```sh
 pnpm exec tsc --noEmit --composite false --incremental false \

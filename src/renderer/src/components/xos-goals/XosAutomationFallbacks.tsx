@@ -1,0 +1,226 @@
+// XOS fork: an automation's model chain on its detail page (plan §3.2 "Fallbacks", RT5/RT6): the
+// primary model from its arguments, the ordered fallbacks tried when a run hits a usage limit, and
+// Auto mode, lane/timeout limits, auto-commit, and the recent runs (GD2).
+import React, { useCallback, useEffect, useState } from 'react'
+import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import type { Automation } from '../../../../shared/automations-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../../shared/tui-agent-display-names'
+import { readXosModelArgs, xosModelArgsSupported } from '../../../../shared/xos-model-args'
+import type {
+  XosAutomationRunConfig,
+  XosModelChoice,
+  XosRunAttempt
+} from '../../../../shared/xos-runtime-types'
+import type { AutomationDraft } from '../automations/AutomationEditorDialog'
+import { XosAutoCommitSection } from './XosAutoCommitSection'
+import { XosAutoModeSection } from './XosAutoModeSection'
+import { XosAutomationModelField } from './XosAutomationModelField'
+import { XosAutomationRunLimits } from './XosAutomationRunLimits'
+import { XosRunHistory, choiceLabel as label } from './XosRunHistory'
+import './xos-ops-cards.css'
+
+const AGENTS = (Object.keys(TUI_AGENT_DISPLAY_NAMES) as TuiAgent[]).filter(xosModelArgsSupported)
+
+function AddFallback({ onAdd }: { onAdd: (choice: XosModelChoice) => void }): React.JSX.Element {
+  const [draft, setDraft] = useState({ agentId: 'codex', extraAgentArgs: '' } as AutomationDraft)
+  return (
+    <div className="space-y-2 rounded-md border border-dashed p-3">
+      <Select
+        value={draft.agentId}
+        onValueChange={(agentId) =>
+          setDraft((current) => ({ ...current, agentId: agentId as TuiAgent, extraAgentArgs: '' }))
+        }
+      >
+        <SelectTrigger size="sm" className="w-full" aria-label="Fallback agent">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {AGENTS.map((agent) => (
+            <SelectItem key={agent} value={agent}>
+              {TUI_AGENT_DISPLAY_NAMES[agent]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <XosAutomationModelField draft={draft} onDraftChange={(update) => setDraft(update)} />
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          const { model, effort } = readXosModelArgs(draft.agentId, draft.extraAgentArgs)
+          onAdd({ agent: draft.agentId, model, effort })
+          setDraft((current) => ({ ...current, extraAgentArgs: '' }))
+        }}
+      >
+        <Plus className="size-3.5" />
+        Add fallback
+      </Button>
+    </div>
+  )
+}
+
+export function XosAutomationFallbacks({
+  automation
+}: {
+  automation: Automation
+}): React.JSX.Element | null {
+  const api = window.api?.xosGoals
+  const [config, setConfig] = useState<XosAutomationRunConfig | null>(null)
+  const [attempts, setAttempts] = useState<XosRunAttempt[]>([])
+  const [adding, setAdding] = useState(false)
+
+  const load = useCallback(async () => {
+    if (!api) {
+      return
+    }
+    const [nextConfig, nextAttempts] = await Promise.all([
+      api.getRunConfig({ automationId: automation.id }),
+      api.getRunAttempts({ automationId: automation.id, limit: 8 })
+    ])
+    setConfig(nextConfig)
+    setAttempts(nextAttempts)
+  }, [api, automation.id])
+
+  useEffect(() => {
+    void load()
+  }, [load, automation.lastRunAt])
+
+  if (!api || !config) {
+    return null
+  }
+
+  const save = async (next: XosAutomationRunConfig): Promise<void> => {
+    setConfig(next)
+    const result = await api.setRunConfig({ automationId: automation.id, config: next })
+    if (!result.ok) {
+      toast.error(result.error)
+      void load()
+    }
+  }
+  const move = (index: number, delta: number): void => {
+    const fallbacks = [...config.fallbacks]
+    const [entry] = fallbacks.splice(index, 1)
+    fallbacks.splice(index + delta, 0, entry)
+    void save({ ...config, fallbacks })
+  }
+  const { model, effort } = readXosModelArgs(automation.agentId, automation.extraAgentArgs ?? '')
+  // Stable keys for a reorderable list that may hold the same model twice.
+  const seen = new Map<string, number>()
+  const fallbackKeys = config.fallbacks.map((choice) => {
+    const text = label(choice)
+    const count = (seen.get(text) ?? 0) + 1
+    seen.set(text, count)
+    return `${text}#${count}`
+  })
+
+  return (
+    <section className="space-y-3 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[11px] font-medium uppercase text-muted-foreground">
+          Models, fallbacks and limits
+        </div>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          Also on manual runs
+          <Switch
+            checked={config.fallbackOnManualRuns}
+            onCheckedChange={(checked) => void save({ ...config, fallbackOnManualRuns: checked })}
+          />
+        </label>
+      </div>
+      {automation.surface === 'chat' && (
+        <p className="text-xs text-muted-foreground">
+          Fallback works for terminal runs. Chat runs keep using their agent&apos;s chat model.
+        </p>
+      )}
+      <ol className="space-y-1.5 text-sm">
+        <li className="flex items-center gap-2">
+          <span className="w-5 text-xs text-muted-foreground">1.</span>
+          <span className="min-w-0 flex-1 truncate font-medium">
+            {config.auto
+              ? `Auto · ${config.auto.tier} tier`
+              : label({ agent: automation.agentId, model, effort })}
+          </span>
+          <span className="text-xs text-muted-foreground">primary</span>
+        </li>
+        {config.fallbacks.map((choice, index) => (
+          <li key={fallbackKeys[index]} className="flex items-center gap-2">
+            <span className="w-5 text-xs text-muted-foreground">{index + 2}.</span>
+            <span className="min-w-0 flex-1 truncate">{label(choice)}</span>
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Move up"
+              disabled={index === 0}
+              onClick={() => move(index, -1)}
+            >
+              <ArrowUp className="size-3" />
+            </Button>
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Move down"
+              disabled={index === config.fallbacks.length - 1}
+              onClick={() => move(index, 1)}
+            >
+              <ArrowDown className="size-3" />
+            </Button>
+            <Button
+              type="button"
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Remove fallback"
+              onClick={() =>
+                void save({ ...config, fallbacks: config.fallbacks.filter((_, i) => i !== index) })
+              }
+            >
+              <X className="size-3" />
+            </Button>
+          </li>
+        ))}
+      </ol>
+      {adding ? (
+        <AddFallback
+          onAdd={(choice) => {
+            setAdding(false)
+            void save({ ...config, fallbacks: [...config.fallbacks, choice] })
+          }}
+        />
+      ) : (
+        config.fallbacks.length < 5 && (
+          <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(true)}>
+            <Plus className="size-3.5" />
+            Add fallback model
+          </Button>
+        )
+      )}
+      <p className="text-xs text-muted-foreground">
+        When a run stops on a usage limit, overload, sign-in problem or missing agent, Orca starts
+        it again on the next model. Other failures never fall back.
+      </p>
+      {automation.surface !== 'chat' && (
+        <XosAutoModeSection config={config} onSave={(next) => void save(next)} />
+      )}
+      <XosAutomationRunLimits config={config} onSave={(next) => void save(next)} />
+      <XosAutoCommitSection
+        automation={automation}
+        config={config}
+        onSave={(next) => void save(next)}
+      />
+      <XosRunHistory attempts={attempts} />
+    </section>
+  )
+}

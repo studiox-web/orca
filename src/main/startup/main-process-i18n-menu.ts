@@ -51,6 +51,12 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       recordCrashBreadcrumb('crash_report_opened')
       sendOpenCrashReport(targetWindow instanceof BrowserWindow ? targetWindow : null)
     },
+    onOpenGoals: (targetWindow) => {
+      const target = targetWindow instanceof BrowserWindow ? targetWindow : state.mainWindow
+      if (target && !target.isDestroyed()) {
+        target.webContents.send('ui:openGoals')
+      }
+    },
     onOpenFeatureTour: (targetWindow) => {
       recordCrashBreadcrumb('feature_tour_opened')
       // Route to the invoking renderer so hidden tests/multiple windows do not depend on global focus.

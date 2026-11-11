@@ -40,6 +40,7 @@ import {
   ToolbarIconButton,
   CoordinatedFlagOffBanner
 } from './automation-detail-components'
+import { XosAutomationFallbacks } from '../xos-goals/XosAutomationFallbacks'
 
 type AutomationDetailProps = {
   capturedOwner?: AutomationCapturedOwner
@@ -389,10 +390,13 @@ export function AutomationDetail({
           ) : null}
         </>
       ) : (
-        <AutomationPromptDisclosure
-          key={`${automation.id}:${automation.prompt}`}
-          prompt={automation.prompt}
-        />
+        <>
+          <XosAutomationFallbacks automation={automation} />
+          <AutomationPromptDisclosure
+            key={`${automation.id}:${automation.prompt}`}
+            prompt={automation.prompt}
+          />
+        </>
       )}
     </div>
   )

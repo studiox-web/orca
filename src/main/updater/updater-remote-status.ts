@@ -9,6 +9,7 @@ import { hasServeUpdateSupervisor } from '../serve-update-handoff'
 import { getLinuxPackageType } from '../linux-update-package-type'
 import { UpdaterNudge } from './updater-nudge'
 import type { UpdateInstallMode } from './updater-state'
+import { releaseUpdatesEnabled } from './updater-fork-guard'
 
 export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   protected getUpdateStatus(): UpdateStatus {
@@ -16,7 +17,7 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   }
 
   protected getRemoteServerUpdateSupport(): RemoteServerUpdateSupport {
-    if (!app.isPackaged) {
+    if (!releaseUpdatesEnabled()) {
       return {
         installMode: this.updateInstallMode,
         automatic: false,

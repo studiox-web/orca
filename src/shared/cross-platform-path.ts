@@ -32,6 +32,15 @@ export function normalizeRuntimePathSeparators(value: string): string {
   return normalized
 }
 
+export function runtimePathDisplayName(value: string | null | undefined): string | null {
+  const path = value?.trim()
+  if (!path) {
+    return null
+  }
+  const segments = path.replace(/\\/g, '/').split('/').filter(Boolean)
+  return segments.at(-1) ?? path
+}
+
 /** Probe // before the dominant FS-event scan; includes is ~30x cheaper than unconditional replacement. */
 function collapseRuntimePathSlashes(value: string): string {
   return value.includes('//') ? value.replace(/\/+/g, '/') : value
