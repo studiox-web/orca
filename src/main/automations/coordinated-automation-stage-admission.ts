@@ -16,6 +16,7 @@ import {
   COORDINATED_START_FAILURE_PREFIX,
   COORDINATED_TIMEOUT_PREFIX
 } from './coordinated-automation-attempt-prefixes'
+import { haltExpiredRun } from './coordinated-automation-wall-clock'
 import { withAttemptStatus } from './coordinated-automation-attempt-lineage'
 
 export { COORDINATED_START_FAILURE_PREFIX }
@@ -127,6 +128,13 @@ export function admitSettledAttempts(
 ): boolean {
   const before = ctx.ledger.progress.sequence
   for (const mapping of run.childMappings ?? []) {
+    haltExpiredRun(ctx, snapshot)
+    if (
+      ctx.ledger.progress.halt?.state === 'failed' ||
+      ctx.ledger.progress.escalations.some((entry) => entry.code === 'wall_clock_ceiling')
+    ) {
+      break
+    }
     const child = snapshot.resolvedChildren.find(
       (c) => c.childDefinitionId === mapping.childDefinitionId
     )

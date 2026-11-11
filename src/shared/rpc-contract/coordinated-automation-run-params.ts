@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { requiredString } from './rpc-param-primitives'
 import { ExpectedOwner } from './automation-params'
+import { CoordinatedStageGateCandidateSchema } from '../coordinated-automation-gate-candidate'
 
 const CoordinatedRunParent = z.strictObject({
   runtimeId: requiredString('Missing runtime authority'),
@@ -27,8 +28,8 @@ const CoordinatedRunOperatorBase = CoordinatedRunParent.extend({
 /**
  * Operator actions carry no request id: each is idempotent on its natural key and answers a
  * replay with `disposition: 'already_recorded'` and no new write — stop on the run, retry on
- * (stage, retryOfDispatchId), gate resolution on (gate, scope, decision). A different decision
- * for a resolved gate, or a retry naming anything but the latest attempt, is refused.
+ * (stage, retryOfDispatchId), gate resolution on (scope, child, gate, candidate, decision).
+ * Escalation is an audit event; approve/reject are mutually exclusive terminal decisions.
  */
 /** Idempotent operator stop: replays after the durable marker are acknowledged, not re-issued. */
 export const StopCoordinatedRun = CoordinatedRunOperatorBase
@@ -43,18 +44,15 @@ export const RetryCoordinatedStage = CoordinatedRunOperatorBase.extend({
 /** Bind an operator decision to the exact run/artifact/evidence scope of one pending gate. */
 export const ResolveCoordinatedGate = CoordinatedRunOperatorBase.extend({
   gateId: requiredString('Missing gate id'),
-  /** Disambiguates an id used by both a stage and a parent requirement; stage-first if omitted. */
+  /** Required when an id names more than one requirement. */
   gateScope: z.enum(['stage', 'parent', 'escalation']).optional(),
   decision: z.enum(['approve', 'reject', 'escalate']),
   note: z.string().min(1).max(2000).optional(),
   childDefinitionId: z.string().min(1).optional(),
   taskId: z.string().min(1).optional(),
   dispatchId: z.string().min(1).optional(),
-  /**
-   * Digest of the held report the operator was shown (stage.pendingApproval.reportDigest).
-   * Approving a stage gate requires it together with dispatchId; the host refuses if either
-   * differs from what it holds at submission.
-   */
+  stageCandidate: CoordinatedStageGateCandidateSchema.optional(),
+  /** Legacy exact-report pair with dispatchId; if stageCandidate is also supplied, both must agree. */
   expectedReportDigest: z.string().min(1).optional()
 })
 

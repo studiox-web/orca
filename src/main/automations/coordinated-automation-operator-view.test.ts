@@ -194,30 +194,34 @@ describe('coordinated operator view and scoped decisions', () => {
 
     expect(afterParent.stages[0].gateResolutionEligibility.approvableDispatchId).toBeNull()
 
-    // Without a scope the host binds stage-first, which still requires the exact stage.
+    // A shared ID without scope is ambiguous and must fail closed.
     await expect(
       adapter.resolveGate({ ...scope(run), gateId: 'signoff', decision: 'approve' })
-    ).rejects.toThrow(/belongs to stage "writer"/)
+    ).rejects.toThrow(/missing or ambiguous/)
     // A stage approval that names no exact Dispatch and report digest fails closed.
     await expect(
       adapter.resolveGate({
         ...scope(run),
         gateId: 'signoff',
+        gateScope: 'stage',
+        taskId: run.childMappings![0].taskId,
         decision: 'approve',
         childDefinitionId: 'writer'
       })
-    ).rejects.toThrow(/must name the exact Dispatch and report digest/)
+    ).rejects.toThrow(/exact Dispatch and report digest/)
     // Naming evidence the host does not hold is refused too: nothing has reported yet.
     await expect(
       adapter.resolveGate({
         ...scope(run),
         gateId: 'signoff',
+        gateScope: 'stage',
+        taskId: run.childMappings![0].taskId,
         decision: 'approve',
         childDefinitionId: 'writer',
         dispatchId: 'ctx_never_launched',
         expectedReportDigest: `sha256:${'0'.repeat(64)}`
       })
-    ).rejects.toThrow(/binds Dispatch|awaiting approval/)
+    ).rejects.toThrow(/Dispatch.*missing|Dispatch.*not|not found/)
     const replay = await adapter.resolveGate({
       ...scope(run),
       gateId: 'signoff',

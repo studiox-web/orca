@@ -1,3 +1,4 @@
+import { haltExpiredRun } from './coordinated-automation-wall-clock'
 import { createHash } from 'node:crypto'
 import type {
   CoordinatedEffectEntry,
@@ -175,8 +176,12 @@ export async function advanceStageEffects(
   const before = ctx.ledger.progress.sequence
   const automationRunId = ctx.ledger.progress.automationRunId
   for (const declared of declaredStageEffects(snapshot, automationRunId)) {
+    haltExpiredRun(ctx, snapshot)
     const progress = ctx.ledger.progress
-    if (progress.halt?.state === 'failed') {
+    if (
+      progress.halt?.state === 'failed' ||
+      progress.escalations.some((entry) => entry.code === 'wall_clock_ceiling')
+    ) {
       break
     }
     const entry = progress.effects[declared.effectId]

@@ -1,22 +1,31 @@
+import {
+  resolveOperatorGateScope,
+  type CoordinatedOperatorGateInput
+} from './coordinated-automation-operator-gate-scope'
+export type { CoordinatedOperatorGateInput } from './coordinated-automation-operator-gate-scope'
+import { sameStageGateCandidate } from '../../shared/coordinated-automation-gate-candidate'
+import {
+  currentStageGateCandidate,
+  decisionStageCandidate
+} from './coordinated-automation-gate-identity'
+import { haltExpiredRun } from './coordinated-automation-wall-clock'
+import {
+  decodeWorkerReportResult,
+  structuredReportDigest
+} from './coordinated-automation-worker-report-envelope'
 import type { AutomationRun } from '../../shared/automations-types'
 import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
 import { withAttemptStatus } from './coordinated-automation-attempt-lineage'
 import { assertHeldReportApprovable } from './coordinated-automation-attempt-validation'
-import type {
-  CoordinatedGateScope,
-  CoordinatedOperatorActionDisposition
-} from '../../shared/coordinated-automation-run-inspection'
-import {
-  LOCAL_OPERATOR_IDENTITY,
-  stageBoundDispatchId
-} from './coordinated-automation-operator-eligibility'
+import type { CoordinatedOperatorActionDisposition } from '../../shared/coordinated-automation-run-inspection'
+import { LOCAL_OPERATOR_IDENTITY } from './coordinated-automation-operator-eligibility'
 import {
   assertOperatorScope,
   recordedOperatorProgress,
-  requireOperatorLedger,
-  type CoordinatedOperatorScopeInput
+  requireOperatorLedger
 } from './coordinated-automation-operator-actions'
 import {
+  progressIdentityProblem,
   withHalt,
   withOperatorDecision,
   withRunApproval,
@@ -26,18 +35,6 @@ import {
   assertCoordinatorActive,
   type CoordinatedRecoveryContext
 } from './coordinated-automation-recovery-context'
-
-export type CoordinatedOperatorGateInput = CoordinatedOperatorScopeInput & {
-  gateId: string
-  gateScope?: CoordinatedGateScope
-  /** Digest of the held report the caller was shown; required for a stage approval. */
-  expectedReportDigest?: string
-  decision: 'approve' | 'reject' | 'escalate'
-  note?: string
-  childDefinitionId?: string
-  taskId?: string
-  dispatchId?: string
-}
 
 /**
  * Binds one operator decision to the exact gate: a stage approval requirement, a parent outcome
@@ -53,131 +50,102 @@ export function operatorResolveGate(
   assertCoordinatorActive(ctx)
   const snapshot = run.resolvedSnapshot!
   const recorded = recordedOperatorProgress(ctx, run)
-  const wants = (scope: CoordinatedGateScope): boolean =>
-    input.gateScope === undefined || input.gateScope === scope
-  const stageReq = wants('stage')
-    ? snapshot.resolvedChildren
-        .flatMap((child) =>
-          (child.stageAcceptance?.requiredApprovals ?? []).map((requirement) => ({
-            child,
-            requirement
-          }))
-        )
-        .find((entry) => entry.requirement.id === input.gateId)
-    : undefined
-  // Stage-first when the caller names no scope, matching how pending decisions are listed.
-  const parentReq =
-    !stageReq && wants('parent')
-      ? snapshot.outcomeContract.requiredApprovals.find(
-          (requirement) => requirement.id === input.gateId
-        )
-      : undefined
-  const escalation =
-    !stageReq && !parentReq && wants('escalation')
-      ? recorded?.escalations.find(
-          (entry) => entry.key === input.gateId && entry.requiresHumanDecision
-        )
-      : undefined
-  const scope: CoordinatedGateScope | null = stageReq
-    ? 'stage'
-    : parentReq
-      ? 'parent'
-      : escalation
-        ? 'escalation'
-        : null
-  if (!scope) {
+  if (recorded) {
+    const problem = progressIdentityProblem(recorded, {
+      automationRunId: run.id,
+      orchestrationRunId: run.orchestrationRunId!,
+      snapshot
+    })
+    if (problem) {
+      throw new Error(problem)
+    }
+  }
+  const { stageReq, parentReq, escalation, scope, mapping, held, candidate } =
+    resolveOperatorGateScope(ctx, run, input, recorded)
+  const decisions = recorded?.operatorDecisions ?? []
+  if (
+    decisions.some(
+      (entry) =>
+        entry.kind === 'gate_resolution' && entry.gateId === input.gateId && !entry.gateScope
+    )
+  ) {
     throw new Error(
-      `Gate "${input.gateId}" is not a pending approval requirement or human-decision escalation of this run.`
+      `Gate "${input.gateId}" has an ambiguous legacy decision; it cannot authorize another mutation.`
     )
   }
-  const held = stageReq
-    ? (recorded?.stages[stageReq.child.childDefinitionId]?.pendingApproval ?? null)
-    : null
-  const boundDispatch = stageReq
-    ? (held?.dispatchId ?? stageBoundDispatchId(recorded?.stages[stageReq.child.childDefinitionId]))
-    : null
-  const mapping = stageReq
-    ? run.childMappings?.find(
-        (entry) => entry.childDefinitionId === stageReq.child.childDefinitionId
-      )
-    : undefined
-  if (stageReq) {
-    if (input.childDefinitionId !== stageReq.child.childDefinitionId) {
-      throw new Error(
-        `Gate "${input.gateId}" belongs to stage "${stageReq.child.childDefinitionId}", not "${String(input.childDefinitionId)}".`
-      )
-    }
-    if (input.taskId && input.taskId !== mapping?.taskId) {
-      throw new Error(`Gate "${input.gateId}" does not belong to Task "${input.taskId}".`)
-    }
-    // Fail closed: an approval must name the exact evidence the approver was shown.
-    if (input.decision === 'approve' && (!input.dispatchId || !input.expectedReportDigest)) {
-      throw new Error(
-        `Approving stage gate "${input.gateId}" must name the exact Dispatch and report digest being approved.`
-      )
-    }
-  } else if (parentReq) {
-    if (input.childDefinitionId || input.taskId || input.dispatchId || input.expectedReportDigest) {
-      throw new Error(
-        `Gate "${input.gateId}" is parent-scoped and must not name stage scope fields.`
-      )
-    }
-  } else if (input.childDefinitionId && input.childDefinitionId !== escalation!.childDefinitionId) {
-    throw new Error(
-      `Escalation "${input.gateId}" belongs to stage "${String(escalation!.childDefinitionId)}", not "${input.childDefinitionId}".`
-    )
-  }
-
-  // What this decision speaks for: the candidate the caller saw, else what the host holds.
-  const candidateDispatch = stageReq ? (input.dispatchId ?? boundDispatch) : null
-  const candidateDigest = stageReq
-    ? (input.expectedReportDigest ?? held?.reportDigest ?? null)
-    : null
-  const earlier = (recorded?.operatorDecisions ?? []).find(
-    (decision) =>
-      decision.kind === 'gate_resolution' &&
-      decision.gateId === input.gateId &&
-      (decision.gateScope ?? scope) === scope &&
-      // A replay is the same decision about the same candidate, never a newer report's approval.
+  const matching = decisions.filter(
+    (entry) =>
+      entry.kind === 'gate_resolution' &&
+      entry.gateId === input.gateId &&
+      entry.gateScope === scope &&
       (scope !== 'stage' ||
-        (decision.dispatchId === candidateDispatch &&
-          (decision.reportDigest ?? null) === candidateDigest))
+        (entry.childDefinitionId === input.childDefinitionId &&
+          (!entry.taskId || entry.taskId === input.taskId) &&
+          sameStageGateCandidate(decisionStageCandidate(entry), candidate)))
   )
-  if (earlier) {
-    if (earlier.decision === input.decision) {
-      return 'already_recorded'
-    }
+  if (matching.some((entry) => entry.decision === input.decision)) {
+    return 'already_recorded'
+  }
+  const terminal = matching.find((entry) => entry.decision !== 'escalate' || scope === 'escalation')
+  if (terminal) {
     throw new Error(
-      `Gate "${input.gateId}" has already been resolved as "${String(earlier.decision)}".`
+      `Gate "${input.gateId}" has already been resolved as "${String(terminal.decision)}".`
     )
   }
   if (stageReq) {
-    if (input.dispatchId && input.dispatchId !== boundDispatch) {
+    const current = recorded
+      ? currentStageGateCandidate(recorded, stageReq.child.childDefinitionId)
+      : { kind: 'no_attempt' as const }
+    if (!sameStageGateCandidate(candidate, current)) {
       throw new Error(
-        `Gate "${input.gateId}" binds Dispatch "${String(boundDispatch)}", not "${input.dispatchId}".`
+        `The candidate awaiting a decision for gate "${input.gateId}" changed; inspect it again before deciding.`
       )
     }
-    if (input.expectedReportDigest && input.expectedReportDigest !== held?.reportDigest) {
-      throw new Error(
-        `The report awaiting approval for gate "${input.gateId}" is ${held?.reportDigest ?? 'no longer held'}, not ${input.expectedReportDigest}; inspect it again before deciding.`
-      )
+    const latest = ctx.orchestrationDb.getDispatchContext(mapping!.taskId)
+    if (
+      (candidate!.kind === 'no_attempt' && latest) ||
+      (candidate!.kind !== 'no_attempt' && latest?.id !== candidate!.dispatchId)
+    ) {
+      throw new Error(`Gate "${input.gateId}" no longer binds the named attempt.`)
     }
-    if (input.decision === 'approve') {
-      if (recorded?.halt) {
-        throw new Error(`The run is halted (${recorded.halt.state}); an approval cannot resume it.`)
-      }
-      // The held bytes and every artifact they name are re-verified at the moment of decision.
-      assertHeldReportApprovable(ctx, {
-        run,
-        snapshot,
-        child: stageReq.child,
-        taskId: mapping?.taskId,
-        held,
-        gateId: input.gateId
-      })
+    const decoded = decodeWorkerReportResult(ctx.orchestrationDb.getTask(mapping!.taskId)?.result)
+    if (candidate!.kind === 'attempt' && decoded.kind === 'structured') {
+      throw new Error('The named attempt now has a report; inspect its report before deciding.')
+    }
+    if (
+      candidate!.kind === 'report' &&
+      decoded.kind === 'structured' &&
+      structuredReportDigest(decoded.report) !== candidate!.reportDigest
+    ) {
+      throw new Error('The held report bytes changed; inspect it again before deciding.')
     }
   }
   const ledger = requireOperatorLedger(ctx, run)
+  haltExpiredRun({ ...ctx, ledger }, snapshot)
+  if ((stageReq || parentReq) && (ledger.progress.halt || ledger.progress.operatorStop)) {
+    const halt = ledger.progress.halt
+    if (halt && halt.state !== 'failed') {
+      ctx.store.recordCoordinatedRunHold({
+        automationRunId: run.id,
+        state: halt.state,
+        reason: halt.reason
+      })
+    }
+    throw new Error('The run is halted or stopping; a gate decision cannot resume it.')
+  }
+  if (stageReq && input.decision === 'approve') {
+    if (candidate?.kind !== 'report') {
+      throw new Error('Approval requires an exact held report.')
+    }
+    assertHeldReportApprovable(ctx, {
+      run,
+      snapshot,
+      child: stageReq.child,
+      taskId: mapping?.taskId,
+      held,
+      gateId: input.gateId
+    })
+  }
   const now = ctx.clock.now()
   const detail = input.note ?? `${input.decision} for gate "${input.gateId}".`
   ledger.update(`operator-gate:${input.decision}`, (current) => {
@@ -186,8 +154,9 @@ export function operatorResolveGate(
       at: now,
       actor: LOCAL_OPERATOR_IDENTITY,
       childDefinitionId: input.childDefinitionId ?? escalation?.childDefinitionId ?? null,
-      dispatchId: candidateDispatch ?? input.dispatchId ?? null,
-      ...(candidateDigest ? { reportDigest: candidateDigest } : {}),
+      dispatchId: candidate && candidate.kind !== 'no_attempt' ? candidate.dispatchId : null,
+      ...(candidate ? { stageCandidate: candidate, taskId: input.taskId } : {}),
+      ...(candidate?.kind === 'report' ? { reportDigest: candidate.reportDigest } : {}),
       gateId: input.gateId,
       gateScope: scope,
       decision: input.decision,
@@ -210,25 +179,26 @@ export function operatorResolveGate(
           ? {
               childDefinitionId: stageReq.child.childDefinitionId,
               taskId: mapping?.taskId,
-              dispatchId: boundDispatch ?? undefined,
+              dispatchId: held?.dispatchId,
               reportDigest: held?.reportDigest
             }
           : { targetChildId: parentReq?.targetChildId })
       })
     } else if (input.decision === 'reject') {
-      next = stageReq
-        ? rejectStageAtGate(
-            next,
-            stageReq.child.childDefinitionId,
-            mapping?.taskId,
-            `Gate "${input.gateId}" rejected by operator: ${detail}`,
-            now
-          )
-        : withHalt(next, {
-            state: 'failed',
-            reason: `Gate "${input.gateId}" rejected by operator: ${detail}`,
-            at: now
-          })
+      next =
+        stageReq && held
+          ? rejectStageAtGate(
+              next,
+              stageReq.child.childDefinitionId,
+              mapping?.taskId,
+              `Gate "${input.gateId}" rejected by operator: ${detail}`,
+              now
+            )
+          : withHalt(next, {
+              state: 'failed',
+              reason: `Gate "${input.gateId}" rejected by operator: ${detail}`,
+              at: now
+            })
     }
     return next
   })

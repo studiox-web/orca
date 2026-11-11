@@ -41,14 +41,21 @@ function gateScopeLabel(gate: CoordinatedPendingGate, view: CoordinatedRunView):
     (entry) => entry.childDefinitionId === gate.childDefinitionId
   )
   const dispatchId = stage?.pendingApproval?.dispatchId
+  const candidate = stage?.gateResolutionEligibility.stageCandidate
+  const attempt =
+    candidate?.kind === 'attempt'
+      ? `attempt ${candidate.dispatchId} (no held report)`
+      : candidate?.kind === 'no_attempt'
+        ? 'no attempt'
+        : 'candidate unavailable'
   return `${gate.childDefinitionId} / ${stage?.taskId ?? 'no-task'} / ${
-    dispatchId ? `approve binds ${dispatchId}` : 'no held report to approve'
+    dispatchId ? `report from ${dispatchId}` : attempt
   }`
 }
 
 const GATE_IMPACT = {
   stage:
-    'Approval applies only to the held report shown here. A changed report or attempt requires a new decision; this does not reopen the completed worker.',
+    'This decision applies only to the report or attempt shown here. Rejecting a held report may start a retry within the saved retry budget. With no held report, rejection halts the run. Escalation leaves the requirement pending for a later approval or rejection.',
   parent: 'This decision applies to the parent outcome, not to any one stage.',
   escalation:
     'An escalation decision records your acknowledgement only. It does not clear the halt or approve a requirement.'

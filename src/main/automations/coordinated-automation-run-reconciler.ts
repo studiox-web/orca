@@ -26,10 +26,8 @@ import { acceptedStageReports } from './coordinated-automation-accepted-reports'
 import { admitSettledAttempts } from './coordinated-automation-stage-admission'
 import { isCompleteCoordinatedHostApproval } from './coordinated-automation-approval-validation'
 import { resolveRunWorkspacePath } from './coordinated-automation-attempt-validation'
-import {
-  haltExpiredApprovalHolds,
-  dispatchRunnableStages
-} from './coordinated-automation-stage-dispatch'
+import { dispatchRunnableStages } from './coordinated-automation-stage-dispatch'
+import { haltExpiredRun } from './coordinated-automation-wall-clock'
 import {
   reconcileStartingAttempts,
   repairNativeChildDispatchMappings,
@@ -137,6 +135,10 @@ async function tryComplete(
   run: AutomationRun,
   snapshot: ResolvedAutomationRunSnapshot
 ): Promise<CoordinatedRunOutcome | null> {
+  haltExpiredRun(ctx, snapshot)
+  if (ctx.ledger.progress.halt || ctx.ledger.progress.operatorStop) {
+    return null
+  }
   const progress = ctx.ledger.progress
   const stages = Object.values(progress.stages)
   const effects = unresolvedEffects(snapshot, progress)
@@ -239,10 +241,11 @@ export async function reconcileCoordinatedRun(
     progressed = repairNativeChildDispatchMappings(ctx, run) || progressed
     progressed = (await settleStoppingAttemptsForReconcile(ctx, run)) || progressed
     progressed = abandonStoppedAttempts(ctx, run) || progressed
+    progressed = haltExpiredRun(ctx, snapshot) || progressed
     progressed = admitSettledAttempts(ctx, run, snapshot) || progressed
-    progressed = haltExpiredApprovalHolds(ctx, snapshot) || progressed
     syncNativeReadiness(ctx, run, snapshot)
     reverifyAcceptedArtifacts(ctx, run, snapshot)
+    haltExpiredRun(ctx, snapshot)
     if (ctx.effectAdapter) {
       progressed = (await advanceStageEffects(ctx, snapshot)) || progressed
       assertCoordinatorActive(ctx)

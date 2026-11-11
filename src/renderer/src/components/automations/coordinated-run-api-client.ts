@@ -1,7 +1,7 @@
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations-types'
 import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type {
@@ -15,7 +15,8 @@ import type {
 } from '../../../../shared/rpc-contract/coordinated-automation-run-params'
 import { COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
 import type { CoordinatedRunOperatorAction } from './coordinated-run-operator-client'
-import { ownerKey } from '../../../../shared/automation-owner-key'
+import type { CoordinatedRunBinding } from './coordinated-run-binding'
+export { coordinatedRunBindingKey, type CoordinatedRunBinding } from './coordinated-run-binding'
 import { getAutomationAuthorityTarget } from './automation-host-client'
 import { listAutomationRunsForOwner } from './automation-scoped-list-client'
 import { REQUEST_TIMEOUT_MS } from './automation-capability-probe'
@@ -27,11 +28,6 @@ export type CoordinatedRunRequest = {
   unconfirmedOperator?: { action: CoordinatedRunOperatorAction; label: string; detail: string }
 }
 export type CoordinatedRunRequests = Map<string, CoordinatedRunRequest>
-export type CoordinatedRunBinding = { automation: Automation; owner: AutomationOwnerRef }
-
-export function coordinatedRunBindingKey(binding: CoordinatedRunBinding): string {
-  return JSON.stringify([ownerKey(binding.owner), binding.automation.id])
-}
 
 async function callHost<T>(owner: AutomationOwnerRef, method: string, input?: unknown): Promise<T> {
   return callRuntimeRpc<T>(getAutomationAuthorityTarget(owner.authority), method, input, {

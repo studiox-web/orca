@@ -188,6 +188,11 @@ describe('coordinated run operator client', () => {
           childDefinitionId: 'child-reviewer',
           taskId: 'task_rev_3',
           dispatchId: 'ctx_rev_1',
+          stageCandidate: {
+            kind: 'report',
+            dispatchId: 'ctx_rev_1',
+            reportDigest: inspected.inspection.stages[2].pendingApproval!.reportDigest
+          },
           expectedReportDigest: inspected.inspection.stages[2].pendingApproval!.reportDigest
         }
       ],

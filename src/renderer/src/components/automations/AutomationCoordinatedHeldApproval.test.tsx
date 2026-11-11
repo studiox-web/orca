@@ -125,6 +125,11 @@ describe.each([false, true])('held approval on pinned route %s', (pinned) => {
       decision: 'approve',
       childDefinitionId: 'child-reviewer',
       taskId: 'task_rev_3',
+      stageCandidate: {
+        kind: 'report',
+        dispatchId: 'ctx_rev_1',
+        reportDigest: view.inspection.stages[2].pendingApproval!.reportDigest
+      },
       dispatchId: 'ctx_rev_1',
       expectedReportDigest: view.inspection.stages[2].pendingApproval!.reportDigest
     })
@@ -168,6 +173,10 @@ describe.each([false, true])('held approval on pinned route %s', (pinned) => {
       const stage = view.inspection.stages[2]
       if (kind === 'missing') {
         delete stage.pendingApproval
+        stage.gateResolutionEligibility.stageCandidate = {
+          kind: 'attempt',
+          dispatchId: 'ctx_rev_1'
+        }
       } else {
         stage.pendingApproval!.report = { kind, reason: 'No verified report bytes.' }
       }
@@ -186,8 +195,16 @@ describe.each([false, true])('held approval on pinned route %s', (pinned) => {
         decision: 'reject',
         taskId: 'task_rev_3'
       })
-      expect(submissions()[0][2]).not.toHaveProperty('expectedReportDigest')
-      expect(submissions()[0][2]).not.toHaveProperty('dispatchId')
+      expect(submissions()[0][2]).toMatchObject({
+        stageCandidate:
+          kind === 'missing'
+            ? { kind: 'attempt', dispatchId: 'ctx_rev_1' }
+            : {
+                kind: 'report',
+                dispatchId: 'ctx_rev_1',
+                reportDigest: stage.pendingApproval!.reportDigest
+              }
+      })
     }
   )
 
@@ -223,5 +240,37 @@ describe.each([false, true])('held approval on pinned route %s', (pinned) => {
     expect(submissions()[1][2]).toEqual(original)
     expect(container.textContent).toContain('this request wrote nothing')
     expect(container.textContent).not.toContain('Its effect is unknown')
+  })
+
+  it('keeps rejection A bound during lost-response replay while B remains visible and can be approved', async () => {
+    loseAnswer = true
+    await render()
+    await open()
+    await click(dialog().querySelector('[aria-label="reject"]'))
+    await click(confirm())
+    const original = structuredClone(submissions()[0][2])
+    expect(container.textContent).toContain('Its effect is unknown')
+    const stage = view.inspection.stages[2]
+    stage.pendingApproval!.dispatchId = 'ctx_rev_2'
+    stage.pendingApproval!.reportDigest = 'sha256:report-b'
+    if (stage.pendingApproval!.report.kind === 'available') {
+      stage.pendingApproval!.report.summary = 'Report B awaiting signoff'
+    }
+    stage.gateResolutionEligibility.approvableDispatchId = 'ctx_rev_2'
+    await click(button(pinned ? 'Refresh run' : 'Refresh test runs'))
+    expect(container.textContent).toContain('Report B awaiting signoff')
+    loseAnswer = false
+    await click(button('Ask host about this request'))
+    expect(submissions()[1][2]).toEqual(original)
+    expect(container.textContent).toContain('already recorded this reject decision')
+    await open()
+    await click(dialog().querySelector('[aria-label="approve"]'))
+    await click(confirm())
+    expect(submissions()[2][2]).toMatchObject({
+      decision: 'approve',
+      dispatchId: 'ctx_rev_2',
+      expectedReportDigest: 'sha256:report-b',
+      stageCandidate: { kind: 'report', dispatchId: 'ctx_rev_2', reportDigest: 'sha256:report-b' }
+    })
   })
 })

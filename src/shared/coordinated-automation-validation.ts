@@ -56,6 +56,18 @@ export function validateChildGraph(
   const childMap = new Map<string, CoordinatedAutomationChildDefinition>()
 
   for (const child of children) {
+    const approvalIds = new Set<string>()
+    for (const requirement of child.stageAcceptance?.requiredApprovals ?? []) {
+      if (approvalIds.has(requirement.id)) {
+        errors.push({
+          code: 'INVALID_OUTCOME_CONTRACT',
+          message: `Duplicate required approval ID "${requirement.id}" within child "${child.id}".`,
+          childId: child.id,
+          path: `children.${child.id}.stageAcceptance.requiredApprovals`
+        })
+      }
+      approvalIds.add(requirement.id)
+    }
     if (seenChildIds.has(child.id)) {
       errors.push({
         code: 'DUPLICATE_CHILD_ID',

@@ -187,7 +187,7 @@ describe('captured gate scope and consent', () => {
   })
 
   it.each(['reject', 'escalate'] as const)(
-    'does not add approval fields to %s',
+    'binds %s to the exact report candidate too',
     async (decision) => {
       await submitCoordinatedRunOperatorAction(binding, run, { ...action, decision })
       expect(writes()[0][2]).toMatchObject({
@@ -196,8 +196,15 @@ describe('captured gate scope and consent', () => {
         childDefinitionId: 'child-reviewer',
         taskId: 'task_rev_3'
       })
-      expect(writes()[0][2]).not.toHaveProperty('dispatchId')
-      expect(writes()[0][2]).not.toHaveProperty('expectedReportDigest')
+      expect(writes()[0][2]).toMatchObject({
+        dispatchId: 'ctx_rev_1',
+        expectedReportDigest: action.candidate.heldReport!.reportDigest,
+        stageCandidate: {
+          kind: 'report',
+          dispatchId: 'ctx_rev_1',
+          reportDigest: action.candidate.heldReport!.reportDigest
+        }
+      })
     }
   )
 })

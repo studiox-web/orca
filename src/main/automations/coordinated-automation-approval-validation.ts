@@ -46,6 +46,7 @@ export function isCompleteCoordinatedHostApproval(
       typeof approval.childDefinitionId === 'string' &&
       typeof approval.taskId === 'string' &&
       typeof approval.dispatchId === 'string' &&
+      typeof approval.reportDigest === 'string' &&
       approval.targetChildId === undefined
     )
   }
@@ -174,9 +175,10 @@ export function validateStageApprovals(
     const byId = approvalsForScope(approvals, req.id, 'stage').filter(
       (a) =>
         a.scope !== 'stage' ||
-        a.reportDigest === undefined ||
-        context.reportDigest === undefined ||
-        a.reportDigest === context.reportDigest
+        ((a.childDefinitionId === undefined || a.childDefinitionId === context.childDefinitionId) &&
+          (a.reportDigest === undefined ||
+            context.reportDigest === undefined ||
+            a.reportDigest === context.reportDigest))
     )
     if (byId.length === 0) {
       missing.push(req)

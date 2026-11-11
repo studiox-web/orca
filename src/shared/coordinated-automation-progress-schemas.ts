@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CoordinatedStageGateCandidateSchema } from './coordinated-automation-gate-candidate'
 import type {
   CoordinatedAdmittedReport,
   CoordinatedEffectEntry,
@@ -138,6 +139,8 @@ export const CoordinatedRunProgressSchema: z.ZodType<CoordinatedRunProgress> = z
     .array(
       z.object({
         kind: z.enum(['stop', 'retry', 'gate_resolution']),
+        taskId: z.string().min(1).optional(),
+        stageCandidate: CoordinatedStageGateCandidateSchema.optional(),
         at: z.number(),
         actor: z.string().min(1),
         childDefinitionId: z.string().nullable(),

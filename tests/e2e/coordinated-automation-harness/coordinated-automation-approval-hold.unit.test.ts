@@ -66,6 +66,7 @@ function approval(runId: string, candidate: { dispatchId: string; reportDigest: 
     gateId: GATE,
     decision: 'approve' as const,
     childDefinitionId: 'draft',
+    taskId: env.taskId(runId, 'draft'),
     dispatchId: candidate.dispatchId,
     expectedReportDigest: candidate.reportDigest
   }

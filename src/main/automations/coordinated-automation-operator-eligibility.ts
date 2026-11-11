@@ -1,3 +1,4 @@
+import { currentStageGateCandidate, gateRecords } from './coordinated-automation-gate-identity'
 import type {
   CoordinatedGateResolutionEligibility,
   CoordinatedPendingDecision,
@@ -79,6 +80,7 @@ export function stageRetryEligibility(input: {
 }
 
 export function stageGateResolutionEligibility(input: {
+  taskId?: string
   progress: CoordinatedRunProgress
   child: ResolvedChildSnapshot
   runSettled: boolean
@@ -97,7 +99,8 @@ export function stageGateResolutionEligibility(input: {
     ...(child.stageAcceptance?.requiredApprovals ?? [])
       .filter(
         (requirement) =>
-          requirement.required !== false && gatePending(progress, requirement.id, 'stage')
+          requirement.required !== false &&
+          gatePending(progress, requirement.id, 'stage', child.childDefinitionId, input.taskId)
       )
       .map((requirement) => requirement.id),
     ...progress.escalations
@@ -110,8 +113,10 @@ export function stageGateResolutionEligibility(input: {
   // Only a held report can be approved; an attempt that has not reported offers no evidence.
   const approvableDispatchId =
     progress.stages[child.childDefinitionId]?.pendingApproval?.dispatchId ?? null
-  return pendingGateIds.length > 0
+  const stageCandidate = currentStageGateCandidate(progress, child.childDefinitionId)
+  return pendingGateIds.length > 0 && stageCandidate !== null
     ? {
+        stageCandidate,
         canResolve: true,
         reason: null,
         pendingGateId: pendingGateIds[0],
@@ -120,48 +125,31 @@ export function stageGateResolutionEligibility(input: {
       }
     : {
         canResolve: false,
-        reason: 'No pending gate awaits a decision for this stage.',
+        stageCandidate,
+        reason: 'No unambiguous pending gate awaits a decision for this stage.',
         pendingGateId: null,
         pendingGateIds,
         approvableDispatchId
       }
 }
 
-/** The one attempt a stage approval speaks for: the accepted Dispatch, else the latest launched. */
-export function stageBoundDispatchId(
-  stage: CoordinatedRunProgress['stages'][string] | undefined
-): string | null {
-  return stage ? (stage.acceptedDispatchId ?? lastAttemptDispatchId(stage)) : null
-}
-
 /** A requirement is pending in one scope until that scope records an approval or a rejection. */
 export function gatePending(
   progress: CoordinatedRunProgress,
   gateId: string,
-  scope: 'stage' | 'parent'
+  scope: 'stage' | 'parent',
+  childDefinitionId?: string,
+  taskId?: string
 ): boolean {
-  const approved = (progress.approvals ?? []).some(
-    (approval) =>
-      approval.scope === scope &&
-      approval.approvalId === gateId &&
-      // A stage approval of a superseded attempt does not approve the current one.
-      (scope === 'parent' || stageApprovalIsCurrent(progress, approval))
-  )
-  const rejected = (progress.operatorDecisions ?? []).some(
-    (decision) =>
-      decision.kind === 'gate_resolution' &&
-      decision.gateId === gateId &&
-      // Records written before scopes existed were stage-first; treat them as either scope.
-      (decision.gateScope ?? scope) === scope &&
-      decision.decision === 'reject'
-  )
-  return !approved && !rejected
+  const { approval, rejection } = gateRecords(progress, gateId, scope, childDefinitionId, taskId)
+  return !approval && !rejection
 }
 
 /** Pending operator decisions with the scope each is bound to: parent, stage, then escalations. */
 export function pendingHumanDecisions(
   progress: CoordinatedRunProgress,
-  snapshot: ResolvedAutomationRunSnapshot
+  snapshot: ResolvedAutomationRunSnapshot,
+  taskIds: ReadonlyMap<string, string> = new Map()
 ): CoordinatedPendingDecision[] {
   const pending: CoordinatedPendingDecision[] = []
   for (const requirement of snapshot.outcomeContract.requiredApprovals) {
@@ -171,7 +159,16 @@ export function pendingHumanDecisions(
   }
   for (const child of snapshot.resolvedChildren) {
     for (const requirement of child.stageAcceptance?.requiredApprovals ?? []) {
-      if (requirement.required !== false && gatePending(progress, requirement.id, 'stage')) {
+      if (
+        requirement.required !== false &&
+        gatePending(
+          progress,
+          requirement.id,
+          'stage',
+          child.childDefinitionId,
+          taskIds.get(child.childDefinitionId)
+        )
+      ) {
         pending.push({
           gateId: requirement.id,
           scope: 'stage',
@@ -203,23 +200,7 @@ function escalationPending(
       (decision) =>
         decision.kind === 'gate_resolution' &&
         decision.gateId === escalation.key &&
-        (decision.gateScope ?? 'escalation') === 'escalation'
+        decision.gateScope === 'escalation'
     )
-  )
-}
-
-/** A stage approval counts only for the stage's current attempt and the report bytes it named. */
-function stageApprovalIsCurrent(
-  progress: CoordinatedRunProgress,
-  approval: NonNullable<CoordinatedRunProgress['approvals']>[number]
-): boolean {
-  const stage = progress.stages[approval.childDefinitionId ?? '']
-  const reportDigest = stage?.pendingApproval?.reportDigest ?? stage?.acceptedReportDigest
-  return (
-    approval.dispatchId === (stageBoundDispatchId(stage) ?? undefined) &&
-    (approval.reportDigest === undefined ||
-      reportDigest === undefined ||
-      reportDigest === null ||
-      approval.reportDigest === reportDigest)
   )
 }

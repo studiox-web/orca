@@ -1,4 +1,5 @@
 import type { AutomationRunStatus } from './automations-types'
+import type { CoordinatedStageGateCandidate } from './coordinated-automation-gate-candidate'
 import type {
   CoordinatedAttemptRecord,
   CoordinatedEffectEntry,
@@ -51,6 +52,8 @@ export type CoordinatedRetryEligibility = {
 }
 
 export type CoordinatedGateResolutionEligibility = {
+  /** Explicit identity for reject/escalate even before a report exists; absent means unknown. */
+  stageCandidate?: CoordinatedStageGateCandidate | null
   canResolve: boolean
   reason: string | null
   /** Unmet approval requirement id or human-decision escalation key awaiting a decision. */
@@ -108,6 +111,7 @@ export type CoordinatedApprovalObservation = {
     childDefinitionId?: string
     taskId?: string
     dispatchId?: string
+    reportDigest?: string
   }
 }
 

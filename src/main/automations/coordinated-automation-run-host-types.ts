@@ -1,4 +1,5 @@
 import type { AutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
+import type { CoordinatedStageGateCandidate } from '../../shared/coordinated-automation-gate-candidate'
 import type {
   CoordinatedGateScope,
   CoordinatedManualRunResult,
@@ -112,6 +113,7 @@ export type CoordinatedRunRetryRequest = CoordinatedRunOperatorScope & {
 }
 
 export type CoordinatedRunGateRequest = CoordinatedRunOperatorScope & {
+  stageCandidate?: CoordinatedStageGateCandidate
   gateId: string
   gateScope?: CoordinatedGateScope
   expectedReportDigest?: string

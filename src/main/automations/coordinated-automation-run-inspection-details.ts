@@ -1,3 +1,4 @@
+import { currentStageGateCandidate, gateRecords } from './coordinated-automation-gate-identity'
 import type { AutomationRun } from '../../shared/automations-types'
 import type {
   Availability,
@@ -23,7 +24,6 @@ import {
 import { nativeDispatchLineageProblem } from './coordinated-automation-native-validation'
 import {
   pendingHumanDecisions,
-  stageBoundDispatchId,
   stageGateResolutionEligibility,
   stageRetryEligibility
 } from './coordinated-automation-operator-eligibility'
@@ -110,17 +110,16 @@ type ApprovalStatusProjection = Pick<
 function projectApprovalStatus(
   progress: CoordinatedRunProgress,
   requirement: RequirementLike,
-  scope: 'stage' | 'parent'
+  scope: 'stage' | 'parent',
+  childDefinitionId?: string,
+  taskId?: string
 ): ApprovalStatusProjection {
-  const approval = (progress.approvals ?? []).find(
-    (entry) => entry.scope === scope && entry.approvalId === requirement.id
-  )
-  const rejection = (progress.operatorDecisions ?? []).find(
-    (entry) =>
-      entry.kind === 'gate_resolution' &&
-      entry.gateId === requirement.id &&
-      (entry.gateScope ?? scope) === scope &&
-      entry.decision === 'reject'
+  const { approval, rejection } = gateRecords(
+    progress,
+    requirement.id,
+    scope,
+    childDefinitionId,
+    taskId
   )
   return {
     status: approval ? 'approved' : rejection ? 'rejected' : 'pending',
@@ -164,26 +163,40 @@ function stageObservation(
   requirement: RequirementLike
 ): CoordinatedApprovalObservation {
   const mapping = run.childMappings?.find((m) => m.childDefinitionId === child.childDefinitionId)
-  const stage = progress.stages[child.childDefinitionId]
+  const candidate = currentStageGateCandidate(progress, child.childDefinitionId)
   return {
     ...requirementFields(requirement),
-    ...projectApprovalStatus(progress, requirement, 'stage'),
+    ...projectApprovalStatus(
+      progress,
+      requirement,
+      'stage',
+      child.childDefinitionId,
+      mapping?.taskId
+    ),
     scope: {
       automationRunId: run.id,
       orchestrationRunId: run.orchestrationRunId ?? null,
       childDefinitionId: child.childDefinitionId,
       ...(mapping?.taskId ? { taskId: mapping.taskId } : {}),
-      ...(stageBoundDispatchId(stage) ? { dispatchId: stageBoundDispatchId(stage)! } : {})
+      ...(candidate && candidate.kind !== 'no_attempt' ? { dispatchId: candidate.dispatchId } : {}),
+      ...(candidate?.kind === 'report' ? { reportDigest: candidate.reportDigest } : {})
     }
   }
 }
 
 export function runHumanResolution(input: {
+  run: AutomationRun
   snapshot: ResolvedAutomationRunSnapshot
   progress: CoordinatedRunProgress | null
 }): CoordinatedRunHumanResolution {
   const pendingDecisions = input.progress
-    ? pendingHumanDecisions(input.progress, input.snapshot)
+    ? pendingHumanDecisions(
+        input.progress,
+        input.snapshot,
+        new Map(
+          input.run.childMappings?.map((mapping) => [mapping.childDefinitionId, mapping.taskId])
+        )
+      )
     : []
   const pendingDecisionKeys = pendingDecisions.map((decision) => decision.gateId)
   return pendingDecisions.length > 0
@@ -198,6 +211,7 @@ export function runHumanResolution(input: {
 
 /** Both operator eligibility projections for one stage, or the exact read failure reason. */
 export function stageOperatorEligibility(input: {
+  taskId?: string
   progress: Availability<{ progress: CoordinatedRunProgress }>
   child: ResolvedChildSnapshot
   runSettled: boolean
@@ -218,6 +232,7 @@ export function stageOperatorEligibility(input: {
   return {
     retry: stageRetryEligibility({ progress, child: input.child, runSettled: input.runSettled }),
     gate: stageGateResolutionEligibility({
+      taskId: input.taskId,
       progress,
       child: input.child,
       runSettled: input.runSettled

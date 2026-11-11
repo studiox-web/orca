@@ -291,7 +291,7 @@ describe('selected host run operator controls', () => {
     await render()
     const first = () => container.querySelector('[aria-label="Pending decisions"] li')!
     await click('Resolve', first())
-    expect(document.body.textContent).toContain('approve binds ctx_rev_1')
+    expect(document.body.textContent).toContain('report from ctx_rev_1')
     expect(button('Confirm Gate Decision').disabled).toBe(false)
     await click('Cancel', document.body)
     const waiting = coordinatedHostActiveViewFixture()

@@ -2,12 +2,16 @@ import type {
   CoordinatedPendingDecision,
   CoordinatedStagePendingApprovalView
 } from '../../../../shared/coordinated-automation-run-inspection'
+import {
+  sameStageGateCandidate,
+  type CoordinatedStageGateCandidate
+} from '../../../../shared/coordinated-automation-gate-candidate'
 import type { CoordinatedRunView } from '../../../../shared/coordinated-automation-run-view'
 import type {
   ResolveCoordinatedGateInput,
   StopCoordinatedRunInput
 } from '../../../../shared/rpc-contract/coordinated-automation-run-params'
-import { coordinatedRunBindingKey, type CoordinatedRunBinding } from './coordinated-run-api-client'
+import { coordinatedRunBindingKey, type CoordinatedRunBinding } from './coordinated-run-binding'
 
 export type CoordinatedGateCandidate = {
   bindingKey: string
@@ -15,6 +19,7 @@ export type CoordinatedGateCandidate = {
   base: StopCoordinatedRunInput
   gate: CoordinatedPendingDecision
   taskId: string | null
+  stageCandidate?: CoordinatedStageGateCandidate | null
   heldReport?: CoordinatedStagePendingApprovalView
   approveUnavailableReason: string | null
 }
@@ -92,6 +97,17 @@ export function captureCoordinatedGateCandidate(
     base: runScope(view),
     gate: { scope: gate.scope, gateId: gate.gateId, childDefinitionId: gate.childDefinitionId },
     taskId: stage?.taskId ?? null,
+    ...(stage
+      ? {
+          stageCandidate: stage.pendingApproval
+            ? {
+                kind: 'report' as const,
+                dispatchId: stage.pendingApproval.dispatchId,
+                reportDigest: stage.pendingApproval.reportDigest
+              }
+            : (stage.gateResolutionEligibility.stageCandidate ?? null)
+        }
+      : {}),
     ...(stage?.pendingApproval ? { heldReport: stage.pendingApproval } : {}),
     approveUnavailableReason: approveRefusal(view, gate)
   })
@@ -135,6 +151,29 @@ export function coordinatedGateParams(
   }
   const approval = action.scope === 'stage' && action.decision === 'approve'
   const held = candidate.heldReport
+  if (action.scope === 'stage') {
+    if (!candidate.taskId || !candidate.stageCandidate) {
+      throw new Error(
+        'The host has not identified an exact stage candidate. Nothing was submitted.'
+      )
+    }
+    const current = stage?.pendingApproval
+      ? {
+          kind: 'report' as const,
+          dispatchId: stage.pendingApproval.dispatchId,
+          reportDigest: stage.pendingApproval.reportDigest
+        }
+      : stage?.gateResolutionEligibility.stageCandidate
+    if (
+      !replay &&
+      (!sameStageGateCandidate(candidate.stageCandidate, current) ||
+        (held && JSON.stringify(held.report) !== JSON.stringify(stage?.pendingApproval?.report)))
+    ) {
+      throw new Error(
+        'The held report or attempt changed since this decision was opened. Nothing was submitted; review the current candidate.'
+      )
+    }
+  }
   if (approval) {
     if (candidate.approveUnavailableReason || !held || held.report.kind !== 'available') {
       throw new Error(
@@ -185,7 +224,10 @@ export function coordinatedGateParams(
       ? { childDefinitionId: candidate.gate.childDefinitionId }
       : {}),
     ...(action.scope === 'stage' && candidate.taskId ? { taskId: candidate.taskId } : {}),
-    ...(approval && held
+    ...(action.scope === 'stage' && candidate.stageCandidate
+      ? { stageCandidate: candidate.stageCandidate }
+      : {}),
+    ...(action.scope === 'stage' && held
       ? { dispatchId: held.dispatchId, expectedReportDigest: held.reportDigest }
       : {})
   }

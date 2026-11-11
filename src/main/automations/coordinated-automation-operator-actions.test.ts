@@ -390,6 +390,7 @@ describe('Coordinated Run Operator Actions', () => {
       reason: null,
       pendingGateId: 'gate-1',
       pendingGateIds: ['gate-1'],
+      stageCandidate: { kind: 'no_attempt' },
       approvableDispatchId: null
     })
     const stopped = { ...progress, operatorStop: { at: 5, reason: null } }
@@ -451,7 +452,8 @@ describe('Coordinated Run Operator Actions', () => {
       reason: null,
       pendingGateId: 'gate-1',
       pendingGateIds: ['gate-1'],
-      approvableDispatchId: 'ctx_first'
+      approvableDispatchId: 'ctx_first',
+      stageCandidate: { kind: 'report', dispatchId: 'ctx_first', reportDigest: digest }
     })
     const approved = { ...waiting, approvals: [{ ...approval, reportDigest: digest }] }
     expect(

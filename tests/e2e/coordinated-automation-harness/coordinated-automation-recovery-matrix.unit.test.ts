@@ -427,7 +427,7 @@ describe('coordinated recovery: failure-injection matrix', () => {
     expect(progress.escalations.map((e) => e.code)).toEqual(['cost_ceiling'])
   })
 
-  it('wall-clock ceiling reached: no new Dispatch starts', async () => {
+  it('wall-clock ceiling reached before report admission: no acceptance or new Dispatch', async () => {
     const { runId } = env.createRun(pipeline({ globalCeilings: { maxWallClockSeconds: 60 } }))
     env.crashAt('report.after-native-settle')
     await expect(env.adapter.reconcileRun(runId)).rejects.toThrow(InjectedCoordinatorCrash)
@@ -437,7 +437,9 @@ describe('coordinated recovery: failure-injection matrix', () => {
     expect(outcome.state).toBe('blocked')
     expect(outcome.run.status).toBe('dispatched')
     expect(outcome.run.error).toContain('wall-clock')
-    expect(env.adapter.inspectProgress(runId)!.stages.draft.status).toBe('accepted')
+    expect(env.adapter.inspectProgress(runId)!.stages.draft.status).toBe('pending')
+    expect(env.adapter.inspectProgress(runId)!.reports).toEqual([])
+    expect(env.run(runId).completionReceipt ?? null).toBeNull()
     expect(env.dispatchIds(runId, 'review')).toHaveLength(0)
     expect(env.adapter.inspectProgress(runId)!.escalations.map((e) => e.code)).toEqual([
       'wall_clock_ceiling'

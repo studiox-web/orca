@@ -46,9 +46,10 @@ export function AutomationRunGateDecisionFields<S extends RunControlImpactStage>
       </div>
 
       <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">
-        Approve records an operator approval that the host’s acceptance checks read. Reject closes
-        this gate against the stage or run. Escalate records the decision and leaves the gate
-        pending. Definitions and run history are not edited.
+        For an approval requirement, approve records an operator approval and reject closes the
+        decision for this candidate. Escalate records an audit event and leaves the requirement
+        pending. An escalation notice is acknowledged only; its halt remains in place. Decisions are
+        recorded in this run’s history.
       </p>
       {request.kind === 'resolve_run_gate' && request.impactNote ? (
         <p className="rounded border border-border/50 bg-muted/20 p-2 text-2xs text-muted-foreground">

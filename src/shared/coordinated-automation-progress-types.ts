@@ -1,4 +1,5 @@
 import type { SemanticReceiptApproval } from './coordinated-automation-receipt-types'
+import type { CoordinatedStageGateCandidate } from './coordinated-automation-gate-candidate'
 
 /**
  * Host-owned durable progress for one coordinated run. Stage acceptance, loop counters,
@@ -156,6 +157,8 @@ export type CoordinatedOperatorDecision = {
   actor: string
   childDefinitionId: string | null
   dispatchId: string | null
+  taskId?: string
+  stageCandidate?: CoordinatedStageGateCandidate
   /** Held report a stage gate decision spoke for; a replay must name the same candidate. */
   reportDigest?: string
   gateId: string | null

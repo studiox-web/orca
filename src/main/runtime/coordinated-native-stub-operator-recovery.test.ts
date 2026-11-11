@@ -76,12 +76,14 @@ it('binds one gate id per scope: the stage approval names the exact attempt, the
     f.adapter.resolveGate({
       ...operatorScope(run),
       gateId: 'gate-review',
+      gateScope: 'stage',
+      taskId: writerTaskId,
       decision: 'approve',
       childDefinitionId: 'writer',
       dispatchId,
       expectedReportDigest: `sha256:${'0'.repeat(64)}`
     })
-  ).rejects.toThrow(/awaiting approval/)
+  ).rejects.toThrow(/candidate awaiting a decision/)
 
   await sendWorkerDone(f, {
     handle: terminal.handle,
@@ -115,6 +117,8 @@ it('binds one gate id per scope: the stage approval names the exact attempt, the
   const completed = await f.adapter.resolveGate({
     ...operatorScope(run),
     gateId: 'gate-review',
+    gateScope: 'stage',
+    taskId: writerTaskId,
     decision: 'approve',
     note: 'Reviewed the delivered report.',
     childDefinitionId: 'writer',
@@ -157,7 +161,7 @@ it('refuses gate replays and scope-mismatched decisions before any write', async
       gateId: 'gate-unknown',
       decision: 'approve'
     })
-  ).rejects.toThrow(/not a pending approval requirement/)
+  ).rejects.toThrow(/missing or ambiguous/)
   await expect(
     f.adapter.resolveGate({
       ...operatorScope(run),
@@ -167,7 +171,7 @@ it('refuses gate replays and scope-mismatched decisions before any write', async
       taskId: writerTaskId,
       dispatchId
     })
-  ).rejects.toThrow(/belongs to stage/)
+  ).rejects.toThrow(/missing or ambiguous/)
   const terminal = f.createdTerminals.at(-1)!
   await sendWorkerDone(f, {
     handle: terminal.handle,
@@ -195,7 +199,7 @@ it('refuses gate replays and scope-mismatched decisions before any write', async
   // Fail closed without the displayed evidence.
   await expect(
     f.adapter.resolveGate({ ...approve, expectedReportDigest: undefined })
-  ).rejects.toThrow(/must name the exact Dispatch and report digest/)
+  ).rejects.toThrow(/exact Dispatch and report digest/)
   expect((await f.adapter.resolveGate(approve)).disposition).toBe('recorded')
   // A lost acknowledgement replays to the same answer; a different decision is refused.
   expect((await f.adapter.resolveGate(approve)).disposition).toBe('already_recorded')
@@ -203,7 +207,7 @@ it('refuses gate replays and scope-mismatched decisions before any write', async
     /already been resolved as "approve"/
   )
   await expect(f.adapter.resolveGate({ ...approve, gateScope: 'parent' })).rejects.toThrow(
-    /not a pending approval requirement/
+    /missing or ambiguous/
   )
   const progress = f.adapter.inspectProgress(run.id)!
   expect(progress.approvals).toHaveLength(1)

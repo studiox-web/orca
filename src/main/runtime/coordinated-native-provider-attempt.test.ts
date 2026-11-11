@@ -237,6 +237,7 @@ it('keeps native technical settlement separate from approval and launches the de
   const approval = {
     ...operatorScope(run),
     gateId: 'editor',
+    taskId: writerTaskId,
     childDefinitionId: 'writer',
     decision: 'approve' as const,
     dispatchId,

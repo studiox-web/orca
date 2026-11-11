@@ -205,7 +205,12 @@ export function inspectCoordinatedRun(input: {
         }
       : null
     const runSettled = runIsOperatorSettled(run)
-    const operator = stageOperatorEligibility({ progress, child, runSettled })
+    const operator = stageOperatorEligibility({
+      progress,
+      child,
+      runSettled,
+      taskId: taskId ?? undefined
+    })
     const pendingApproval =
       !untrusted && progress.kind === 'available'
         ? stagePendingApproval(db, progress.progress, child.childDefinitionId, taskId)
@@ -278,7 +283,7 @@ export function inspectCoordinatedRun(input: {
       : { stage: [], parent: [] },
     operatorStop: trustedProgressOrNull(progress)?.operatorStop ?? null,
     humanResolution: snapshot
-      ? runHumanResolution({ snapshot, progress: trustedProgressOrNull(progress) })
+      ? runHumanResolution({ run, snapshot, progress: trustedProgressOrNull(progress) })
       : {
           available: false,
           reason: 'The run has no frozen snapshot.',
