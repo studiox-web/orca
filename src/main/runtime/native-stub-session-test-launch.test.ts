@@ -1,8 +1,10 @@
+import { buildCoordinatedNativeStub } from '../../../config/scripts/build-coordinated-native-stub.mjs'
+import { publishHostDescriptor } from './host-descriptor'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { createStore, closeTestStores, testState } from '../persistence/persistence-test-harness'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
@@ -36,12 +38,15 @@ import { getAppEnvironment } from '../../shared/app-environment'
 import * as invalidators from '../ipc/worktree-change-invalidators'
 import { _resetTerminalModelQueryAuthorityForTest } from './terminal-model-query-authority'
 import { _resetTerminalViewAttributesForTest } from './terminal-view-attribute-store'
+import * as bundle from './native-stub-report-bundle'
 
 const native = vi.hoisted(() => ({ spawn: vi.fn() }))
 vi.mock('node-pty', () => ({ spawn: native.spawn }))
 vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => false } }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
+
+beforeAll(() => buildCoordinatedNativeStub())
 
 const originalProvider = getLocalPtyProvider()
 let root = ''
@@ -98,6 +103,10 @@ async function setup() {
   disposers.push(host.revoke)
   const registration = vi.spyOn(invalidators, 'registerWorktreeChangeInvalidator')
   const runtime = new OrcaRuntimeService(store, undefined, { nativeStubSessionTest: host })
+  publishHostDescriptor(runtime.getRuntimeId(), {
+    installationId: 'b7ac5d7e-9e4a-40d4-a310-88baecf1c2cd'
+  })
+  disposers.push(() => publishHostDescriptor(runtime.getRuntimeId(), null))
   for (const result of registration.mock.results) {
     if (result.type === 'return') {
       disposers.push(result.value)
@@ -159,9 +168,7 @@ it('runs the fixed fixture through actual native create/controller/provider with
   expect(native.spawn).toHaveBeenCalledTimes(1)
   const [file, argv, options] = native.spawn.mock.calls[0]
   expect(file).toBe(realpathSync(process.execPath))
-  expect(argv).toEqual([
-    realpathSync(join(process.cwd(), 'tests/e2e/fixtures/golden-stub-agent/golden-stub-agent.js'))
-  ])
+  expect(argv).toEqual([realpathSync(join(process.cwd(), 'out-coordinated/native-stub/entry.cjs'))])
   expect(options.cwd).toBe(f.workspace)
   expect(options.env).toEqual({
     HOME: f.home,
@@ -172,6 +179,10 @@ it('runs the fixed fixture through actual native create/controller/provider with
     LANG: 'C.UTF-8',
     TERM: 'xterm-256color',
     ELECTRON_RUN_AS_NODE: '1',
+    ORCA_USER_DATA_PATH: root,
+    ORCA_RUNTIME_SOURCE_PROFILE_PATH: root,
+    ORCA_RUNTIME_SOURCE_ID: 'b7ac5d7e-9e4a-40d4-a310-88baecf1c2cd',
+    ORCA_RUNTIME_SOURCE_INCARNATION: f.runtime.getRuntimeId(),
     ORCA_AGENT_LAUNCH_TOKEN: created.launchToken,
     ORCA_TERMINAL_HANDLE: created.handle,
     ORCA_WORKSPACE_ID: created.worktreeId,
@@ -622,3 +633,26 @@ it.each([
     expect(f.runtime.getPtyLivenessVerdict(error.ptyId)?.status).toBe('exited')
   }
 )
+
+it('revalidates the bundle at physical spawn and refuses changed dependencies', async () => {
+  const f = await setup()
+  vi.spyOn(bundle, 'requireNativeStubReportBundle').mockImplementation(() => {
+    throw new Error('native_stub_fixture_changed')
+  })
+  await expect(f.runtime.createTerminal(f.selector, f.options)).rejects.toThrow(
+    'native_stub_fixture_changed'
+  )
+  expect(native.spawn).not.toHaveBeenCalled()
+})
+
+it('refuses a missing or changed published runtime source before spawning', async () => {
+  const f = await setup()
+  publishHostDescriptor(f.runtime.getRuntimeId(), null)
+  await expect(f.runtime.createTerminal(f.selector, f.options)).rejects.toThrow(
+    'native_stub_runtime_source_changed'
+  )
+  expect(native.spawn).not.toHaveBeenCalled()
+  await expect(f.host.prepare(f.runtime, f.selector)).rejects.toThrow(
+    'native_stub_runtime_source_unavailable'
+  )
+})

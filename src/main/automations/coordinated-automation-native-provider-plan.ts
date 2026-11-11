@@ -5,12 +5,7 @@ import type {
 } from '../../shared/coordinated-automation-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
-/**
- * Guarded source for running coordinated children on normal providers. Nothing here launches:
- * this module only translates one frozen child launch configuration into the exact inputs the
- * existing worker start already takes, or refuses. No host, capability string or RPC payload
- * installs it; execution needs a separate, explicit authorization that no source grants yet.
- */
+/** Translate one frozen child into exact worker-start inputs; only an opaque host permit executes it. */
 export const COORDINATED_NATIVE_PROVIDER_CAPABILITY = 'coordinated_native_provider_runs_v1'
 
 /** Where a frozen workspace actually lives, as its owning host proves it — never a guessed path. */
@@ -43,6 +38,7 @@ export type CoordinatedNativeProviderRefusalCode =
   | 'session_reuse_unsupported'
   | 'extra_args_unsupported'
   | 'workspace_mode_unsupported'
+  | 'setup_unsupported'
   | 'workspace_unresolved'
   | 'workspace_not_local'
   | 'launch_unsupported'
@@ -128,6 +124,12 @@ export function planCoordinatedNativeProviderLaunch(input: {
       `Child "${id}" is frozen to create a workspace per run; that creation is not wired to coordinated runs.`
     )
   }
+  if (config.setupDecision !== 'skip') {
+    return refuse(
+      'setup_unsupported',
+      `Child "${id}" freezes ${config.setupDecision} setup; an existing-workspace worker start cannot honor it.`
+    )
+  }
   if (!config.workspaceId || !parseWorkspaceKey(config.workspaceId)) {
     return refuse('workspace_unresolved', `Child "${id}" names no exact frozen workspace.`)
   }
@@ -173,6 +175,3 @@ export function planCoordinatedNativeProviderLaunch(input: {
     })
   }
 }
-
-export const COORDINATED_NATIVE_PROVIDER_EXECUTION_REFUSAL =
-  'coordinated_native_provider_execution_not_authorized: a valid launch plan exists, but real provider execution for coordinated runs has no admitted host and stays off.'

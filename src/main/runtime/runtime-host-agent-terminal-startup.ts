@@ -1,4 +1,5 @@
 import { resolveNativeStubTerminalOptions } from './native-stub-launch-options'
+import { requireNativeProviderLaunch } from './native-provider-execution-admission'
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import {
   resolveAgentTerminalCreateOptions,
@@ -22,6 +23,9 @@ export async function resolveHostAgentTerminalCreateOptions(
     return resolveNativeStubTerminalOptions(host.runtime, workspace, opts)
   }
   const resolvedLaunch = await resolveAgentTerminalCreateOptions(workspace, opts, host)
+  if (opts.preparedNativeProvider) {
+    requireNativeProviderLaunch(opts.preparedNativeProvider, host.runtime)
+  }
   const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
   // SSH launches prepare accounts on their own execution host.
   if (workspace.connectionId) {
@@ -29,6 +33,9 @@ export async function resolveHostAgentTerminalCreateOptions(
   }
   if (launch.launchAgent) {
     await host.accounts.prepareHostAgentLaunch(launch.launchAgent)
+    if (opts.preparedNativeProvider) {
+      requireNativeProviderLaunch(opts.preparedNativeProvider, host.runtime)
+    }
   }
   const hostLaunchEnv = host.accounts.hostLaunchEnvFor(launch.launchAgent)
   return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)

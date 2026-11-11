@@ -1,13 +1,9 @@
-import {
-  coordinatedNativeStubHostIsActive,
-  type CoordinatedNativeStubWorker
-} from './coordinated-automation-native-stub-worker'
+import type { CoordinatedAutomationAdapterContext } from './coordinated-automation-adapter-context'
+import { coordinatedNativeStubHostIsActive } from './coordinated-automation-native-stub-worker'
+import { coordinatedNativeProviderHostIsActive } from './coordinated-automation-native-provider-worker'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
 import type { CoordinatedOperatorActionDisposition } from '../../shared/coordinated-automation-run-inspection'
-import type { SemanticReceiptEffect } from '../../shared/coordinated-automation-receipt-types'
-import type { OrchestrationDb } from '../runtime/orchestration/db'
-import type { Store } from '../persistence/loading-store/store'
 import type { CoordinatedOrchestrationRecordProbe } from '../persistence/scheduling-automations/coordinated-automation-run-records'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
 import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
@@ -35,11 +31,7 @@ import {
   type CoordinatedOperatorScopeInput
 } from './coordinated-automation-operator-actions'
 import { requestCoordinatedNativeStops } from './coordinated-automation-native-stub-stop'
-import type { CoordinatedRunProgressStore } from './coordinated-automation-progress-store'
-import {
-  type CoordinatedBoundaryHook,
-  CoordinatedProgressLedger
-} from './coordinated-automation-progress-ledger'
+import { CoordinatedProgressLedger } from './coordinated-automation-progress-ledger'
 import {
   defaultCoordinatedProgressStore,
   dispatchReadyCoordinatedTasks
@@ -47,9 +39,6 @@ import {
 import {
   abandonCoordinatorWaits,
   assertCoordinatorActive,
-  type CoordinatedClock,
-  type CoordinatedFakeEffectAdapter,
-  type CoordinatedLaneLockProvider,
   type CoordinatedRecoveryContext,
   type CoordinatedWorkerIdentity,
   type CoordinatedWorkerProvider
@@ -78,28 +67,7 @@ export type CoordinatedOperatorOutcome = CoordinatedRunOutcome & {
   disposition: CoordinatedOperatorActionDisposition
 }
 
-export type CoordinatedAutomationAdapterContext = {
-  store: Store
-  orchestrationDb: OrchestrationDb
-  workerProvider?: CoordinatedWorkerProvider
-  nativeStubWorker?: CoordinatedNativeStubWorker
-  /** Guarded normal-provider planning facts; no run host injection carries them. */
-  nativeProviderHost?: CoordinatedRecoveryContext['nativeProviderHost']
-  runInParentLane?: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
-  /** Host-owned approvals; a function is re-read at every evaluation. */
-  hostApprovals?: readonly CoordinatedHostApproval[] | (() => readonly CoordinatedHostApproval[])
-  hostEffectReceipts?: readonly SemanticReceiptEffect[]
-  workspacePath?: string
-  trustedAuthorIdentity?: string
-  /** Durable progress; defaults to the profile's coordinated progress directory. */
-  progressStore?: CoordinatedRunProgressStore
-  clock?: CoordinatedClock
-  durableBoundary?: CoordinatedBoundaryHook
-  effectAdapter?: CoordinatedFakeEffectAdapter
-  laneLocks?: CoordinatedLaneLockProvider
-  /** Host lifetime gate; once false, the adapter refuses new claims, writes, and dispatches. */
-  isActive?: () => boolean
-}
+export type { CoordinatedAutomationAdapterContext } from './coordinated-automation-adapter-context'
 
 export class CoordinatedAutomationAdapter {
   readonly #ctx: CoordinatedRecoveryContext
@@ -116,7 +84,7 @@ export class CoordinatedAutomationAdapter {
       probe: orchestrationRecordProbe(ctx.orchestrationDb),
       workerProvider: ctx.workerProvider ?? createDefaultFakeNoEffectsWorkerProvider(ctx.store),
       nativeStubWorker: ctx.nativeStubWorker,
-      nativeProviderHost: ctx.nativeProviderHost,
+      nativeProviderWorker: ctx.nativeProviderWorker,
       progressStore: ctx.progressStore ?? defaultCoordinatedProgressStore(),
       clock: ctx.clock ?? {
         now: () => Date.now(),
@@ -136,7 +104,9 @@ export class CoordinatedAutomationAdapter {
       pendingWaits: new Set(),
       // A revoked or re-bound native host fences every claim, ledger write and receipt, not only launches.
       isActive: () =>
-        (ctx.isActive?.() ?? true) && coordinatedNativeStubHostIsActive(ctx.nativeStubWorker)
+        (ctx.isActive?.() ?? true) &&
+        coordinatedNativeStubHostIsActive(ctx.nativeStubWorker) &&
+        coordinatedNativeProviderHostIsActive(ctx.nativeProviderWorker)
     }
     this.#runInParentLane =
       ctx.runInParentLane ??
@@ -195,8 +165,9 @@ export class CoordinatedAutomationAdapter {
     return this.#operatorMutation(input.automationRunId, (run) => {
       const disposition = operatorStopRun(this.#ctx, run, input)
       // A replay re-requests nothing: the first request already asked native authority to stop.
-      if (disposition === 'recorded' && this.#ctx.nativeStubWorker) {
-        requestCoordinatedNativeStops(this.#ctx.nativeStubWorker, run)
+      const nativeWorker = this.#ctx.nativeStubWorker ?? this.#ctx.nativeProviderWorker
+      if (disposition === 'recorded' && nativeWorker) {
+        requestCoordinatedNativeStops(nativeWorker, run)
       }
       return disposition
     })

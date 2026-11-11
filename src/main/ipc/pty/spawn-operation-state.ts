@@ -4,6 +4,7 @@ import type { PtySpawnTiming } from './pty-spawn-timing'
 import type { PaneSpawnOperation } from './pane/pane-spawn-operation'
 import type { ReplacedPaneOwner } from './pane/replaced-pane-owner'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { PtySpawnCommitIdentity } from '../../providers/pty-provider-contract'
 
 export type PtySpawnOperationState = Pick<
   RuntimePtySpawnState,
@@ -68,5 +69,5 @@ export type PtySpawnExecutionFacts = {
   suppressRefusedLaunch?: () => void
   validateDispatch?: () => void
   beforeProviderSpawn?: () => void
-  reportPtySpawnCommitted?: () => void
+  reportPtySpawnCommitted?: (identity?: PtySpawnCommitIdentity) => void
 }

@@ -3,6 +3,10 @@ import {
   assertNativeStubProviderSpawn
 } from '../../../runtime/native-stub-launch-options'
 import { getLocalPtyProvider } from '../provider/registry'
+import {
+  assertNativeProviderRuntimeSpawn,
+  assertNativeProviderPhysicalSpawn
+} from '../../../runtime/native-provider-launch-options'
 import { runPtySpawn, normalizePtySpawnSessionId } from '../spawn-operation'
 import { requireAcceptedSpawn } from '../spawn-outcome'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
@@ -22,6 +26,9 @@ export async function spawnPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   request: RuntimePtySpawnArgs
 ) {
+  if (request.preparedNativeProvider !== undefined) {
+    assertNativeProviderRuntimeSpawn(request, deps.runtime)
+  }
   if (request.preparedNativeStub !== undefined) {
     assertNativeStubRuntimeSpawn(request, deps.runtime)
   }
@@ -34,6 +41,19 @@ export async function spawnPtyFromRuntimeController(
         assertNativeStubRuntimeSpawn(ctx.args, deps.runtime)
       } else {
         ctx.args = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
+      }
+      if (request.preparedNativeProvider !== undefined) {
+        if (
+          ctx.args.preparedNativeProvider !== request.preparedNativeProvider ||
+          ctx.args.onPtySpawnCommitted !== request.onPtySpawnCommitted ||
+          ctx.args.preAllocatedHandle !== request.preAllocatedHandle ||
+          ctx.args.tabId !== request.tabId ||
+          ctx.args.leafId !== request.leafId ||
+          ctx.args.launchToken !== request.launchToken
+        ) {
+          throw new Error('native_provider_identity_changed')
+        }
+        assertNativeProviderRuntimeSpawn(ctx.args, deps.runtime)
       }
       await prepareRuntimePtySpawn(ctx)
       await buildRuntimePtySpawnOptions(ctx)
@@ -49,6 +69,13 @@ export async function spawnPtyFromRuntimeController(
       paneKey: ctx.spawnIdentityPaneKey,
       preAllocatedHandle: args.preAllocatedHandle,
       validateDispatch: () => {
+        if (request.preparedNativeProvider !== undefined) {
+          assertNativeProviderRuntimeSpawn(ctx.args, deps.runtime)
+          assertNativeProviderPhysicalSpawn(ctx.spawnOptions)
+          if (ctx.provider !== getLocalPtyProvider()) {
+            throw new Error('native_provider_changed')
+          }
+        }
         if (ctx.args.preparedNativeStub !== undefined) {
           assertNativeStubRuntimeSpawn(ctx.args, deps.runtime)
           assertNativeStubProviderSpawn(ctx.spawnOptions)

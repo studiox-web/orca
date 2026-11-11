@@ -1,7 +1,6 @@
 import type { AutomationRun } from '../../shared/automations-types'
 import { computeSnapshotCanonicalDigest } from '../../shared/coordinated-automation-snapshot'
 import type { ResolvedChildSnapshot } from '../../shared/coordinated-automation-types'
-import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
@@ -34,7 +33,6 @@ export type NativeStubWorkerHost = {
   composition: NativeStubSessionTestComposition
 }
 const hosts = new WeakMap<CoordinatedNativeStubWorker, NativeStubWorkerHost>()
-const lanes = new WeakMap<OrchestrationDb, Map<string, Promise<void>>>()
 
 /** Process-local admission only; neither a capability string nor an RPC payload installs a host. */
 export function createCoordinatedNativeStubWorker(
@@ -47,19 +45,6 @@ export function createCoordinatedNativeStubWorker(
   const worker = Object.freeze({ kind: NATIVE_STUB_ATTEMPT })
   hosts.set(worker, input)
   return worker
-}
-
-export function inNativeStubDispatchLane<T>(
-  db: OrchestrationDb,
-  taskId: string,
-  operation: () => Promise<T>
-): Promise<T> {
-  let queue = lanes.get(db)
-  if (!queue) {
-    queue = new Map()
-    lanes.set(db, queue)
-  }
-  return runKeyedSerializedOperation(queue, taskId, operation)
 }
 
 /** Non-throwing liveness for host lifetime gates; a revoked or re-bound composition reads inactive. */

@@ -1,3 +1,4 @@
+import type { PreparedNativeProviderLaunch } from './native-provider-execution-admission'
 import type { PreparedNativeStubLaunch } from './native-stub-session-test-host'
 import type { RuntimePtyWorktreeRecord, RuntimeLeafRecord } from './runtime-terminal-state-records'
 import type { ProgramStatusFacet } from '../../shared/program-status/facet'
@@ -29,9 +30,14 @@ import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from '../../shared/worker-terminal-host-scope'
+import type { PtySpawnCommitIdentity } from '../providers/pty-provider-contract'
+
+export type TerminalPtySpawnCommitIdentity = PtySpawnCommitIdentity &
+  Readonly<{ handle: string; paneKey: string }>
 
 export type TerminalCreateOptions = {
   preparedNativeStub?: PreparedNativeStubLaunch
+  preparedNativeProvider?: PreparedNativeProviderLaunch
   command?: string
   /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string
@@ -114,7 +120,7 @@ export type TerminalCreateOptions = {
   signal?: AbortSignal
   /** Refuse (`worktree_terminals_sleeping`) instead of waking a worktree the host has put to sleep. */
   refuseSleptWorktree?: boolean
-  onPtySpawnCommitted?: () => void
+  onPtySpawnCommitted?: (identity?: TerminalPtySpawnCommitIdentity) => void
   /** Called before the spawn request leaves this process; a throw before it proves nothing spawned. */
   onPtySpawnDispatched?: (launch?: {
     launchConfig?: SleepingAgentLaunchConfig

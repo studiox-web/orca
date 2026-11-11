@@ -4,12 +4,8 @@ import {
   type OrchestrationCompatibilityEvidence
 } from './orchestration-compatibility-evidence'
 
-/**
- * Fixture-side half of the pinned stub's completion report. It runs with exactly what the stub
- * process has: the brief it received on its own stdin and its own environment. Credentials are
- * read from that environment the same way the real CLI reads them and travel only in the RPC
- * envelope — never in argv, the message body or anything this module returns for display.
- */
+export const NATIVE_STUB_BRIEF_ECHO_CHECK = 'native-stub-brief-echo'
+
 export type NativeStubCompletionRequest = Readonly<{
   method: 'orchestration.send'
   params: Readonly<{ from: string; type: 'worker_done'; subject: string; payload: string }>
@@ -21,6 +17,7 @@ export type NativeStubCompletionRefusal =
   | 'brief_has_no_report_contract'
   | 'environment_has_no_launch_identity'
   | 'brief_addressed_to_another_terminal'
+  | 'unsupported_fixture_check'
 
 export function buildNativeStubCompletionReport(input: {
   /** The submission the stub received, i.e. the dispatch brief typed into its composer. */
@@ -42,6 +39,9 @@ export function buildNativeStubCompletionReport(input: {
     return { kind: 'refused', reason: 'brief_addressed_to_another_terminal' }
   }
   const { requiredCheckIds, ...identity } = contract
+  if (requiredCheckIds.some((id) => id !== NATIVE_STUB_BRIEF_ECHO_CHECK)) {
+    return { kind: 'refused', reason: 'unsupported_fixture_check' }
+  }
   return {
     kind: 'request',
     request: Object.freeze({
@@ -63,7 +63,7 @@ export function buildNativeStubCompletionReport(input: {
             checks: requiredCheckIds.map((id) => ({
               id,
               outcome: 'passed',
-              evidence: ['Golden stub fixture: no work is performed, nothing can fail.']
+              evidence: ['The fixture received and echoed the complete dispatch brief.']
             })),
             effects: [],
             blockers: []

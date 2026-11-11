@@ -1,3 +1,4 @@
+import type { PreparedNativeProviderLaunch } from '../../../runtime/native-provider-execution-admission'
 import type { PreparedNativeStubLaunch } from '../../../runtime/native-stub-session-test-host'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
@@ -8,6 +9,7 @@ import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime
 import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
 import type {
   IPtyProvider,
+  PtySpawnCommitIdentity,
   PtySpawnOptions,
   PtySpawnResult
 } from '../../../providers/pty-provider-contract'
@@ -108,12 +110,13 @@ export type RuntimePtySpawnState = {
   provedSnapshotSeq: number | undefined
   preparedProvisionalExecutionContext: boolean
   releaseWorktreeSpawn: (() => void) | undefined
-  reportPtySpawnCommitted: () => void
+  reportPtySpawnCommitted: (identity?: PtySpawnCommitIdentity) => void
   preSpawnHiddenMarkId: string | null
 }
 
 export type RuntimePtySpawnArgs = {
   preparedNativeStub?: PreparedNativeStubLaunch
+  preparedNativeProvider?: PreparedNativeProviderLaunch
   resolvedWorkspace?: TerminalWorkspaceLaunchScope
   cols: number
   rows: number
@@ -165,7 +168,7 @@ export type RuntimePtySpawnArgs = {
   spawnIntent?: SpawnIntent
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
-  onPtySpawnCommitted?: () => void
+  onPtySpawnCommitted?: (identity?: PtySpawnCommitIdentity) => void
   /** Publish fresh resume outcome before writing its pane binding. */
   onResumeOutcome?: (ptyId: string, outcome: PaneResumeOutcome) => void
   paneSpawnOperation?: PaneSpawnOperation

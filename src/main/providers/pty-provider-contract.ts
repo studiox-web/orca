@@ -1,3 +1,4 @@
+import type { PreparedNativeProviderLaunch } from '../runtime/native-provider-execution-admission'
 import type { PreparedNativeStubLaunch } from '../runtime/native-stub-session-test-host'
 import type {
   PtyFencedTerminationRequest,
@@ -28,6 +29,11 @@ export type {
   PtyTransientFact
 } from './pty-provider-events'
 
+export type PtySpawnCommitIdentity = Readonly<{
+  ptyId: string
+  incarnationId: string
+}>
+
 export type PtyProviderBufferSnapshot = {
   data: string
   /** Live state that can be restored without an alternate-screen frame. */
@@ -51,6 +57,7 @@ export type PtyProviderBufferSnapshot = {
 
 export type PtySpawnOptions = {
   preparedNativeStub?: PreparedNativeStubLaunch
+  preparedNativeProvider?: PreparedNativeProviderLaunch
   cols: number
   rows: number
   cwd?: string
@@ -110,7 +117,7 @@ export type PtySpawnOptions = {
   /** Host-scoped structured-create identity used only for lower-owner replay. */
   agentSessionCreateOperationId?: string
   /** Signals that the native process exists even if later publication fails. */
-  onPtySpawnCommitted?: () => void
+  onPtySpawnCommitted?: (identity?: PtySpawnCommitIdentity) => void
   /** Cancels only before physical dispatch; operation identity fences later ambiguity. */
   signal?: AbortSignal
 }

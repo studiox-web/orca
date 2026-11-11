@@ -31,12 +31,12 @@ export async function buildRuntimePtySpawnOptions(
     ? false
     : (ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true)
   let ptySpawnCommitReported = false
-  ctx.reportPtySpawnCommitted = (): void => {
+  ctx.reportPtySpawnCommitted = (identity): void => {
     if (ptySpawnCommitReported) {
       return
     }
     ptySpawnCommitReported = true
-    args.onPtySpawnCommitted?.()
+    args.onPtySpawnCommitted?.(identity)
   }
   const deletions = args.preparedNativeStub
     ? { env: ctx.env, envToDelete: undefined }
@@ -113,6 +113,9 @@ export async function buildRuntimePtySpawnOptions(
         claudeAuth: ctx.claudeAuth
       })
   ctx.spawnOptions = launch.spawnOptions
+  if (args.preparedNativeProvider) {
+    ctx.spawnOptions.preparedNativeProvider = args.preparedNativeProvider
+  }
   ctx.env = launch.env
   ctx.launchCommand = launch.launchCommand
   ctx.provisionalPtySize = seedPtySpawnSize({

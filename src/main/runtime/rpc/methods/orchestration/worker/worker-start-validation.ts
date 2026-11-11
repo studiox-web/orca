@@ -49,7 +49,7 @@ export function validateFederatedWorkerStartPlacement(
 }
 
 export function prepareLocalWorkerStart(args: {
-  params: WorkerStartInput
+  params: Omit<WorkerStartInput, 'from'> & { from?: string }
   createsWorktree: boolean
   runtime: OrcaRuntimeService
   openCodeModelLaunchSupported?: boolean

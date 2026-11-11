@@ -5,34 +5,45 @@ import {
   CoordinatedHostStoppedError,
   type CoordinatedRecoveryContext
 } from './coordinated-automation-recovery-context'
-import { isCoordinatedNativeAttempt } from './coordinated-automation-native-attempt'
+import {
+  isCoordinatedNativeAttempt,
+  NATIVE_STUB_ATTEMPT
+} from './coordinated-automation-native-attempt'
 import {
   resolveActiveNativeStubHost,
   type CoordinatedNativeStubWorker
 } from './coordinated-automation-native-stub-worker'
+import {
+  resolveActiveNativeProviderHost,
+  type CoordinatedNativeProviderWorker
+} from './coordinated-automation-native-provider-worker'
 
 const TERMINAL_WORKER_STATES = ['succeeded', 'failed', 'stopped', 'abandoned']
+type CoordinatedNativeWorker = CoordinatedNativeStubWorker | CoordinatedNativeProviderWorker
+
+function resolveActiveNativeHost(worker: CoordinatedNativeWorker) {
+  if (worker.kind === NATIVE_STUB_ATTEMPT) {
+    const host = resolveActiveNativeStubHost(worker)
+    return {
+      ...host,
+      generation: assertNativeStubComposition(host.composition, host.runtime, host.store).generation
+    }
+  }
+  return resolveActiveNativeProviderHost(worker)
+}
 
 export type CoordinatedNativeStopRequests = {
-  /** Dispatches that accepted a new stop request in this call. */
   requested: string[]
-  /** Dispatches already terminal (or context-only) before the call. */
   alreadyTerminal: string[]
-  /** Dispatches whose stop request the native authority refused (e.g. mid-start). */
   problems: string[]
 }
 
-/**
- * Cancellation through native authority: every still-open mapped native Dispatch of the run is
- * asked to stop under the admitted composition generation. Idempotent per Dispatch — a replay
- * finds the earlier `stopping` row and counts it as already requested.
- */
+/** Native stop uses the admitted generation and never creates a worker report on the worker's behalf. */
 export function requestCoordinatedNativeStops(
-  worker: CoordinatedNativeStubWorker,
+  worker: CoordinatedNativeWorker,
   run: AutomationRun
 ): CoordinatedNativeStopRequests {
-  const host = resolveActiveNativeStubHost(worker)
-  const identity = assertNativeStubComposition(host.composition, host.runtime, host.store)
+  const host = resolveActiveNativeHost(worker)
   const result: CoordinatedNativeStopRequests = { requested: [], alreadyTerminal: [], problems: [] }
   for (const mapping of run.childMappings ?? []) {
     if (!mapping.dispatchId || !isCoordinatedNativeAttempt(host.db, mapping.dispatchId)) {
@@ -45,7 +56,7 @@ export function requestCoordinatedNativeStops(
       continue
     }
     try {
-      const begun = host.db.beginWorkerStop(dispatchId, identity.generation)
+      const begun = host.db.beginWorkerStop(dispatchId, host.generation)
       if (begun.disposition === 'stopping') {
         result.requested.push(dispatchId)
       } else {
@@ -60,15 +71,12 @@ export function requestCoordinatedNativeStops(
   return result
 }
 
-/**
- * Drive every stopping native Dispatch of the run to its proven terminal stop outcome: exit
- * evidence settles, anything unproven is marked stop-unknown. Never synthesizes worker reports.
- */
+/** Exit evidence settles a stop; anything unproven stays stop-unknown. */
 export async function settleStoppingCoordinatedNativeAttempts(
-  worker: CoordinatedNativeStubWorker,
+  worker: CoordinatedNativeWorker,
   run: AutomationRun
 ): Promise<{ settled: string[]; unknown: string[] }> {
-  const host = resolveActiveNativeStubHost(worker)
+  const host = resolveActiveNativeHost(worker)
   const settled: string[] = []
   const unknown: string[] = []
   for (const mapping of run.childMappings ?? []) {
@@ -86,15 +94,15 @@ export async function settleStoppingCoordinatedNativeAttempts(
   return { settled, unknown }
 }
 
-/** Reconcile-pass step: settle stopping attempts and report whether any settled (progress signal). */
 export async function settleStoppingAttemptsForReconcile(
-  ctx: Pick<CoordinatedRecoveryContext, 'nativeStubWorker' | 'isActive'>,
+  ctx: Pick<CoordinatedRecoveryContext, 'nativeStubWorker' | 'nativeProviderWorker' | 'isActive'>,
   run: AutomationRun
 ): Promise<boolean> {
-  if (!ctx.nativeStubWorker) {
+  const worker = ctx.nativeStubWorker ?? ctx.nativeProviderWorker
+  if (!worker) {
     return false
   }
-  const { settled } = await settleStoppingCoordinatedNativeAttempts(ctx.nativeStubWorker, run)
+  const { settled } = await settleStoppingCoordinatedNativeAttempts(worker, run)
   if (!ctx.isActive()) {
     throw new CoordinatedHostStoppedError()
   }

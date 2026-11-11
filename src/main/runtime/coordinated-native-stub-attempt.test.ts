@@ -216,7 +216,7 @@ it('refuses reports after the runtime generation changed, while the durable sett
   const retained = await plain.dispatchTask(run.id, writerTaskId)
   expect(retained).toMatchObject({ dispatchId, outcome: 'native_retained' })
   await expect(plain.dispatchTask(run.id, reviewerTaskId)).rejects.toThrow(
-    /without the native host/
+    /without the same native host/
   )
 })
 

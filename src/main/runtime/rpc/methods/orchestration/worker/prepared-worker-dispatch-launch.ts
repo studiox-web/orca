@@ -2,9 +2,15 @@ import {
   isDispatchedNativeStubLaunch,
   type PreparedNativeStubLaunch
 } from '../../../../native-stub-session-test-host'
+import {
+  consumeNativeProviderLaunch,
+  isDispatchedNativeProviderLaunch,
+  type PreparedNativeProviderLaunch
+} from '../../../../native-provider-execution-admission'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow } from '../../../../orchestration/types'
+import type { TerminalPtySpawnCommitIdentity } from '../../../../runtime-terminal-contracts'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
 import type { WorkerStartInput } from './worker-start-schema'
 import type { prepareLocalWorkerStart } from './worker-start-validation'
@@ -30,6 +36,7 @@ import { placedWorkerParty, type WorkerFollowUp } from './worker-follow-up-place
 
 type PreparedWorkerDispatchLaunch = {
   preparedNativeStub?: PreparedNativeStubLaunch
+  preparedNativeProvider?: PreparedNativeProviderLaunch
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   params: Omit<WorkerStartInput, 'from'> & { from?: string }
@@ -47,6 +54,8 @@ type PreparedWorkerDispatchLaunch = {
   orchestrationMutation: WorkerStartMutation | undefined
   recordStart: ReturnType<typeof prepareWorkerStartCard>
   followUp: WorkerFollowUp | undefined
+  preAllocatedTerminalHandle?: string
+  onTerminalSpawnCommitted?: (identity: TerminalPtySpawnCommitIdentity) => void
 }
 
 // Internal launch plumbing: the caller must authorize, validate and allocate the Dispatch first.
@@ -70,16 +79,26 @@ export async function launchPreparedWorkerDispatch(
   } = args
   let { mode, resolvedWorktree } = args
   const systemCoordinator = args.systemCoordinator
+  const nativePermit = args.preparedNativeStub ?? args.preparedNativeProvider
   if (
-    systemCoordinator &&
-    (!args.preparedNativeStub || systemCoordinator.runId !== run.id || params.from)
+    (args.preparedNativeStub && args.preparedNativeProvider) ||
+    (nativePermit && !systemCoordinator) ||
+    (systemCoordinator && (!nativePermit || systemCoordinator.runId !== run.id || params.from))
   ) {
-    throw new Error('native_stub_system_coordinator_mismatch')
+    throw new Error('native_system_coordinator_mismatch')
   }
   if (!systemCoordinator && !params.from) {
     throw new Error('worker_coordinator_required')
   }
   systemCoordinator?.assertCurrent()
+  if (args.preparedNativeProvider) {
+    consumeNativeProviderLaunch(args.preparedNativeProvider, {
+      runtime,
+      runId: run.id,
+      taskId: started.task.id,
+      dispatchId: started.dispatch.id
+    })
+  }
   // Only a host-owned coordinated launch of the pinned stub uses the stub's own readiness protocol.
   const stubFixture = systemCoordinator ? args.preparedNativeStub : undefined
   const effects: WorkerEffect[] = []
@@ -100,6 +119,7 @@ export async function launchPreparedWorkerDispatch(
   try {
     placed = await placeWorkerAgent({
       preparedNativeStub: args.preparedNativeStub,
+      preparedNativeProvider: args.preparedNativeProvider,
       runtime,
       db,
       dispatchId: started.dispatch.id,
@@ -112,6 +132,8 @@ export async function launchPreparedWorkerDispatch(
       agent,
       launchPreferences: launch.preferences,
       effects,
+      preAllocatedTerminalHandle: args.preAllocatedTerminalHandle,
+      onTerminalSpawnCommitted: args.onTerminalSpawnCommitted,
       onStage,
       followUp: args.followUp
     })
@@ -229,7 +251,9 @@ export async function launchPreparedWorkerDispatch(
       dispatchId: started.dispatch.id,
       failedStage,
       error:
-        systemCoordinator && isDispatchedNativeStubLaunch(args.preparedNativeStub)
+        systemCoordinator &&
+        (isDispatchedNativeStubLaunch(args.preparedNativeStub) ||
+          isDispatchedNativeProviderLaunch(args.preparedNativeProvider))
           ? Object.assign(
               new Error(error instanceof Error ? error.message : String(error), { cause: error }),
               { code: 'operation_unknown' }

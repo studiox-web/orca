@@ -171,7 +171,9 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
 ]
 
 const UNWIRED_CONSTRUCTION_OPTIONS: Readonly<Record<string, string>> = {
-  nativeStubSessionTest: 'Pinned in-process test fixture only; absent from both live roots.'
+  nativeStubSessionTest: 'Pinned in-process test fixture only; absent from both live roots.',
+  coordinatedNativeProviderExecution:
+    'Explicit isolated host admission only; absent from both live roots.'
 }
 
 const POSITIONAL_CONSTRUCTOR_PARAMETERS = ['stats'] as const

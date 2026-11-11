@@ -12,7 +12,9 @@ type RestoreHintWorkspace = { id: string; connectionId?: string | null }
 export type MigratedPaneRestoreHint = {
   peekCwd: (requestedCwd: string | null | undefined) => Promise<string | null>
   consume: () => void
-  consumeThen: (onCommitted?: () => void) => () => void
+  consumeThen: <Args extends unknown[]>(
+    onCommitted?: (...args: Args) => void
+  ) => (...args: Args) => void
 }
 
 export function migratedPaneRestoreHint(
@@ -24,10 +26,12 @@ export function migratedPaneRestoreHint(
   return {
     peekCwd: (requestedCwd) => peekMigratedPaneRestoreCwd(store, workspace, paneKey, requestedCwd),
     consume,
-    consumeThen: (onCommitted) => () => {
-      consume()
-      onCommitted?.()
-    }
+    consumeThen:
+      (onCommitted) =>
+      (...args) => {
+        consume()
+        onCommitted?.(...args)
+      }
   }
 }
 

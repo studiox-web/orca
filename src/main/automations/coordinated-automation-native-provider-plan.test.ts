@@ -86,16 +86,12 @@ describe('guarded normal-provider launch planning', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  async function frozenRun(
-    launchConfig: ChildLaunchConfig = FROZEN,
-    host?: CoordinatedNativeProviderHostFacts
-  ) {
+  async function frozenRun(launchConfig: ChildLaunchConfig = FROZEN) {
     const store = createStore()
     const provider = vi.fn(async () => ({}))
     const adapter = new CoordinatedAutomationAdapter({
       store,
       orchestrationDb: db,
-      nativeProviderHost: host,
       workerProvider: { capability: 'fake_no_effects', run: provider }
     })
     const automation = store.createCoordinatedAutomation(
@@ -173,31 +169,14 @@ describe('guarded normal-provider launch planning', () => {
     ['surface_unsupported', { surface: 'chat' }],
     ['session_reuse_unsupported', { reuseSession: true }],
     ['extra_args_unsupported', { extraAgentArgs: '--dangerous' }],
-    ['workspace_mode_unsupported', { workspaceMode: 'new_per_run', baseBranch: 'main' }]
+    ['workspace_mode_unsupported', { workspaceMode: 'new_per_run', baseBranch: 'main' }],
+    ['setup_unsupported', { setupDecision: 'run' }],
+    ['setup_unsupported', { setupDecision: 'inherit' }]
   ])('refuses a frozen configuration it cannot honor exactly (%s)', async (code, override) => {
     const { snapshot, child: frozen, taskId } = await frozenRun({ ...FROZEN, ...override })
     expect(
       planCoordinatedNativeProviderLaunch({ snapshot, child: frozen, taskId, host: hostFacts() })
     ).toMatchObject({ kind: 'refused', code })
-  })
-
-  it('stops a fully plannable launch before any Dispatch, process or provider call', async () => {
-    const { adapter, run, taskId, provider } = await frozenRun(FROZEN, hostFacts())
-    await expect(adapter.dispatchTask(run.id, taskId)).rejects.toThrow(
-      /coordinated_native_provider_execution_not_authorized/
-    )
-    expect(db.getDispatchContext(taskId)).toBeUndefined()
-    expect(provider).not.toHaveBeenCalled()
-  })
-
-  it('surfaces the exact refusal for an unplannable launch, also before any Dispatch', async () => {
-    const { adapter, run, taskId, provider } = await frozenRun(
-      FROZEN,
-      hostFacts({}, { kind: 'ssh', connectionId: 'conn-1' })
-    )
-    await expect(adapter.dispatchTask(run.id, taskId)).rejects.toThrow(/workspace_not_local/)
-    expect(db.getDispatchContext(taskId)).toBeUndefined()
-    expect(provider).not.toHaveBeenCalled()
   })
 
   it('leaves the fake no-process path untouched when no provider host is present', async () => {

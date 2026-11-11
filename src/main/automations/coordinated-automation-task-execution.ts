@@ -1,19 +1,16 @@
-import {
-  inNativeStubDispatchLane,
-  prepareCoordinatedNativeStubAttempt
-} from './coordinated-automation-native-stub-worker'
+import { prepareCoordinatedNativeStubAttempt } from './coordinated-automation-native-stub-worker'
+import { prepareCoordinatedNativeProviderAttempt } from './coordinated-automation-native-provider-worker'
+import { inNativeDispatchLane } from './coordinated-automation-native-dispatch-lane'
 import {
   isCoordinatedNativeAttempt,
   nativeAttemptBindingProblem,
-  runHasCoordinatedNativeAttempt
+  nativeAttemptStartOptions,
+  runCoordinatedNativeAttemptKind
 } from './coordinated-automation-native-attempt'
 import { CoordinatedAutomationLaunchRefusedError } from './coordinated-automation-materialization'
-import {
-  COORDINATED_NATIVE_PROVIDER_EXECUTION_REFUSAL,
-  planCoordinatedNativeProviderLaunch
-} from './coordinated-automation-native-provider-plan'
 import { validateLaunchPolicy } from './coordinated-automation-result-validation'
 import {
+  assertCoordinatorActive,
   CoordinatedHostStoppedError,
   type CoordinatedRecoveryContext,
   type CoordinatedWorkerIdentity,
@@ -40,10 +37,8 @@ export function executeCoordinatedTaskDispatch(
   ...args: Parameters<typeof executeTaskDispatch>
 ): ReturnType<typeof executeTaskDispatch> {
   const [ctx, input] = args
-  return ctx.nativeStubWorker
-    ? inNativeStubDispatchLane(ctx.orchestrationDb, input.taskId, () =>
-        executeTaskDispatch(...args)
-      )
+  return ctx.nativeStubWorker || ctx.nativeProviderWorker
+    ? inNativeDispatchLane(ctx.orchestrationDb, input.taskId, () => executeTaskDispatch(...args))
     : executeTaskDispatch(...args)
 }
 
@@ -113,25 +108,16 @@ async function executeTaskDispatch(
   if (!policyCheck.allowed) {
     throw new CoordinatedAutomationLaunchRefusedError(policyCheck.reason)
   }
-  if (ctx.nativeProviderHost) {
-    // Planned or not, a normal-provider launch stops here: before any Dispatch, process or write.
-    const planning = ctx.nativeStubWorker
-      ? null
-      : planCoordinatedNativeProviderLaunch({
-          snapshot,
-          child,
-          taskId,
-          host: ctx.nativeProviderHost
-        })
+  if (ctx.nativeStubWorker && ctx.nativeProviderWorker) {
     throw new CoordinatedAutomationLaunchRefusedError(
-      planning === null
-        ? 'A coordinated run cannot mix the pinned stub host with a normal-provider host.'
-        : planning.kind === 'refused'
-          ? `${planning.code}: ${planning.reason}`
-          : COORDINATED_NATIVE_PROVIDER_EXECUTION_REFUSAL
+      'A coordinated run cannot mix the pinned stub host with a normal-provider host.'
     )
   }
-  if (!ctx.nativeStubWorker && !hasFakeWorkerCapability(workerProvider)) {
+  if (
+    !ctx.nativeStubWorker &&
+    !ctx.nativeProviderWorker &&
+    !hasFakeWorkerCapability(workerProvider)
+  ) {
     throw new CoordinatedAutomationLaunchRefusedError(
       'Provider rejected: the disabled shadow implementation requires an explicit host-owned fake/no-effect provider capability.'
     )
@@ -147,12 +133,15 @@ async function executeTaskDispatch(
     }
     return { taskId, dispatchId: existing.id, outcome: 'native_retained' }
   }
-  const mixedRefusal =
-    !ctx.nativeStubWorker && runHasCoordinatedNativeAttempt(orchestrationDb, run.orchestrationRunId)
-      ? 'Native stub attempts exist; a fresh launch without the native host is refused.'
-      : null
-  if (mixedRefusal) {
-    throw new CoordinatedAutomationLaunchRefusedError(mixedRefusal)
+  const previousNativeKind = runCoordinatedNativeAttemptKind(
+    orchestrationDb,
+    run.orchestrationRunId
+  )
+  const nativeKind = ctx.nativeStubWorker?.kind ?? ctx.nativeProviderWorker?.kind
+  if (previousNativeKind && previousNativeKind !== nativeKind) {
+    throw new CoordinatedAutomationLaunchRefusedError(
+      'Native attempts exist; a fresh launch without the same native host is refused.'
+    )
   }
   const prepareInput = {
     run,
@@ -164,10 +153,12 @@ async function executeTaskDispatch(
   }
   const native = ctx.nativeStubWorker
     ? await prepareCoordinatedNativeStubAttempt(ctx, prepareInput)
-    : undefined
+    : ctx.nativeProviderWorker
+      ? await prepareCoordinatedNativeProviderAttempt(ctx, prepareInput)
+      : undefined
   input.assertCurrent?.()
   if (native && existing) {
-    throw new Error('native_stub_existing_attempt_refused')
+    throw new Error('native_existing_attempt_refused')
   }
   const started = orchestrationDb.createStartingWorkerDispatch({
     taskId,
@@ -191,7 +182,8 @@ async function executeTaskDispatch(
       maxRetries: child.launchConfig.maxRetries,
       maxReviewIterations: child.launchConfig.maxReviewIterations,
       mode: { mode: native ? 'terminal' : 'headless' },
-      ...(native ? { coordinatedNativeStub: native.binding } : {})
+      ...(native && 'launchReceipt' in native ? { launch: native.launchReceipt } : {}),
+      ...(native ? nativeAttemptStartOptions(native.binding) : {})
     }
   })
   const { dispatch } = started
@@ -215,6 +207,7 @@ async function executeTaskDispatch(
     input.assertCurrent?.()
     await raceWorkerDeadline(ctx, native.launch(started), deadlineAt)
     input.assertCurrent?.()
+    assertCoordinatorActive(ctx)
     return { taskId, dispatchId: dispatch.id, outcome: 'native_retained' }
   }
 

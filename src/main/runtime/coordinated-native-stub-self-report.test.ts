@@ -1,15 +1,17 @@
+import { publishHostDescriptor } from './host-descriptor'
+import { createRuntimeTransportMetadata } from './runtime-rpc/runtime-rpc-socket-metadata'
 import './rpc/unused-default-rpc-methods.test-fixture'
-// The pinned stub's own completion report: built fixture-side from nothing but the brief the stub
-// received on its stdin and the environment it was spawned with, then sent through the same
-// authenticated orchestration.send ingress every worker uses. The test harness injects no
-// credential. Readiness (READY marker), turn start (SUBMITTED echo) and the report stay separate.
-// PTY bytes are emulated; the real stub binary is not started.
-
 import { expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { runNativeStubBundle } from './native-stub-bundle-vm.test-support'
+import {
+  child,
+  coordinatedCreateInput
+} from '../persistence/scheduling-automations/coordinated-automation-persistence.test-support'
 import {
   buildNativeStubCompletionReport,
-  type NativeStubCompletionRefusal
+  NATIVE_STUB_BRIEF_ECHO_CHECK
 } from '../../shared/native-stub-fixture-report'
 import {
   formatCoordinatedReportContract,
@@ -19,7 +21,8 @@ import { nativeAttemptSettlementProblem } from '../automations/coordinated-autom
 import {
   installNativeStubAttemptHooks,
   setStubPtyBehavior,
-  setStubSelfReport,
+  setStubEntry,
+  nativeStubAttemptRoot,
   setupNativeStubAttempt as setup,
   type NativeStubAttemptFixture
 } from './coordinated-native-stub-attempt.test-support'
@@ -33,135 +36,218 @@ vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 installNativeStubAttemptHooks(native.spawn)
 
-type StubReportAttempt =
-  | { kind: 'sent'; params: unknown; ok: boolean }
-  | { kind: 'refused'; reason: NativeStubCompletionRefusal }
-
-/** Plays the stub's side: act on its own input and environment, over the real RPC dispatcher. */
-function letStubReport(
-  f: NativeStubAttemptFixture,
-  tamperEnv: (env: Record<string, string>) => Record<string, string> = (env) => env
-) {
-  const attempts: StubReportAttempt[] = []
-  let sent = 0
-  let done: () => void = () => {}
-  const settled = new Promise<void>((resolve) => {
-    done = resolve
-  })
-  setStubSelfReport((transcript, env) => {
-    const built = buildNativeStubCompletionReport({ brief: transcript, env: tamperEnv(env) })
-    if (built.kind === 'refused') {
-      // The stub keeps reading until the whole brief has arrived.
-      if (built.reason !== 'brief_has_no_report_contract') {
-        attempts.push(built)
-        done()
-      }
-      return
+function createEchoRun(f: NativeStubAttemptFixture) {
+  return createNativeRun(f, [child('writer')], 30, {
+    outcomeContract: {
+      ...coordinatedCreateInput().outcomeContract!,
+      acceptanceCriteria: [
+        {
+          id: NATIVE_STUB_BRIEF_ECHO_CHECK,
+          description: 'Brief echoed',
+          required: true,
+          kind: 'custom'
+        }
+      ]
     }
-    if (sent > 0) {
-      return
-    }
-    sent += 1
-    const { orchestrationCompatibilityEvidence, ...message } = built.request
-    void f.dispatcher
-      .dispatch({
-        id: 'stub-report',
-        authToken: 'test',
-        ...message,
-        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-        orchestrationRequestId: 'stub-report-1',
-        orchestrationCompatibilityEvidence
-      })
-      .then((response) => {
-        attempts.push({ kind: 'sent', params: message.params, ok: response.ok })
-        done()
-      })
   })
-  return { attempts, settled }
 }
 
-it('lets the stub submit its own authenticated completion report from its stdin brief and spawn environment', async () => {
+function letStubReport(
+  f: NativeStubAttemptFixture,
+  options: {
+    env?: (env: Record<string, string>) => Record<string, string>
+    loseAck?: boolean
+    afterProbe?: () => void
+    foreignEndpoint?: boolean
+  } = {}
+) {
+  writeFileSync(
+    join(nativeStubAttemptRoot(), 'orca-runtime.json'),
+    JSON.stringify({
+      runtimeId: f.runtime.getRuntimeId(),
+      pid: process.pid,
+      authToken: 'test',
+      transports: [
+        options.foreignEndpoint
+          ? { kind: 'named-pipe', endpoint: '\\\\foreign\\pipe\\orca' }
+          : createRuntimeTransportMetadata(
+              nativeStubAttemptRoot(),
+              process.pid,
+              process.platform,
+              f.runtime.getRuntimeId()
+            )
+      ]
+    })
+  )
+  let entry: ReturnType<typeof runNativeStubBundle> | undefined
+  setStubEntry((process, file, env) => {
+    process.onData.mockImplementation((listener) => {
+      queueMicrotask(() => {
+        entry = runNativeStubBundle({
+          file,
+          env: options.env?.(env) ?? env,
+          output: listener,
+          dispatch: async (request) => {
+            const response = await f.dispatcher.dispatch(request)
+            if (request.method === 'status.get') {
+              options.afterProbe?.()
+            }
+            return options.loseAck && request.method === 'orchestration.send' ? null : response
+          }
+        })
+      })
+      return { dispose() {} }
+    })
+    process.write.mockImplementation((bytes: string) => {
+      entry!.stdin.emit('data', bytes)
+    })
+  })
+  return () => entry!
+}
+
+it('executes the admitted bundle entry from its own stdin through existing transport and authenticated ingress', async () => {
   const f = await setup()
-  const report = letStubReport(f)
-  const { run, writerTaskId } = await createNativeRun(f)
+  const entry = letStubReport(f)
+  const { run, writerTaskId } = await createEchoRun(f)
   await f.adapter.reconcileRun(run.id)
-  await report.settled
+  await vi.waitFor(() => expect(entry().output()).toContain('GOLDEN_STUB_REPORT_REPORTED'))
   const dispatchId = f.db.getDispatchContext(writerTaskId)!.id
   const terminal = f.createdTerminals.at(-1)!
-
-  expect(report.attempts).toMatchObject([{ kind: 'sent', ok: true }])
-  // The launch token reached the stub only through its environment, and left only in the envelope.
-  const [file, args, options] = native.spawn.mock.calls[0]
-  expect(options.env.ORCA_AGENT_LAUNCH_TOKEN).toBe(terminal.launchToken)
-  expect(JSON.stringify([file, args])).not.toContain(terminal.launchToken)
-  expect(JSON.stringify(report.attempts)).not.toContain(terminal.launchToken)
-
-  // Settled by the authenticated ingress itself: exact assignee, token, pane and process.
-  const dispatch = f.db.getDispatchContextById(dispatchId)!
-  expect(dispatch.status).toBe('completed')
-  expect(dispatch.assignee_handle).toBe(terminal.handle)
-  expect(f.db.getWorkerDispatch(dispatchId)).toMatchObject({ state: 'succeeded', stage: 'settled' })
-  expect(
-    f.db.getAttemptObservationFacts(dispatchId).find((fact) => fact.facet === 'worker_report')
-  ).toMatchObject({
-    authorityId: `run_home:${run.orchestrationRunId}`,
-    payload: { status: 'accepted', outcome: 'succeeded' }
+  const writes = entry().requests.filter((r) => r.method === 'orchestration.send')
+  expect(writes).toHaveLength(1)
+  expect(writes[0].expectedRuntimeSource).toEqual({
+    sourceId: 'b7ac5d7e-9e4a-40d4-a310-88baecf1c2cd',
+    runtimeId: f.runtime.getRuntimeId()
   })
+  expect(entry().output()).not.toContain(terminal.launchToken)
+  expect(JSON.stringify(writes[0].params)).not.toContain(terminal.launchToken)
+  expect(JSON.stringify(native.spawn.mock.calls[0].slice(0, 2))).not.toContain(terminal.launchToken)
+  expect(f.db.getDispatchContextById(dispatchId)!.status).toBe('completed')
+  expect(f.db.getWorkerDispatch(dispatchId)).toMatchObject({ state: 'succeeded', stage: 'settled' })
   const current = f.store.listAutomationRuns().find((r) => r.id === run.id)!
   expect(nativeAttemptSettlementProblem(f.db, current, dispatchId)).toBeNull()
-
-  const completed = await f.adapter.reconcileRun(run.id)
-  expect(completed.state).toBe('completed')
-  expect(completed.run.completionReceipt).toBeTruthy()
-  // One process, one Dispatch, one report.
+  expect((await f.adapter.reconcileRun(run.id)).state).toBe('completed')
+  entry().stdin.emit('data', 'duplicate\r')
+  expect(entry().requests.filter((r) => r.method === 'orchestration.send')).toHaveLength(1)
   expect(native.spawn).toHaveBeenCalledTimes(1)
-  expect(f.db.getDispatchContext(writerTaskId)!.id).toBe(dispatchId)
 })
 
-it('refuses the stub report at the commit boundary when its environment token is not the minted one', async () => {
+it.each([
+  [
+    'bad launch token',
+    (env: Record<string, string>) => ({ ...env, ORCA_AGENT_LAUNCH_TOKEN: 'not-minted' })
+  ],
+  ['missing root', (env: Record<string, string>) => ({ ...env, ORCA_USER_DATA_PATH: '' })],
+  ['foreign root', (env: Record<string, string>) => ({ ...env, ORCA_USER_DATA_PATH: env.HOME })],
+  ['missing source', (env: Record<string, string>) => ({ ...env, ORCA_RUNTIME_SOURCE_ID: '' })],
+  [
+    'foreign source',
+    (env: Record<string, string>) => ({ ...env, ORCA_RUNTIME_SOURCE_ID: 'foreign' })
+  ],
+  [
+    'changed incarnation',
+    (env: Record<string, string>) => ({ ...env, ORCA_RUNTIME_SOURCE_INCARNATION: 'restarted' })
+  ],
+  [
+    'missing launch identity',
+    (env: Record<string, string>) => ({ ...env, ORCA_AGENT_LAUNCH_TOKEN: '' })
+  ]
+])('refuses %s without accepting a report', async (_name, env) => {
   const f = await setup()
-  const report = letStubReport(f, (env) => ({ ...env, ORCA_AGENT_LAUNCH_TOKEN: 'not-the-token' }))
-  const { run, writerTaskId } = await createNativeRun(f)
+  const entry = letStubReport(f, { env })
+  const { run, writerTaskId } = await createEchoRun(f)
   await f.adapter.reconcileRun(run.id)
-  await report.settled
-  const dispatchId = f.db.getDispatchContext(writerTaskId)!.id
-
-  expect(report.attempts).toMatchObject([{ kind: 'sent', ok: false }])
-  expect(f.db.getDispatchContextById(dispatchId)!.status).not.toBe('completed')
-  expect(f.db.getWorkerDispatch(dispatchId)!.state).not.toBe('succeeded')
-  const outcome = await f.adapter.reconcileRun(run.id)
-  expect(outcome.state).toBe('outcome_uncertain')
-  expect(outcome.run.completionReceipt ?? null).toBeNull()
-})
-
-it.each<[NativeStubCompletionRefusal, (env: Record<string, string>) => Record<string, string>]>([
-  ['environment_has_no_launch_identity', ({ ORCA_AGENT_LAUNCH_TOKEN: _token, ...env }) => env],
-  ['brief_addressed_to_another_terminal', (env) => ({ ...env, ORCA_TERMINAL_HANDLE: 'term_other' })]
-])('never sends a stub report when the fixture side sees %s', async (reason, tamper) => {
-  const f = await setup()
-  const report = letStubReport(f, tamper)
-  const { run, writerTaskId } = await createNativeRun(f)
-  await f.adapter.reconcileRun(run.id)
-  await report.settled
-
-  expect(report.attempts[0]).toEqual({ kind: 'refused', reason })
-  expect(report.attempts.some((attempt) => attempt.kind === 'sent')).toBe(false)
-  const dispatchId = f.db.getDispatchContext(writerTaskId)!.id
-  expect(f.db.getDispatchContextById(dispatchId)!.status).not.toBe('completed')
+  await vi.waitFor(() => expect(entry().output()).toContain('GOLDEN_STUB_REPORT_REFUSED'))
+  expect(f.db.getDispatchContext(writerTaskId)!.status).not.toBe('completed')
   expect((await f.adapter.reconcileRun(run.id)).state).toBe('outcome_uncertain')
+  expect(entry().output()).not.toContain(f.createdTerminals.at(-1)!.launchToken)
+})
+
+it('refuses foreign transport metadata before opening a connection', async () => {
+  const f = await setup()
+  const entry = letStubReport(f, { foreignEndpoint: true })
+  const { run, writerTaskId } = await createEchoRun(f)
+  await f.adapter.reconcileRun(run.id)
+  await vi.waitFor(() => expect(entry().output()).toContain('GOLDEN_STUB_REPORT_REFUSED'))
+  expect(entry().requests).toHaveLength(0)
+  expect(f.db.getDispatchContext(writerTaskId)!.status).not.toBe('completed')
+})
+
+it('does not claim arbitrary acceptance checks just because the stub did no work', async () => {
+  const f = await setup()
+  const entry = letStubReport(f)
+  const { run, writerTaskId } = await createNativeRun(f)
+  await f.adapter.reconcileRun(run.id)
+  await vi.waitFor(() => expect(entry().output()).toContain('GOLDEN_STUB_REPORT_REFUSED'))
+  expect(entry().requests).toHaveLength(0)
+  expect(f.db.getDispatchContext(writerTaskId)!.status).not.toBe('completed')
+})
+
+it('keeps a lost report acknowledgement unknown without another mutation or process', async () => {
+  const f = await setup()
+  const entry = letStubReport(f, { loseAck: true })
+  const { run, writerTaskId } = await createEchoRun(f)
+  await f.adapter.reconcileRun(run.id)
+  await vi.waitFor(() => expect(entry().output()).toContain('GOLDEN_STUB_REPORT_UNKNOWN'))
+  entry().stdin.emit('data', 'duplicate\r')
+  expect(entry().requests.filter((r) => r.method === 'orchestration.send')).toHaveLength(1)
+  expect(f.db.getDispatchContext(writerTaskId)!.status).toBe('completed')
+  expect((await f.adapter.reconcileRun(run.id)).state).toBe('completed')
+  expect(native.spawn).toHaveBeenCalledTimes(1)
+})
+
+it('refuses a different host source appearing after the socket probe', async () => {
+  const f = await setup()
+  const entry = letStubReport(f, {
+    afterProbe: () =>
+      publishHostDescriptor(f.runtime.getRuntimeId(), {
+        installationId: 'a32aad34-d115-4072-8713-284cfdd91910'
+      })
+  })
+  const { run, writerTaskId } = await createEchoRun(f)
+  await f.adapter.reconcileRun(run.id)
+  await vi.waitFor(() => expect(entry().output()).toContain('GOLDEN_STUB_REPORT_REFUSED'))
+  expect(f.db.getDispatchContext(writerTaskId)!.status).not.toBe('completed')
+})
+
+it('waits for the complete pasted submission before reporting', async () => {
+  const f = await setup()
+  const connect = letStubReport(f)
+  const { run } = await createEchoRun(f)
+  await f.adapter.reconcileRun(run.id)
+  await vi.waitFor(() => expect(connect().output()).toContain('GOLDEN_STUB_REPORT_REPORTED'))
+  const [_, args, options] = native.spawn.mock.calls[0]
+  const entry = runNativeStubBundle({
+    file: args[0],
+    env: options.env,
+    dispatch: (request) => f.dispatcher.dispatch(request)
+  })
+  entry.stdin.emit('data', '\x1b[200~partial\nbrief')
+  expect(entry.requests).toHaveLength(0)
+  entry.stdin.emit('data', '\x1b[201~')
+  expect(entry.requests).toHaveLength(0)
+  entry.stdin.emit('data', '\r')
+  expect(entry.output()).toContain('[GOLDEN_STUB_AGENT_SUBMITTED] partial\nbrief')
+  expect(entry.output()).toContain('GOLDEN_STUB_REPORT_REFUSED')
+  expect(entry.requests).toHaveLength(0)
 })
 
 it('keeps a ready stub that never echoes its submission start-unknown within the frozen launch budget', async () => {
   const f = await setup()
   setStubPtyBehavior('never_submits')
   const { run, writerTaskId } = await createNativeRun(f, undefined, 3)
-  const startedAt = Date.now()
-  const first = await f.adapter.reconcileRun(run.id)
-  const elapsedMs = Date.now() - startedAt
-
-  expect(first.state).toBe('outcome_uncertain')
-  // Bounded by the child's frozen 3 s budget, not by a fixed prompt-effect timeout.
-  expect(elapsedMs).toBeLessThan(6_000)
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  try {
+    const pending = f.adapter.reconcileRun(run.id)
+    await vi.waitFor(() => expect(native.spawn.mock.results[0]?.value.write).toHaveBeenCalled(), {
+      interval: 1
+    })
+    await vi.advanceTimersByTimeAsync(3_000)
+    const first = await pending
+    expect(first.state).toBe('outcome_uncertain')
+  } finally {
+    vi.useRealTimers()
+  }
   const dispatchId = f.db.getDispatchContext(writerTaskId)!.id
   const process = native.spawn.mock.results[0].value
   // Readiness was proven and the brief was written; only the turn start is unproven.

@@ -1,3 +1,6 @@
+import { buildCoordinatedNativeStub } from '../../../config/scripts/build-coordinated-native-stub.mjs'
+import { STATUS_METHODS } from './rpc/methods/status'
+import { publishHostDescriptor } from './host-descriptor'
 // A coordinated native stub attempt runs through the real Store, orchestration DB, pinned golden
 // stub composition, launch, readiness and prompt-write path; only the physical PTY is mocked, and
 // that mock plays the pinned stub's own READY/SUBMITTED byte protocol. Nothing here starts a
@@ -6,7 +9,7 @@
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, vi, type Mock } from 'vitest'
+import { afterEach, beforeAll, beforeEach, vi, type Mock } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import {
   closeTestStores,
@@ -24,6 +27,7 @@ import {
 } from '../providers/local-pty/local-pty-provider'
 import {
   createLocalPtyMockProcess,
+  type LocalPtyMockProcess,
   type LocalPtyExitCallback
 } from '../providers/local-pty/local-pty-provider-test-harness'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
@@ -40,6 +44,8 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_SEND_METHODS } from './rpc/methods/orchestration/messaging/send-methods'
 import { CoordinatedAutomationAdapter } from '../automations/coordinated-automation-adapter'
 import { createCoordinatedNativeStubWorker } from '../automations/coordinated-automation-native-stub-worker'
+import { createCoordinatedNativeProviderWorker } from '../automations/coordinated-automation-native-provider-worker'
+import { createNativeProviderExecutionAdmission } from './native-provider-execution-admission'
 import { coordinatedTestState } from '../persistence/scheduling-automations/coordinated-automation-persistence.test-support'
 
 const originalProvider = getLocalPtyProvider()
@@ -48,43 +54,74 @@ const disposers: (() => void)[] = []
 
 let exitCallback: LocalPtyExitCallback | undefined
 let nativeSpawn: Mock = vi.fn()
+let fixtureKind: 'stub' | 'provider' = 'stub'
 let stubBehavior: StubPtyBehavior = 'responsive'
-let stubSelfReport: ((transcript: string, env: Record<string, string>) => void) | null = null
+let providerBehavior: 'responsive' | 'never_ready' = 'responsive'
+let stubEntry:
+  | ((process: LocalPtyMockProcess, file: string, env: Record<string, string>) => void)
+  | null = null
 
-/** Lets the emulated stub act on its own input, with only its own spawn environment. */
-export function setStubSelfReport(
-  report: ((transcript: string, env: Record<string, string>) => void) | null
-): void {
-  stubSelfReport = report
+export function setStubEntry(entry: NonNullable<typeof stubEntry>): void {
+  stubEntry = entry
 }
 
 /** Registers per-test PTY mock and cleanup; the caller owns the hoisted `node-pty` mock. */
 export function installNativeStubAttemptHooks(spawn: Mock): void {
   nativeSpawn = spawn
+  beforeAll(() => buildCoordinatedNativeStub())
   beforeEach(resetNativeSpawn)
   afterEach(cleanupNativeStubAttempt)
+}
+
+function emulateProviderOnPty(process: ReturnType<typeof createLocalPtyMockProcess>): void {
+  const firstRender = (): void => {
+    if (providerBehavior === 'never_ready') {
+      return
+    }
+    if (process.onData.mock.calls.length === 0) {
+      setTimeout(firstRender, 1)
+      return
+    }
+    const ready = [
+      '\x1b]0;workspace\x07',
+      '  Muse Code 1.3.0',
+      '  Skills: 77 loaded · 1 warning · 28 details hidden (ctrl+o to expand)',
+      '── Voice input (⌥ + v to start) ──────────────────────────────────────────',
+      '❯ ────────────────────────────────────────────────────────────────────',
+      '  frozen-model · high · workspace · YOLO',
+      ''
+    ].join('\r\n')
+    for (const [listener] of process.onData.mock.calls) {
+      listener(ready)
+    }
+  }
+  setTimeout(firstRender, 1)
 }
 
 function resetNativeSpawn(): void {
   exitCallback = undefined
   nativeSpawn.mockReset()
+  fixtureKind = 'stub'
   stubBehavior = 'responsive'
-  stubSelfReport = null
+  providerBehavior = 'responsive'
+  stubEntry = null
   nativeSpawn.mockImplementation(
-    (_file: string, _args: unknown, options?: { env?: Record<string, string> }) => {
+    (_file: string, args: string[], options?: { env?: Record<string, string> }) => {
       const process = createLocalPtyMockProcess({
         get: () => exitCallback,
         set: (callback) => {
           exitCallback = callback
         }
       })
-      // The stub only ever sees its own stdin and the environment it was spawned with.
-      const env = { ...options?.env }
-      emulatePinnedStubOnPty(
-        process,
-        () => stubBehavior,
-        (transcript) => stubSelfReport?.(transcript, env)
-      )
+      if (fixtureKind === 'provider') {
+        emulateProviderOnPty(process)
+        return process
+      }
+      if (stubEntry) {
+        stubEntry(process, args[0], { ...options?.env })
+      } else {
+        emulatePinnedStubOnPty(process, () => stubBehavior)
+      }
       return process
     }
   )
@@ -93,6 +130,10 @@ function resetNativeSpawn(): void {
 /** Selects how the next controlled PTY plays the pinned stub. */
 export function setStubPtyBehavior(behavior: StubPtyBehavior): void {
   stubBehavior = behavior
+}
+
+export function setProviderPtyBehavior(behavior: 'responsive' | 'never_ready'): void {
+  providerBehavior = behavior
 }
 
 async function cleanupNativeStubAttempt(): Promise<void> {
@@ -114,35 +155,60 @@ async function cleanupNativeStubAttempt(): Promise<void> {
 
 export type NativeStubAttemptFixture = Awaited<ReturnType<typeof setupNativeStubAttempt>>
 
-export async function setupNativeStubAttempt(reuse?: {
-  rootDir: string
-  homeDir: string
-  workspaceDir: string
+export async function setupNativeStubAttempt(options?: {
+  rootDir?: string
+  homeDir?: string
+  workspaceDir?: string
+  kind?: 'stub' | 'provider'
 }) {
-  root = reuse?.rootDir ?? mkdtempSync(join(tmpdir(), 'orca-coordinated-native-'))
-  const home = reuse?.homeDir ?? join(root, 'home')
-  const workspace = reuse?.workspaceDir ?? join(root, 'workspace')
+  fixtureKind = options?.kind ?? 'stub'
+  root = options?.rootDir ?? mkdtempSync(join(tmpdir(), 'orca-coordinated-native-'))
+  const home = options?.homeDir ?? join(root, 'home')
+  const workspace = options?.workspaceDir ?? join(root, 'workspace')
   testState.dir = join(root, 'profiles', 'local')
   for (const path of [home, workspace, testState.dir]) {
     mkdirSync(path, { recursive: true })
   }
-  if (!reuse) {
+  if (!options?.rootDir) {
     writeDataFile(coordinatedTestState())
   }
   const store = createStore()
   installFakeAppEnvironment({ getPath: (name) => (name === 'home' ? home : root) })
-  const buildSpawnEnv = vi.fn(() => {
-    throw new Error('account environment must not run')
-  })
+  const buildSpawnEnv = vi.fn(
+    (
+      _id: string,
+      env: Record<string, string>
+    ): Record<string, string> | Promise<Record<string, string>> => {
+      if (fixtureKind !== 'provider') {
+        throw new Error('account environment must not run')
+      }
+      return env
+    }
+  )
   const provider = new LocalPtyProvider({ buildSpawnEnv })
   setLocalPtyProvider(provider)
-  const host = createNativeStubSessionTestComposition({
-    userDataDirectory: root,
-    homeDirectory: home
-  })
+  const stubHost =
+    fixtureKind === 'stub'
+      ? createNativeStubSessionTestComposition({ userDataDirectory: root, homeDirectory: home })
+      : undefined
+  const providerAdmission =
+    fixtureKind === 'provider'
+      ? createNativeProviderExecutionAdmission({ userDataDirectory: root })
+      : undefined
+  const host = stubHost ?? providerAdmission!
   disposers.push(host.revoke)
   const registration = vi.spyOn(invalidators, 'registerWorktreeChangeInvalidator')
-  const runtime = new OrcaRuntimeService(store, undefined, { nativeStubSessionTest: host })
+  const runtime = new OrcaRuntimeService(store, undefined, {
+    nativeStubSessionTest: stubHost,
+    coordinatedNativeProviderExecution: providerAdmission
+  })
+  if (fixtureKind === 'provider') {
+    vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
+  }
+  publishHostDescriptor(runtime.getRuntimeId(), {
+    installationId: 'b7ac5d7e-9e4a-40d4-a310-88baecf1c2cd'
+  })
+  disposers.push(() => publishHostDescriptor(runtime.getRuntimeId(), null))
   for (const result of registration.mock.results) {
     if (result.type === 'return') {
       disposers.push(result.value)
@@ -188,19 +254,32 @@ export async function setupNativeStubAttempt(reuse?: {
     createdTerminals.push(created)
     return created
   })
-  // The app composes provider output into the runtime; the stub's markers arrive on that path.
   disposers.push(
     provider.onData((payload) => runtime.onPtyData(payload.id, payload.data, Date.now()))
   )
-  const nativeStubWorker = createCoordinatedNativeStubWorker({
-    runtime,
+  const nativeStubWorker = stubHost
+    ? createCoordinatedNativeStubWorker({ runtime, store, db, composition: stubHost })
+    : undefined
+  const nativeProviderWorker = providerAdmission
+    ? createCoordinatedNativeProviderWorker({
+        runtime,
+        store,
+        db,
+        admission: providerAdmission
+      })
+    : undefined
+  const adapter = new CoordinatedAutomationAdapter({
     store,
-    db,
-    composition: host
+    orchestrationDb: db,
+    nativeStubWorker,
+    nativeProviderWorker
   })
-  const adapter = new CoordinatedAutomationAdapter({ store, orchestrationDb: db, nativeStubWorker })
-  const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_SEND_METHODS })
+  const dispatcher = new RpcDispatcher({
+    runtime,
+    methods: [...ORCHESTRATION_SEND_METHODS, ...STATUS_METHODS]
+  })
   return {
+    buildSpawnEnv,
     store,
     host,
     runtime,
@@ -209,6 +288,7 @@ export async function setupNativeStubAttempt(reuse?: {
     dispatcher,
     createdTerminals,
     nativeStubWorker,
+    nativeProviderWorker,
     workspaceId,
     home,
     workspace

@@ -9,9 +9,10 @@ import { toCanonicalJson } from '../../shared/coordinated-automation-canonical-d
 import { LOCAL_SELF_OWNER, runScopeRefusal } from './coordinated-automation-run-host-gate'
 
 export const NATIVE_STUB_ATTEMPT = 'native_stub_session_test' as const
+export const NATIVE_PROVIDER_ATTEMPT = 'native_provider_worker' as const
 const Binding = z
   .object({
-    kind: z.literal(NATIVE_STUB_ATTEMPT),
+    kind: z.enum([NATIVE_STUB_ATTEMPT, NATIVE_PROVIDER_ATTEMPT]),
     version: z.literal(1),
     automationId: z.string(),
     automationRunId: z.string(),
@@ -36,9 +37,31 @@ function startOptions(db: OrchestrationDb, dispatchId: string): unknown {
   }
 }
 
+function nativeBindingCandidate(options: unknown): unknown {
+  if (!options || typeof options !== 'object') {
+    return null
+  }
+  if ('coordinatedNativeStub' in options) {
+    return options.coordinatedNativeStub
+  }
+  return 'coordinatedNativeProvider' in options ? options.coordinatedNativeProvider : null
+}
+
+export function nativeAttemptStartOptions(
+  binding: CoordinatedNativeAttemptBinding
+): Record<string, unknown> {
+  return binding.kind === NATIVE_STUB_ATTEMPT
+    ? { coordinatedNativeStub: binding }
+    : { coordinatedNativeProvider: binding }
+}
+
 export function isCoordinatedNativeAttempt(db: OrchestrationDb, dispatchId: string): boolean {
   const options = startOptions(db, dispatchId)
-  return !!options && typeof options === 'object' && 'coordinatedNativeStub' in options
+  return (
+    !!options &&
+    typeof options === 'object' &&
+    ('coordinatedNativeStub' in options || 'coordinatedNativeProvider' in options)
+  )
 }
 
 export function readCoordinatedNativeBinding(
@@ -46,12 +69,16 @@ export function readCoordinatedNativeBinding(
   dispatchId: string
 ): CoordinatedNativeAttemptBinding | null {
   const options = startOptions(db, dispatchId)
-  const parsed = Binding.safeParse(
-    options && typeof options === 'object' && 'coordinatedNativeStub' in options
-      ? options.coordinatedNativeStub
-      : null
-  )
-  return parsed.success ? parsed.data : null
+  const parsed = Binding.safeParse(nativeBindingCandidate(options))
+  if (!parsed.success || !options || typeof options !== 'object') {
+    return null
+  }
+  const expectedKey =
+    parsed.data.kind === NATIVE_STUB_ATTEMPT ? 'coordinatedNativeStub' : 'coordinatedNativeProvider'
+  return expectedKey in options &&
+    !('coordinatedNativeStub' in options && 'coordinatedNativeProvider' in options)
+    ? parsed.data
+    : null
 }
 
 /** A stored marker selects recovery policy; it never grants fresh launch or attachment authority. */
@@ -183,15 +210,22 @@ export function nativeAttemptSettlementProblem(
     : 'Native report has no accepted atomic ingestion fact.'
 }
 
-/** Any mapped native attempt binds the whole Run to the native protocol. */
-export function runHasCoordinatedNativeAttempt(
+/** Any mapped native attempt binds the whole Run to its exact native protocol. */
+export function runCoordinatedNativeAttemptKind(
   db: OrchestrationDb,
   orchestrationRunId: string
-): boolean {
-  return db.listTasks({ runId: orchestrationRunId }).some((task) => {
+): CoordinatedNativeAttemptBinding['kind'] | null {
+  for (const task of db.listTasks({ runId: orchestrationRunId })) {
     const dispatch = db.getDispatchContext(task.id)
-    return dispatch !== undefined && isCoordinatedNativeAttempt(db, dispatch.id)
-  })
+    const binding = dispatch ? readCoordinatedNativeBinding(db, dispatch.id) : null
+    if (dispatch && isCoordinatedNativeAttempt(db, dispatch.id) && !binding) {
+      throw new Error('Native attempt identity is incomplete.')
+    }
+    if (binding) {
+      return binding.kind
+    }
+  }
+  return null
 }
 
 function canonicalProfilePath(path: string | null | undefined): string | null {

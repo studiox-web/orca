@@ -2,6 +2,8 @@ import {
   assertNativeStubProviderSpawn,
   nativeStubSpawnEnvironment
 } from '../../runtime/native-stub-launch-options'
+import { assertNativeProviderPhysicalSpawn } from '../../runtime/native-provider-launch-options'
+import { markNativeProviderDispatched } from '../../runtime/native-provider-execution-admission'
 import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
@@ -41,6 +43,9 @@ export async function spawnLocalPty(
   args: PtySpawnOptions,
   getOptions: () => LocalPtyProviderOptions
 ): Promise<PtySpawnResult> {
+  if (args.preparedNativeProvider !== undefined) {
+    assertNativeProviderPhysicalSpawn(args)
+  }
   if (args.preparedNativeStub !== undefined) {
     assertNativeStubProviderSpawn(args)
   }
@@ -92,6 +97,9 @@ export async function spawnLocalPty(
       }
       throwIfCanceled()
     }
+    if (args.preparedNativeProvider) {
+      assertNativeProviderPhysicalSpawn(args)
+    }
     const envResult = args.preparedNativeStub
       ? { ...nativeStubSpawnEnvironment(args.preparedNativeStub) }
       : buildLocalPtySpawnEnvironment({
@@ -131,6 +139,9 @@ export async function spawnLocalPty(
       if (concurrentWinner) {
         return concurrentWinner
       }
+      if (args.preparedNativeProvider) {
+        assertNativeProviderPhysicalSpawn(args)
+      }
       const pendingSpawn = spawn({
         shellPath: plan.shellPath,
         shellArgs: plan.shellArgs,
@@ -150,7 +161,10 @@ export async function spawnLocalPty(
       })
       const spawnResult = pendingSpawn instanceof Promise ? await pendingSpawn : pendingSpawn
       try {
-        if (args.preparedNativeStub) {
+        if (args.preparedNativeStub || args.preparedNativeProvider) {
+          if (args.preparedNativeProvider) {
+            markNativeProviderDispatched(args.preparedNativeProvider)
+          }
           recordLocalPtySpawnIdentity({
             id,
             incarnationId,
@@ -175,7 +189,7 @@ export async function spawnLocalPty(
           }
         }
         if (!args.preparedNativeStub) {
-          args.onPtySpawnCommitted?.()
+          args.onPtySpawnCommitted?.({ ptyId: id, incarnationId })
         }
         plan.shellPath = spawnResult.shellPath
         // The winning Windows fallback may embed startup in argv; its flag prevents duplicate stdin delivery.
@@ -212,19 +226,27 @@ export async function spawnLocalPty(
         })
         if (args.preparedNativeStub) {
           checkCanceled()
-          args.onPtySpawnCommitted?.()
+          args.onPtySpawnCommitted?.({ ptyId: id, incarnationId })
         }
         return result
       } catch (cause) {
-        if (!args.preparedNativeStub) {
+        if (!args.preparedNativeStub && !args.preparedNativeProvider) {
           throw cause
         }
         // Physical spawn is proven; failed activation or acknowledgement does not prove exit.
-        throw Object.assign(new Error('native_stub_post_spawn_outcome_unknown', { cause }), {
-          code: 'operation_unknown',
-          ptyId: id,
-          incarnationId
-        })
+        throw Object.assign(
+          new Error(
+            args.preparedNativeStub
+              ? 'native_stub_post_spawn_outcome_unknown'
+              : 'native_provider_post_spawn_outcome_unknown',
+            { cause }
+          ),
+          {
+            code: 'operation_unknown',
+            ptyId: id,
+            incarnationId
+          }
+        )
       }
     })
   })

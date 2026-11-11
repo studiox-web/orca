@@ -37,6 +37,7 @@ import { resolveStartupShell } from '../../shared/tui-agent-startup-shell'
 import { resolveWslSessionContext } from '../daemon/wsl-session-context'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
+import { nativeProviderStartupSettings } from './native-provider-launch-options'
 
 /** No launch command could be built for a requested `startupAgent`. */
 export class AgentLaunchUnbuildableError extends Error {}
@@ -125,7 +126,9 @@ export async function resolveAgentTerminalCreateOptions(
           workspace,
           opts,
           plannedAgent,
-          store.getSettings(),
+          opts.preparedNativeProvider
+            ? nativeProviderStartupSettings(opts.preparedNativeProvider, store.getSettings())
+            : store.getSettings(),
           runtime,
           host
         )

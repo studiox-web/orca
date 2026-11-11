@@ -1,6 +1,4 @@
-import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
-import { LocalPtyProvider } from '../../providers/local-pty/local-pty-provider'
-import { bindNativeStubSessionTestComposition } from '../native-stub-session-test-host'
+import { bindRuntimeNativeExecutionAdmissions } from './runtime-native-execution-admissions'
 import { collectSavedStructuredAgentSessionIds } from '../saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
@@ -122,18 +120,11 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   ) {
     super()
     this.store = store
-    bindNativeStubSessionTestComposition(deps?.nativeStubSessionTest, {
+    bindRuntimeNativeExecutionAdmissions(deps, {
       runtime: this,
       store,
       generation: () => this.runtimeId,
-      isLocalDesktop: () => !this.servesHeadlessGraph,
-      readInProcessProvider: () => {
-        const provider = getLocalPtyProvider()
-        if (Object.getPrototypeOf(provider) !== LocalPtyProvider.prototype) {
-          throw new Error('native_stub_in_process_provider_required')
-        }
-        return provider
-      }
+      isLocalDesktop: () => !this.servesHeadlessGraph
     })
     installGitHubProjectAccounts(store, () => this.resolvedWorktrees.peek()?.worktrees ?? [])
     this.legacyStructuredSessionTabIds = Object.freeze(

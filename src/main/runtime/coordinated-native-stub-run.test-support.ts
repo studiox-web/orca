@@ -34,14 +34,21 @@ export async function createNativeRun(
   f: Fixture,
   children = [child('writer')],
   timeoutSeconds = 30,
-  overrides: Parameters<typeof coordinatedCreateInput>[0] = {}
+  overrides: Parameters<typeof coordinatedCreateInput>[0] = {},
+  launchOverrides: Partial<ChildLaunchConfig> = {}
 ) {
   const automation = f.store.createCoordinatedAutomation(
     coordinatedCreateInput({
       ...overrides,
       children: children.map((c) =>
         c.id === 'writer' || c.id === 'reviewer'
-          ? { ...c, launchConfig: nativeLaunchConfig(f.workspaceId, timeoutSeconds) }
+          ? {
+              ...c,
+              launchConfig: {
+                ...nativeLaunchConfig(f.workspaceId, timeoutSeconds),
+                ...launchOverrides
+              }
+            }
           : c
       )
     })

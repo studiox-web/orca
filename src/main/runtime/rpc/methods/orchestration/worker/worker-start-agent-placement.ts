@@ -1,8 +1,11 @@
+import type { PreparedNativeProviderLaunch } from '../../../../native-provider-execution-admission'
+import { requireNativeProviderLaunch } from '../../../../native-provider-execution-admission'
 import {
   requireNativeStubLaunch,
   type PreparedNativeStubLaunch
 } from '../../../../native-stub-session-test-host'
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
+import type { TerminalPtySpawnCommitIdentity } from '../../../../runtime-terminal-contracts'
 /** Use the shared executor for new workers; structured worktrees omit startup agent, then resolve host support before chat creation.
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
  * Structured create refusals fail start through the worker error contract instead of silently downgrading. */
@@ -49,6 +52,7 @@ export type WorkerAgentPlacement = {
 
 type WorkerAgentPlacementArgs = {
   preparedNativeStub?: PreparedNativeStubLaunch
+  preparedNativeProvider?: PreparedNativeProviderLaunch
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   dispatchId: string
@@ -64,6 +68,8 @@ type WorkerAgentPlacementArgs = {
   agent: TuiAgent | undefined
   launchPreferences: AgentLaunchPreferences | undefined
   effects: WorkerEffect[]
+  preAllocatedTerminalHandle?: string
+  onTerminalSpawnCommitted?: (identity: TerminalPtySpawnCommitIdentity) => void
   /** Attributes a throw to the step that was running, the way the caller's own stages do. */
   onStage: (stage: string) => void
   /** A follow-up continuing a worker; a closed one is brought back in place of a launch. */
@@ -83,6 +89,21 @@ export const EXISTING_WORKTREE_SETUP: WorkerSetupReceipt = {
 export async function placeWorkerAgent(
   args: WorkerAgentPlacementArgs
 ): Promise<WorkerAgentPlacement> {
+  if (args.preparedNativeProvider !== undefined) {
+    const { selection } = requireNativeProviderLaunch(args.preparedNativeProvider, args.runtime)
+    if (
+      args.creationTarget ||
+      args.followUp ||
+      args.params.terminal ||
+      args.mode.mode !== 'terminal' ||
+      args.agent !== selection.agent ||
+      args.resolvedWorktree?.id !== selection.workspaceId ||
+      (args.launchPreferences?.model ?? null) !== selection.model ||
+      (args.launchPreferences?.effort ?? null) !== selection.effort
+    ) {
+      throw new Error('native_provider_worker_placement_override')
+    }
+  }
   if (args.preparedNativeStub !== undefined) {
     const record = requireNativeStubLaunch(args.preparedNativeStub, args.runtime)
     if (
@@ -269,12 +290,15 @@ function workerSurfaceFactory(
       recordSurfaceStage(worktreeId)
       const terminal = await createExistingWorktreeWorkerTerminal({
         preparedNativeStub: args.preparedNativeStub,
+        preparedNativeProvider: args.preparedNativeProvider,
         runtime: args.runtime,
         worktreeId,
         agent,
         ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
         taskId: args.taskId,
-        effects: args.effects
+        effects: args.effects,
+        preAllocatedHandle: args.preAllocatedTerminalHandle,
+        onPtySpawnCommitted: args.onTerminalSpawnCommitted
       })
       onTerminalCreation(terminal)
       return {

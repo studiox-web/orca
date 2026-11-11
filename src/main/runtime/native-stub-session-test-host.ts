@@ -1,8 +1,11 @@
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { resolveLocalLaunchScopeRuntime } from '../local-project-runtime-resolution'
-import { createHash } from 'node:crypto'
-import { readFileSync, realpathSync } from 'node:fs'
-import { isAbsolute, join, relative, sep } from 'node:path'
+import { join } from 'node:path'
+import {
+  canonicalNativeStubPath as canonical,
+  isWithinNativeStubPath as within,
+  nativeStubFileDigest as digest
+} from './native-stub-file-identity'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { NativeStubPhysicalIdentity } from './native-stub-physical-spawn'
@@ -10,7 +13,9 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session/lifecycle/agent-session-resume'
 
-const fixtureDigest = 'acf1eaac760b5cedcbfe1bf55009876f4842eceace0a29e57b1e370d2f51dd4d'
+import { requireNativeStubReportBundle } from './native-stub-report-bundle'
+import { getRuntimeSourceStamp } from './host-descriptor'
+import { stampRuntimeSourceEnv, type RuntimeSourceStamp } from '../../shared/runtime-source-env'
 const compositions = new WeakMap<NativeStubSessionTestComposition, Composition>()
 const permits = new WeakMap<PreparedNativeStubLaunch, NativeStubLaunchRecord>()
 
@@ -20,7 +25,7 @@ export type NativeStubSessionTestComposition = Readonly<{
   revoke(): void
 }>
 type Binding = {
-  runtime: object
+  runtime: { getRuntimeId?: () => string }
   store: RuntimeStore | null
   generation: () => string
   isLocalDesktop: () => boolean
@@ -41,6 +46,7 @@ type Composition = {
 export type NativeStubLaunchRecord = {
   composition: Composition
   runtime: object
+  source: RuntimeSourceStamp
   workspace: Readonly<TerminalWorkspaceLaunchScope>
   env: Readonly<Record<string, string>>
   launchConfig: SleepingAgentLaunchConfig
@@ -50,19 +56,6 @@ export type NativeStubLaunchRecord = {
   assertDispatchCurrent?: () => void
 }
 
-function canonical(path: string): string {
-  if (!isAbsolute(path)) {
-    throw new Error('native_stub_absolute_path_required')
-  }
-  return realpathSync(path)
-}
-function within(root: string, path: string): boolean {
-  const child = relative(root, path)
-  return !!child && child !== '..' && !child.startsWith(`..${sep}`) && !isAbsolute(child)
-}
-function digest(file: string): string {
-  return createHash('sha256').update(readFileSync(file)).digest('hex')
-}
 /** Only an isolated host composition can mint permits; serialized options cannot install it. */
 export function createNativeStubSessionTestComposition(input: {
   userDataDirectory: string
@@ -75,12 +68,7 @@ export function createNativeStubSessionTestComposition(input: {
     throw new Error('native_stub_isolation_required')
   }
   const file = canonical(process.execPath)
-  const fixture = canonical(
-    join(environment.getAppPath(), 'tests/e2e/fixtures/golden-stub-agent/golden-stub-agent.js')
-  )
-  if (digest(fixture) !== fixtureDigest) {
-    throw new Error('native_stub_fixture_changed')
-  }
+  const fixture = requireNativeStubReportBundle(environment.getAppPath())
   let revoked = false
   const composition: Composition = {
     userData,
@@ -131,7 +119,11 @@ export function createNativeStubSessionTestComposition(input: {
       ) {
         throw new Error('native_stub_local_workspace_required')
       }
-      const env = Object.freeze({
+      const source = getRuntimeSourceStamp(runtime, userData)
+      if (!source) {
+        throw new Error('native_stub_runtime_source_unavailable')
+      }
+      const env: Record<string, string> = {
         HOME: home,
         USERPROFILE: home,
         TMPDIR: home,
@@ -139,8 +131,11 @@ export function createNativeStubSessionTestComposition(input: {
         TMP: home,
         LANG: 'C.UTF-8',
         TERM: 'xterm-256color',
-        ELECTRON_RUN_AS_NODE: '1'
-      })
+        ELECTRON_RUN_AS_NODE: '1',
+        ORCA_USER_DATA_PATH: userData
+      }
+      stampRuntimeSourceEnv(env, source)
+      Object.freeze(env)
       const permit = Object.freeze({
         capability: 'native_stub_session_test' as const,
         toJSON() {
@@ -150,6 +145,7 @@ export function createNativeStubSessionTestComposition(input: {
       permits.set(permit, {
         composition,
         runtime,
+        source,
         workspace: Object.freeze({
           ...workspace,
           path,
@@ -262,6 +258,13 @@ export function requireNativeStubLaunch(
   ) {
     throw new Error('native_stub_workspace_changed')
   }
+  const source = getRuntimeSourceStamp(
+    record.composition.binding!.runtime,
+    record.composition.userData
+  )
+  if (JSON.stringify(source) !== JSON.stringify(record.source)) {
+    throw new Error('native_stub_runtime_source_changed')
+  }
   record.assertDispatchCurrent?.()
   return record
 }
@@ -271,7 +274,7 @@ export function consumeNativeStubLaunch(permit: PreparedNativeStubLaunch): Nativ
   const { composition } = record
   if (
     !record.surface ||
-    digest(composition.fixture) !== fixtureDigest ||
+    requireNativeStubReportBundle(getAppEnvironment().getAppPath()) !== composition.fixture ||
     canonical(process.execPath) !== composition.file ||
     digest(composition.file) !== composition.fileDigest
   ) {

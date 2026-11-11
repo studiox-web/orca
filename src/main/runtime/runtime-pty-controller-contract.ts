@@ -1,3 +1,4 @@
+import type { PreparedNativeProviderLaunch } from './native-provider-execution-admission'
 import type { PreparedNativeStubLaunch } from './native-stub-session-test-host'
 import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
@@ -25,6 +26,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   PtyProviderBufferSnapshot,
   PtyProcessInfo,
+  PtySpawnCommitIdentity,
   PtySpawnResult
 } from '../providers/pty-provider-contract'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
@@ -70,6 +72,7 @@ export type RuntimePtyController = {
   } | null>
   spawn?(opts: {
     preparedNativeStub?: PreparedNativeStubLaunch
+    preparedNativeProvider?: PreparedNativeProviderLaunch
     resolvedWorkspace?: TerminalWorkspaceLaunchScope
     cols: number
     rows: number
@@ -117,7 +120,7 @@ export type RuntimePtyController = {
     spawnIntent?: SpawnIntent
     signal?: AbortSignal
     refuseSleptWorktree?: boolean
-    onPtySpawnCommitted?: () => void
+    onPtySpawnCommitted?: (identity?: PtySpawnCommitIdentity) => void
     /** Layout-owner build: whether a fresh start resumed its agent, told before its bind is written. */
     onResumeOutcome?: (ptyId: string, outcome: PaneResumeOutcome) => void
     paneSpawnOperation?: PaneSpawnOperation

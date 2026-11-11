@@ -1,10 +1,12 @@
-export function createIdempotentCallback(callback?: () => void): () => void {
+export function createIdempotentCallback<Args extends unknown[]>(
+  callback?: (...args: Args) => void
+): (...args: Args) => void {
   let reported = false
-  return () => {
+  return (...args) => {
     if (reported) {
       return
     }
     reported = true
-    callback?.()
+    callback?.(...args)
   }
 }
