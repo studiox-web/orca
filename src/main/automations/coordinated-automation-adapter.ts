@@ -83,6 +83,8 @@ export type CoordinatedAutomationAdapterContext = {
   orchestrationDb: OrchestrationDb
   workerProvider?: CoordinatedWorkerProvider
   nativeStubWorker?: CoordinatedNativeStubWorker
+  /** Guarded normal-provider planning facts; no run host injection carries them. */
+  nativeProviderHost?: CoordinatedRecoveryContext['nativeProviderHost']
   runInParentLane?: <T>(automationId: string, operation: () => Promise<T>) => Promise<T>
   /** Host-owned approvals; a function is re-read at every evaluation. */
   hostApprovals?: readonly CoordinatedHostApproval[] | (() => readonly CoordinatedHostApproval[])
@@ -114,6 +116,7 @@ export class CoordinatedAutomationAdapter {
       probe: orchestrationRecordProbe(ctx.orchestrationDb),
       workerProvider: ctx.workerProvider ?? createDefaultFakeNoEffectsWorkerProvider(ctx.store),
       nativeStubWorker: ctx.nativeStubWorker,
+      nativeProviderHost: ctx.nativeProviderHost,
       progressStore: ctx.progressStore ?? defaultCoordinatedProgressStore(),
       clock: ctx.clock ?? {
         now: () => Date.now(),
@@ -232,8 +235,7 @@ export class CoordinatedAutomationAdapter {
     })
   }
 
-  /** Materializes if needed, then reconciles persisted evidence until the run cannot advance. */
-  /** `precondition` runs inside the parent lane immediately before the first write. */
+  /** Materializes, then reconciles until stuck; `precondition` runs in-lane before the first write. */
   async reconcileRun(
     automationRunId: string,
     options: { precondition?: () => void } = {}

@@ -1,4 +1,5 @@
 import type { CoordinatedNativeStubWorker } from './coordinated-automation-native-stub-worker'
+import type { CoordinatedNativeProviderHostFacts } from './coordinated-automation-native-provider-plan'
 import type { SemanticReceiptEffect } from '../../shared/coordinated-automation-receipt-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import type { Store } from '../persistence/loading-store/store'
@@ -76,6 +77,8 @@ export type CoordinatedRecoveryContext = {
   probe: CoordinatedOrchestrationRecordProbe
   workerProvider: CoordinatedWorkerProvider
   nativeStubWorker?: CoordinatedNativeStubWorker
+  /** Guarded normal-provider planning facts; absent in every app root. Never launches. */
+  nativeProviderHost?: CoordinatedNativeProviderHostFacts
   progressStore: CoordinatedRunProgressStore
   clock: CoordinatedClock
   boundary: CoordinatedBoundaryHook

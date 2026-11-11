@@ -8,6 +8,10 @@ import {
   runHasCoordinatedNativeAttempt
 } from './coordinated-automation-native-attempt'
 import { CoordinatedAutomationLaunchRefusedError } from './coordinated-automation-materialization'
+import {
+  COORDINATED_NATIVE_PROVIDER_EXECUTION_REFUSAL,
+  planCoordinatedNativeProviderLaunch
+} from './coordinated-automation-native-provider-plan'
 import { validateLaunchPolicy } from './coordinated-automation-result-validation'
 import {
   CoordinatedHostStoppedError,
@@ -108,6 +112,24 @@ async function executeTaskDispatch(
   })
   if (!policyCheck.allowed) {
     throw new CoordinatedAutomationLaunchRefusedError(policyCheck.reason)
+  }
+  if (ctx.nativeProviderHost) {
+    // Planned or not, a normal-provider launch stops here: before any Dispatch, process or write.
+    const planning = ctx.nativeStubWorker
+      ? null
+      : planCoordinatedNativeProviderLaunch({
+          snapshot,
+          child,
+          taskId,
+          host: ctx.nativeProviderHost
+        })
+    throw new CoordinatedAutomationLaunchRefusedError(
+      planning === null
+        ? 'A coordinated run cannot mix the pinned stub host with a normal-provider host.'
+        : planning.kind === 'refused'
+          ? `${planning.code}: ${planning.reason}`
+          : COORDINATED_NATIVE_PROVIDER_EXECUTION_REFUSAL
+    )
   }
   if (!ctx.nativeStubWorker && !hasFakeWorkerCapability(workerProvider)) {
     throw new CoordinatedAutomationLaunchRefusedError(
