@@ -12,7 +12,7 @@ import type { NativeStubAttemptFixture as Fixture } from './coordinated-native-s
 
 let rpcRequests = 0
 
-export function nativeLaunchConfig(workspaceId: string): ChildLaunchConfig {
+export function nativeLaunchConfig(workspaceId: string, timeoutSeconds = 30): ChildLaunchConfig {
   return {
     agentId: 'codex',
     model: null,
@@ -24,18 +24,22 @@ export function nativeLaunchConfig(workspaceId: string): ChildLaunchConfig {
     workspaceId,
     baseBranch: null,
     setupDecision: 'skip' as const,
-    timeoutSeconds: 30,
+    timeoutSeconds,
     maxRetries: 0,
     maxReviewIterations: 0
   }
 }
 
-export async function createNativeRun(f: Fixture, children = [child('writer')]) {
+export async function createNativeRun(
+  f: Fixture,
+  children = [child('writer')],
+  timeoutSeconds = 30
+) {
   const automation = f.store.createCoordinatedAutomation(
     coordinatedCreateInput({
       children: children.map((c) =>
         c.id === 'writer' || c.id === 'reviewer'
-          ? { ...c, launchConfig: nativeLaunchConfig(f.workspaceId) }
+          ? { ...c, launchConfig: nativeLaunchConfig(f.workspaceId, timeoutSeconds) }
           : c
       )
     })

@@ -12,6 +12,7 @@ import {
   type PreparedNativeStubLaunch
 } from '../runtime/native-stub-session-test-host'
 import { observeNativeStubPhysicalSpawn } from '../runtime/native-stub-physical-spawn'
+import { beginNativeStubFixtureObservation } from '../runtime/native-stub-fixture-protocol'
 import { launchPreparedWorkerDispatch } from '../runtime/rpc/methods/orchestration/worker/prepared-worker-dispatch-launch'
 import { folderWorkspaceRepoId } from '../../shared/folder-workspace-worktree'
 import { ROOT_DISPATCH_DEPTH } from '../../shared/nested-worker-depth'
@@ -230,6 +231,8 @@ export async function prepareCoordinatedNativeStubAttempt(
           ) {
             throw new Error('coordinated_native_stub_physical_identity_changed')
           }
+          // Observe before the stub's first render so its own readiness markers cannot be missed.
+          beginNativeStubFixtureObservation(permit, host.runtime, physical)
           host.db.recordCreatedWorkerTerminalCustody({
             dispatchId,
             handle: physical.handle,

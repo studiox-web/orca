@@ -1,10 +1,8 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 // A coordinated native stub attempt runs through the real Store, orchestration DB, pinned golden
-// stub composition and launch path; only the physical PTY spawn is mocked. The pinned stub is not
-// a Codex process, so this file controls the readiness/foreground runtime effects (composer wait,
-// foreground proof, prompt write receipt) the way the host contract allows; that control never
-// claims the pinned stub itself passes the app's real Codex readiness path, and no test here
-// enables any production/default-root capability.
+// stub composition, launch, readiness and prompt-write path; only the physical PTY is mocked, and
+// that mock plays the pinned stub's own READY/SUBMITTED byte protocol. Nothing here starts a
+// process, proves a real Codex/provider journey, or enables a production/default-root capability.
 
 import { expect, it, vi } from 'vitest'
 import { CoordinatedAutomationAdapter } from '../automations/coordinated-automation-adapter'

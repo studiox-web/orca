@@ -13,6 +13,8 @@ import {
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
 import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-guard'
+import { assertNativeStubFixtureWritable } from '../../../../native-stub-fixture-protocol'
+import type { PreparedNativeStubLaunch } from '../../../../native-stub-session-test-host'
 import { sendStructuredWorkerPreamble } from '../../orchestration-structured-worker-session'
 import { chatAssigneeOf } from '../chat-assignee-admission'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -38,7 +40,12 @@ export async function deliverWorkerDispatchPreamble(args: {
   taskId: string
   taskSpec: string
   coordinatorHandle: string
-  systemCoordinator?: { runId: string; assertCurrent: () => void }
+  systemCoordinator?: {
+    runId: string
+    assertCurrent: () => void
+    /** Host-admitted pinned stub: guarded by its own readiness, never a Codex foreground. */
+    stubFixture?: PreparedNativeStubLaunch
+  }
   devMode: boolean | undefined
   requestId: string
   /** The agent this worker start launched into `terminalHandle`; absent for a caller's terminal. */
@@ -109,7 +116,13 @@ export async function deliverWorkerDispatchPreamble(args: {
   }
   // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.
   args.systemCoordinator?.assertCurrent()
-  const briefGuard = createWorkerBriefWriteGuard(runtime, args.launchedAgent, !!args.launchedAgent)
+  const stubFixture = args.systemCoordinator?.stubFixture
+  const briefGuard = stubFixture
+    ? {
+        beforeWrite: async (ptyId: string) => assertNativeStubFixtureWritable(stubFixture, ptyId),
+        dispose: () => {}
+      }
+    : createWorkerBriefWriteGuard(runtime, args.launchedAgent, !!args.launchedAgent)
   try {
     const sent = await sendAgentTurn({
       kind: 'terminal',

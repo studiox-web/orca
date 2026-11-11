@@ -3,6 +3,8 @@ import {
   ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS
 } from '../../../../../../shared/orchestration-timing-budgets'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { waitForNativeStubFixtureSubmission } from '../../../../native-stub-fixture-protocol'
+import type { PreparedNativeStubLaunch } from '../../../../native-stub-session-test-host'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
@@ -33,7 +35,11 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   structuredSession: Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
   terminalHandle: string
   coordinatorHandle: string
-  systemCoordinator?: { runId: string; assertCurrent: () => void }
+  systemCoordinator?: {
+    runId: string
+    assertCurrent: () => void
+    stubFixture?: PreparedNativeStubLaunch
+  }
   devMode: boolean | undefined
   requestId: string
   agent: string | null
@@ -84,18 +90,28 @@ export async function deliverAndSettleWorkerStartReadiness(args: {
   args.onStage('turn_observation')
   // Accepted writes need positive turn-start evidence when supported; structured sends prove acceptance or remain held.
   const promptDelivery = delivery.prompt
+  // Why: a delivery that waited out a held Windows paste must still fit the client's grace.
+  const turnStartTimeoutMs = Math.min(
+    AGENT_PROMPT_EFFECT_TIMEOUT_MS,
+    Math.max(0, ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS - (Date.now() - deliveryStartedAt))
+  )
+  const stubFixture = args.systemCoordinator?.stubFixture
   const turnStart: WorkerTurnStartObservation =
     delivery.structuredTurnStart ??
-    (await observeWorkerTurnStart({
-      runtime,
-      terminalHandle,
-      prompt: promptDelivery,
-      // Why: a delivery that waited out a held Windows paste must still fit the client's grace.
-      timeoutMs: Math.min(
-        AGENT_PROMPT_EFFECT_TIMEOUT_MS,
-        Math.max(0, ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS - (Date.now() - deliveryStartedAt))
-      )
-    }))
+    (stubFixture
+      ? // The stub fires no Codex turn hook; only its own echoed submission proves the turn.
+        {
+          verdict: (await waitForNativeStubFixtureSubmission(stubFixture, turnStartTimeoutMs))
+            ? 'observed'
+            : 'unobserved',
+          prompt: promptDelivery
+        }
+      : await observeWorkerTurnStart({
+          runtime,
+          terminalHandle,
+          prompt: promptDelivery,
+          timeoutMs: turnStartTimeoutMs
+        }))
   args.systemCoordinator?.assertCurrent()
   const deliveredPrompt = turnStart.prompt ?? promptDelivery
   monitorWorkerSetup({

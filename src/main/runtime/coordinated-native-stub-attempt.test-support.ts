@@ -1,9 +1,7 @@
 // A coordinated native stub attempt runs through the real Store, orchestration DB, pinned golden
-// stub composition and launch path; only the physical PTY spawn is mocked. The pinned stub is not
-// a Codex process, so this file controls the readiness/foreground runtime effects (composer wait,
-// foreground proof, prompt write receipt) the way the host contract allows; that control never
-// claims the pinned stub itself passes the app's real Codex readiness path, and no test here
-// enables any production/default-root capability.
+// stub composition, launch, readiness and prompt-write path; only the physical PTY is mocked, and
+// that mock plays the pinned stub's own READY/SUBMITTED byte protocol. Nothing here starts a
+// process, proves a real Codex/provider journey, or enables a production/default-root capability.
 
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -29,6 +27,10 @@ import {
   type LocalPtyExitCallback
 } from '../providers/local-pty/local-pty-provider-test-harness'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
+import {
+  emulatePinnedStubOnPty,
+  type StubPtyBehavior
+} from './native-stub-pty-emulator.test-support'
 import { makeRuntimePtySpawnTestDeps } from '../ipc/pty/runtime/spawn-preflight-test-deps-fixture'
 import { spawnPtyFromRuntimeController } from '../ipc/pty/runtime/spawn'
 import * as invalidators from '../ipc/worktree-change-invalidators'
@@ -46,6 +48,7 @@ const disposers: (() => void)[] = []
 
 let exitCallback: LocalPtyExitCallback | undefined
 let nativeSpawn: Mock = vi.fn()
+let stubBehavior: StubPtyBehavior = 'responsive'
 
 /** Registers per-test PTY mock and cleanup; the caller owns the hoisted `node-pty` mock. */
 export function installNativeStubAttemptHooks(spawn: Mock): void {
@@ -57,14 +60,22 @@ export function installNativeStubAttemptHooks(spawn: Mock): void {
 function resetNativeSpawn(): void {
   exitCallback = undefined
   nativeSpawn.mockReset()
-  nativeSpawn.mockImplementation(() =>
-    createLocalPtyMockProcess({
+  stubBehavior = 'responsive'
+  nativeSpawn.mockImplementation(() => {
+    const process = createLocalPtyMockProcess({
       get: () => exitCallback,
       set: (callback) => {
         exitCallback = callback
       }
     })
-  )
+    emulatePinnedStubOnPty(process, () => stubBehavior)
+    return process
+  })
+}
+
+/** Selects how the next controlled PTY plays the pinned stub. */
+export function setStubPtyBehavior(behavior: StubPtyBehavior): void {
+  stubBehavior = behavior
 }
 
 async function cleanupNativeStubAttempt(): Promise<void> {
@@ -140,6 +151,10 @@ export async function setupNativeStubAttempt(reuse?: {
   Object.defineProperty(runtime, 'ptyController', {
     value: {
       spawn,
+      write: (ptyId: string, data: string) => {
+        provider.write(ptyId, data)
+        return true
+      },
       kill: (ptyId: string) => {
         void ptyId
         exitCallback?.({ exitCode: -1 })
@@ -156,40 +171,10 @@ export async function setupNativeStubAttempt(reuse?: {
     createdTerminals.push(created)
     return created
   })
-  // The pinned stub cannot satisfy Codex readiness itself; the host-controlled effects stand in.
-  vi.spyOn(runtime, 'waitForFreshWorkerComposer').mockImplementation(async (handle: string) => ({
-    handle,
-    condition: 'tui-idle' as const,
-    satisfied: true,
-    status: 'running' as const,
-    exitCode: null
-  }))
-  vi.spyOn(runtime, 'waitForTerminal').mockImplementation(async (handle: string) => ({
-    handle,
-    condition: 'tui-idle' as const,
-    satisfied: true,
-    status: 'running' as const,
-    exitCode: null
-  }))
-  vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue('agent')
-  vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockImplementation(async (handle, body, options) => {
-    const created = createdTerminals.find((terminal) => terminal.handle === handle)
-    await options.beforeWrite?.(created?.ptyId ?? 'unknown-pty')
-    return {
-      handle,
-      accepted: true,
-      bytesWritten: body.length,
-      prompt: {
-        requestId: options.requestId ?? 'request',
-        stages: ['input_accepted', 'turn_started'] as const,
-        provider: 'codex',
-        observation: 'supported',
-        processIncarnation: created?.incarnationId ?? 'unknown',
-        generation: 1,
-        baselineWorkingSequence: 0
-      }
-    }
-  })
+  // The app composes provider output into the runtime; the stub's markers arrive on that path.
+  disposers.push(
+    provider.onData((payload) => runtime.onPtyData(payload.id, payload.data, Date.now()))
+  )
   const nativeStubWorker = createCoordinatedNativeStubWorker({
     runtime,
     store,

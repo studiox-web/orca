@@ -11,6 +11,7 @@ import type { prepareLocalWorkerStart } from './worker-start-validation'
 import type { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
 import type { WorkerWorktreeCreationTarget } from './worker-worktree-creation'
 import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
+import { waitForNativeStubFixtureReady } from '../../../../native-stub-fixture-protocol'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './worker-start-agent-placement'
 import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
@@ -79,6 +80,8 @@ export async function launchPreparedWorkerDispatch(
     throw new Error('worker_coordinator_required')
   }
   systemCoordinator?.assertCurrent()
+  // Only a host-owned coordinated launch of the pinned stub uses the stub's own readiness protocol.
+  const stubFixture = systemCoordinator ? args.preparedNativeStub : undefined
   const effects: WorkerEffect[] = []
   const task = started.task
   if (resolvedWorktree) {
@@ -148,12 +151,18 @@ export async function launchPreparedWorkerDispatch(
       : workerChat
         ? // A chat takes its task as a queued send whatever it is doing, so nothing is waited on.
           null
-        : await waitForWorkerAgentReady(runtime, terminalHandle, {
-            agent,
-            reusesTerminal: Boolean(params.terminal),
-            creation: placed.terminalCreation,
-            timeoutMs: params.timeoutMs ?? 60_000
-          })
+        : stubFixture
+          ? await waitForNativeStubFixtureReady(stubFixture, {
+              handle: terminalHandle,
+              ptyId: placed.terminalCreation?.ptyId,
+              timeoutMs: params.timeoutMs ?? 60_000
+            })
+          : await waitForWorkerAgentReady(runtime, terminalHandle, {
+              agent,
+              reusesTerminal: Boolean(params.terminal),
+              creation: placed.terminalCreation,
+              timeoutMs: params.timeoutMs ?? 60_000
+            })
     systemCoordinator?.assertCurrent()
     if (wait) {
       persistWorkerSetupWaitOutcome({ ...setupStage, wait })
@@ -195,7 +204,7 @@ export async function launchPreparedWorkerDispatch(
       terminalHandle,
       coordinatorHandle: params.from ?? `run:${run.id}`,
       systemCoordinator: systemCoordinator
-        ? { runId: run.id, assertCurrent: systemCoordinator.assertCurrent }
+        ? { runId: run.id, assertCurrent: systemCoordinator.assertCurrent, stubFixture }
         : undefined,
       devMode: params.devMode,
       requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
