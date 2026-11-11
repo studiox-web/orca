@@ -114,9 +114,12 @@ describe('Coordinated Run Operator Actions', () => {
     const progress = adapter.inspectProgress(run!.id)!
     expect(progress.operatorStop).toMatchObject({ reason: 'enough' })
     expect(progress.operatorDecisions).toHaveLength(1)
-    // A later stop is fenced by the settled run and writes nothing further.
-    await expect(adapter.stopRun(operatorScope(settled))).rejects.toThrow(/already settled/)
+    expect(stopped.disposition).toBe('recorded')
+    // A replay after the stop settled the run is acknowledged and writes nothing further.
+    const replay = await adapter.stopRun(operatorScope(settled))
+    expect(replay.disposition).toBe('already_recorded')
     expect(adapter.inspectProgress(run!.id)!.operatorDecisions).toHaveLength(1)
+    expect(adapter.inspectProgress(run!.id)!.operatorStop).toEqual(progress.operatorStop)
     db.close()
   })
 
@@ -252,6 +255,7 @@ describe('Coordinated Run Operator Actions', () => {
       retryOfDispatchId: firstDispatchId
     })
     expect(retried.state).toBe('completed')
+    expect(retried.disposition).toBe('recorded')
     const progress = adapter.inspectProgress(run!.id)!
     expect(progress.stages['writer'].status).toBe('accepted')
     expect(progress.stages['writer'].lineage).toHaveLength(2)
@@ -384,7 +388,9 @@ describe('Coordinated Run Operator Actions', () => {
     ).toEqual({
       canResolve: true,
       reason: null,
-      pendingGateId: 'gate-1'
+      pendingGateId: 'gate-1',
+      pendingGateIds: ['gate-1'],
+      approvableDispatchId: null
     })
     const stopped = { ...progress, operatorStop: { at: 5, reason: null } }
     expect(
@@ -394,28 +400,64 @@ describe('Coordinated Run Operator Actions', () => {
       reason: 'The run is stopping; a retry could fork unknown side effects.',
       retryOfDispatchId: null
     })
+    // An approval speaks for one attempt: it resolves the gate only while that attempt is current.
+    const attempt = (dispatchId: string, attemptNumber: number) => ({
+      attemptNumber,
+      kind: 'initial' as const,
+      dispatchId,
+      retryOfDispatchId: null,
+      previousLatestDispatchId: null,
+      startedAt: 1,
+      deadlineAt: 2,
+      leaseKeys: [],
+      status: 'active' as const
+    })
+    const approval = {
+      scope: 'stage' as const,
+      approvalId: 'gate-1',
+      role: 'reviewer',
+      approverIdentity: 'local_operator',
+      approvedAt: 9,
+      automationId: 'auto',
+      definitionRevision: 1,
+      automationRunId: 'run',
+      orchestrationRunId: 'orch',
+      childDefinitionId: 'writer',
+      taskId: 'task',
+      dispatchId: 'ctx_first'
+    }
     const approved = {
       ...progress,
-      approvals: [
-        {
-          scope: 'stage' as const,
-          approvalId: 'gate-1',
-          role: 'reviewer',
-          approverIdentity: 'local_operator',
-          approvedAt: 9,
-          automationId: 'auto',
-          definitionRevision: 1,
-          automationRunId: 'run',
-          orchestrationRunId: 'orch'
-        }
-      ]
+      stages: { writer: { ...progress.stages.writer, lineage: [attempt('ctx_first', 1)] } },
+      approvals: [approval]
     }
     expect(
       stageGateResolutionEligibility({ progress: approved, child: gatedChild, runSettled: false })
     ).toEqual({
       canResolve: false,
       reason: 'No pending gate awaits a decision for this stage.',
-      pendingGateId: null
+      pendingGateId: null,
+      pendingGateIds: [],
+      approvableDispatchId: 'ctx_first'
+    })
+    const superseded = {
+      ...approved,
+      stages: {
+        writer: {
+          ...progress.stages.writer,
+          lineage: [
+            { ...attempt('ctx_first', 1), status: 'abandoned' as const },
+            attempt('ctx_second', 2)
+          ]
+        }
+      }
+    }
+    expect(
+      stageGateResolutionEligibility({ progress: superseded, child: gatedChild, runSettled: false })
+    ).toMatchObject({
+      canResolve: true,
+      pendingGateIds: ['gate-1'],
+      approvableDispatchId: 'ctx_second'
     })
   })
 })

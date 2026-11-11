@@ -1,10 +1,11 @@
 import type { CoordinatedAutomationRunHost } from '../automations/coordinated-automation-run-host-types'
 import type {
-  CoordinatedRunInspection,
-  CoordinatedRunReconcileResult
+  CoordinatedOperatorActionResult,
+  CoordinatedRunInspection
 } from '../../shared/coordinated-automation-run-inspection'
 import type {
   CoordinatedFakeRunReconcileResponse,
+  CoordinatedOperatorActionResponse,
   CoordinatedFakeRunStartResponse,
   CoordinatedRunActionAvailability,
   CoordinatedRunView
@@ -130,7 +131,7 @@ export class RuntimeCoordinatedRunController {
   async stop(
     input: StopCoordinatedRunInput,
     runtimeId: string
-  ): Promise<CoordinatedFakeRunReconcileResponse> {
+  ): Promise<CoordinatedOperatorActionResponse> {
     const request = StopCoordinatedRun.parse(input)
     return this.operatorAction(request, runtimeId, (host, req) => host.stopRun(req))
   }
@@ -138,7 +139,7 @@ export class RuntimeCoordinatedRunController {
   async retryStage(
     input: RetryCoordinatedStageInput,
     runtimeId: string
-  ): Promise<CoordinatedFakeRunReconcileResponse> {
+  ): Promise<CoordinatedOperatorActionResponse> {
     const request = RetryCoordinatedStage.parse(input)
     return this.operatorAction(request, runtimeId, (host, req) => host.retryStage(req))
   }
@@ -146,7 +147,7 @@ export class RuntimeCoordinatedRunController {
   async resolveGate(
     input: ResolveCoordinatedGateInput,
     runtimeId: string
-  ): Promise<CoordinatedFakeRunReconcileResponse> {
+  ): Promise<CoordinatedOperatorActionResponse> {
     const request = ResolveCoordinatedGate.parse(input)
     return this.operatorAction(request, runtimeId, (host, req) => host.resolveGate(req))
   }
@@ -157,8 +158,8 @@ export class RuntimeCoordinatedRunController {
     invoke: (
       host: CoordinatedAutomationRunHost,
       request: T
-    ) => Promise<CoordinatedRunReconcileResult>
-  ): Promise<CoordinatedFakeRunReconcileResponse> {
+    ) => Promise<CoordinatedOperatorActionResult>
+  ): Promise<CoordinatedOperatorActionResponse> {
     const host = this.requireHost()
     assertCoordinatedRunSelection(this.store!, request, runtimeId)
     const result = await invoke(host, request)
@@ -166,6 +167,7 @@ export class RuntimeCoordinatedRunController {
     return {
       state: result.state,
       reason: result.reason,
+      disposition: result.disposition,
       view: this.view(inspection, request, runtimeId)
     }
   }

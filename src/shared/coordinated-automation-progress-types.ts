@@ -145,6 +145,8 @@ export type CoordinatedOperatorDecision = {
   childDefinitionId: string | null
   dispatchId: string | null
   gateId: string | null
+  /** Scope the gate decision was bound to; absent on records written before scopes existed. */
+  gateScope?: 'stage' | 'parent' | 'escalation'
   decision: 'approve' | 'reject' | 'escalate' | null
   detail: string
 }

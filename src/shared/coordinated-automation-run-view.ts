@@ -1,4 +1,5 @@
 import type {
+  CoordinatedOperatorActionDisposition,
   CoordinatedRunInspection,
   CoordinatedRunSemanticState
 } from './coordinated-automation-run-inspection'
@@ -27,6 +28,11 @@ export type CoordinatedFakeRunReconcileResponse = {
   state: CoordinatedRunSemanticState
   reason: string | null
   view: CoordinatedRunView
+}
+
+/** Result of stopCoordinatedRun / retryCoordinatedStage / resolveCoordinatedGate. */
+export type CoordinatedOperatorActionResponse = CoordinatedFakeRunReconcileResponse & {
+  disposition: CoordinatedOperatorActionDisposition
 }
 
 export type CoordinatedFakeRunStartResponse = CoordinatedFakeRunReconcileResponse & {

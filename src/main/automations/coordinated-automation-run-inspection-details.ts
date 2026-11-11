@@ -22,7 +22,8 @@ import {
 } from './coordinated-automation-native-attempt'
 import { nativeDispatchLineageProblem } from './coordinated-automation-native-validation'
 import {
-  pendingHumanDecisionKeys,
+  pendingHumanDecisions,
+  stageBoundDispatchId,
   stageGateResolutionEligibility,
   stageRetryEligibility
 } from './coordinated-automation-operator-eligibility'
@@ -118,6 +119,7 @@ function projectApprovalStatus(
     (entry) =>
       entry.kind === 'gate_resolution' &&
       entry.gateId === requirement.id &&
+      (entry.gateScope ?? scope) === scope &&
       entry.decision === 'reject'
   )
   return {
@@ -171,7 +173,7 @@ function stageObservation(
       orchestrationRunId: run.orchestrationRunId ?? null,
       childDefinitionId: child.childDefinitionId,
       ...(mapping?.taskId ? { taskId: mapping.taskId } : {}),
-      ...(stage?.acceptedDispatchId ? { dispatchId: stage.acceptedDispatchId } : {})
+      ...(stageBoundDispatchId(stage) ? { dispatchId: stageBoundDispatchId(stage)! } : {})
     }
   }
 }
@@ -180,10 +182,18 @@ export function runHumanResolution(input: {
   snapshot: ResolvedAutomationRunSnapshot
   progress: CoordinatedRunProgress | null
 }): CoordinatedRunHumanResolution {
-  const keys = input.progress ? pendingHumanDecisionKeys(input.progress, input.snapshot) : []
-  return keys.length > 0
-    ? { available: true, reason: null, pendingDecisionKeys: keys }
-    : { available: false, reason: 'No pending human decisions.', pendingDecisionKeys: [] }
+  const pendingDecisions = input.progress
+    ? pendingHumanDecisions(input.progress, input.snapshot)
+    : []
+  const pendingDecisionKeys = pendingDecisions.map((decision) => decision.gateId)
+  return pendingDecisions.length > 0
+    ? { available: true, reason: null, pendingDecisionKeys, pendingDecisions }
+    : {
+        available: false,
+        reason: 'No pending human decisions.',
+        pendingDecisionKeys,
+        pendingDecisions
+      }
 }
 
 /** Both operator eligibility projections for one stage, or the exact read failure reason. */
@@ -195,7 +205,13 @@ export function stageOperatorEligibility(input: {
   if (input.progress.kind !== 'available') {
     return {
       retry: { canRetry: false, reason: input.progress.reason, retryOfDispatchId: null },
-      gate: { canResolve: false, reason: input.progress.reason, pendingGateId: null }
+      gate: {
+        canResolve: false,
+        reason: input.progress.reason,
+        pendingGateId: null,
+        pendingGateIds: [],
+        approvableDispatchId: null
+      }
     }
   }
   const progress = input.progress.progress

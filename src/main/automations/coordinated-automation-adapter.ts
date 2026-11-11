@@ -4,6 +4,7 @@ import {
 } from './coordinated-automation-native-stub-worker'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
+import type { CoordinatedOperatorActionDisposition } from '../../shared/coordinated-automation-run-inspection'
 import type { SemanticReceiptEffect } from '../../shared/coordinated-automation-receipt-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db'
 import type { Store } from '../persistence/loading-store/store'
@@ -26,6 +27,9 @@ import {
 } from './coordinated-automation-task-execution'
 import {
   operatorResolveGate,
+  type CoordinatedOperatorGateInput
+} from './coordinated-automation-operator-gate-resolution'
+import {
   operatorRetryStage,
   operatorStopRun,
   type CoordinatedOperatorScopeInput
@@ -68,6 +72,10 @@ export {
   type CoordinatedWorkerProvider,
   CoordinatedAutomationLaunchRefusedError,
   orchestrationRecordProbe
+}
+
+export type CoordinatedOperatorOutcome = CoordinatedRunOutcome & {
+  disposition: CoordinatedOperatorActionDisposition
 }
 
 export type CoordinatedAutomationAdapterContext = {
@@ -180,12 +188,14 @@ export class CoordinatedAutomationAdapter {
   /** Operator stop: durable marker fences dispatch, native cancellation, then one reconcile. */
   async stopRun(
     input: CoordinatedOperatorScopeInput & { automationRunId: string; note?: string }
-  ): Promise<CoordinatedRunOutcome> {
+  ): Promise<CoordinatedOperatorOutcome> {
     return this.#operatorMutation(input.automationRunId, (run) => {
-      operatorStopRun(this.#ctx, run, input)
-      if (this.#ctx.nativeStubWorker) {
+      const disposition = operatorStopRun(this.#ctx, run, input)
+      // A replay re-requests nothing: the first request already asked native authority to stop.
+      if (disposition === 'recorded' && this.#ctx.nativeStubWorker) {
         requestCoordinatedNativeStops(this.#ctx.nativeStubWorker, run)
       }
+      return disposition
     })
   }
 
@@ -196,23 +206,15 @@ export class CoordinatedAutomationAdapter {
       taskId: string
       retryOfDispatchId: string
     }
-  ): Promise<CoordinatedRunOutcome> {
+  ): Promise<CoordinatedOperatorOutcome> {
     return this.#operatorMutation(input.automationRunId, (run) =>
       operatorRetryStage(this.#ctx, run, input)
     )
   }
 
   async resolveGate(
-    input: CoordinatedOperatorScopeInput & {
-      automationRunId: string
-      gateId: string
-      decision: 'approve' | 'reject' | 'escalate'
-      note?: string
-      childDefinitionId?: string
-      taskId?: string
-      dispatchId?: string
-    }
-  ): Promise<CoordinatedRunOutcome> {
+    input: CoordinatedOperatorGateInput & { automationRunId: string }
+  ): Promise<CoordinatedOperatorOutcome> {
     return this.#operatorMutation(input.automationRunId, (run) =>
       operatorResolveGate(this.#ctx, run, input)
     )
@@ -220,13 +222,13 @@ export class CoordinatedAutomationAdapter {
 
   async #operatorMutation(
     automationRunId: string,
-    mutate: (run: AutomationRun) => void
-  ): Promise<CoordinatedRunOutcome> {
+    mutate: (run: AutomationRun) => CoordinatedOperatorActionDisposition
+  ): Promise<CoordinatedOperatorOutcome> {
     const run = this.#getRunOrThrow(automationRunId)
     return this.runInParentLane(run.automationId, async () => {
       assertCoordinatorActive(this.#ctx)
-      mutate(run)
-      return this.reconcileRunInLane(automationRunId)
+      const disposition = mutate(run)
+      return { ...(await this.reconcileRunInLane(automationRunId)), disposition }
     })
   }
 

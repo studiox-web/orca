@@ -1,5 +1,6 @@
 import type {
   CoordinatedGateResolutionEligibility,
+  CoordinatedPendingDecision,
   CoordinatedRetryEligibility
 } from '../../shared/coordinated-automation-run-inspection'
 import type { CoordinatedRunProgress } from '../../shared/coordinated-automation-progress-types'
@@ -84,73 +85,125 @@ export function stageGateResolutionEligibility(input: {
 }): CoordinatedGateResolutionEligibility {
   const { progress, child } = input
   if (input.runSettled) {
-    return { canResolve: false, reason: 'The run is already settled.', pendingGateId: null }
-  }
-  for (const requirement of child.stageAcceptance?.requiredApprovals ?? []) {
-    if (requirement.required === false) {
-      continue
-    }
-    if (gatePending(progress, requirement.id)) {
-      return { canResolve: true, reason: null, pendingGateId: requirement.id }
+    return {
+      canResolve: false,
+      reason: 'The run is already settled.',
+      pendingGateId: null,
+      pendingGateIds: [],
+      approvableDispatchId: null
     }
   }
-  const escalation = progress.escalations.find(
-    (entry) => entry.requiresHumanDecision && entry.childDefinitionId === child.childDefinitionId
-  )
-  if (escalation) {
-    return { canResolve: true, reason: null, pendingGateId: escalation.key }
-  }
-  return {
-    canResolve: false,
-    reason: 'No pending gate awaits a decision for this stage.',
-    pendingGateId: null
-  }
+  const pendingGateIds = [
+    ...(child.stageAcceptance?.requiredApprovals ?? [])
+      .filter(
+        (requirement) =>
+          requirement.required !== false && gatePending(progress, requirement.id, 'stage')
+      )
+      .map((requirement) => requirement.id),
+    ...progress.escalations
+      .filter(
+        (entry) =>
+          entry.childDefinitionId === child.childDefinitionId && escalationPending(progress, entry)
+      )
+      .map((entry) => entry.key)
+  ]
+  const approvableDispatchId = stageBoundDispatchId(progress.stages[child.childDefinitionId])
+  return pendingGateIds.length > 0
+    ? {
+        canResolve: true,
+        reason: null,
+        pendingGateId: pendingGateIds[0],
+        pendingGateIds,
+        approvableDispatchId
+      }
+    : {
+        canResolve: false,
+        reason: 'No pending gate awaits a decision for this stage.',
+        pendingGateId: null,
+        pendingGateIds,
+        approvableDispatchId
+      }
 }
 
-export function gatePending(progress: CoordinatedRunProgress, gateId: string): boolean {
+/** The one attempt a stage approval speaks for: the accepted Dispatch, else the latest launched. */
+export function stageBoundDispatchId(
+  stage: CoordinatedRunProgress['stages'][string] | undefined
+): string | null {
+  return stage ? (stage.acceptedDispatchId ?? lastAttemptDispatchId(stage)) : null
+}
+
+/** A requirement is pending in one scope until that scope records an approval or a rejection. */
+export function gatePending(
+  progress: CoordinatedRunProgress,
+  gateId: string,
+  scope: 'stage' | 'parent'
+): boolean {
   const approved = (progress.approvals ?? []).some(
-    (approval) => approval.scope === 'stage' && approval.approvalId === gateId
+    (approval) =>
+      approval.scope === scope &&
+      approval.approvalId === gateId &&
+      // A stage approval of a superseded attempt does not approve the current one.
+      (scope === 'parent' ||
+        approval.dispatchId ===
+          (stageBoundDispatchId(progress.stages[approval.childDefinitionId ?? '']) ?? undefined))
   )
   const rejected = (progress.operatorDecisions ?? []).some(
     (decision) =>
       decision.kind === 'gate_resolution' &&
       decision.gateId === gateId &&
+      // Records written before scopes existed were stage-first; treat them as either scope.
+      (decision.gateScope ?? scope) === scope &&
       decision.decision === 'reject'
   )
   return !approved && !rejected
 }
 
-/** Escalation keys and unmet approval requirement ids awaiting an operator decision. */
-export function pendingHumanDecisionKeys(
+/** Pending operator decisions with the scope each is bound to: parent, stage, then escalations. */
+export function pendingHumanDecisions(
   progress: CoordinatedRunProgress,
   snapshot: ResolvedAutomationRunSnapshot
-): string[] {
-  const keys: string[] = []
+): CoordinatedPendingDecision[] {
+  const pending: CoordinatedPendingDecision[] = []
   for (const requirement of snapshot.outcomeContract.requiredApprovals) {
-    const approved = (progress.approvals ?? []).some(
-      (approval) => approval.scope === 'parent' && approval.approvalId === requirement.id
-    )
-    const rejected = (progress.operatorDecisions ?? []).some(
-      (decision) =>
-        decision.kind === 'gate_resolution' &&
-        decision.decision === 'reject' &&
-        decision.gateId === requirement.id
-    )
-    if (!approved && !rejected) {
-      keys.push(requirement.id)
+    if (gatePending(progress, requirement.id, 'parent')) {
+      pending.push({ gateId: requirement.id, scope: 'parent', childDefinitionId: null })
     }
   }
   for (const child of snapshot.resolvedChildren) {
     for (const requirement of child.stageAcceptance?.requiredApprovals ?? []) {
-      if (requirement.required !== false && gatePending(progress, requirement.id)) {
-        keys.push(requirement.id)
+      if (requirement.required !== false && gatePending(progress, requirement.id, 'stage')) {
+        pending.push({
+          gateId: requirement.id,
+          scope: 'stage',
+          childDefinitionId: child.childDefinitionId
+        })
       }
     }
   }
   for (const escalation of progress.escalations) {
-    if (escalation.requiresHumanDecision) {
-      keys.push(escalation.key)
+    if (escalationPending(progress, escalation)) {
+      pending.push({
+        gateId: escalation.key,
+        scope: 'escalation',
+        childDefinitionId: escalation.childDefinitionId
+      })
     }
   }
-  return keys
+  return pending
+}
+
+/** A human-decision escalation stays pending until the operator records a decision for its key. */
+function escalationPending(
+  progress: CoordinatedRunProgress,
+  escalation: CoordinatedRunProgress['escalations'][number]
+): boolean {
+  return (
+    escalation.requiresHumanDecision &&
+    !(progress.operatorDecisions ?? []).some(
+      (decision) =>
+        decision.kind === 'gate_resolution' &&
+        decision.gateId === escalation.key &&
+        (decision.gateScope ?? 'escalation') === 'escalation'
+    )
+  )
 }

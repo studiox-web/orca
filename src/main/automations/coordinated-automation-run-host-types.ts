@@ -1,11 +1,14 @@
 import type { AutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
 import type {
+  CoordinatedGateScope,
   CoordinatedManualRunResult,
+  CoordinatedOperatorActionResult,
   CoordinatedRunInspection,
   CoordinatedRunReconcileResult
 } from '../../shared/coordinated-automation-run-inspection'
 export type {
   Availability,
+  CoordinatedOperatorActionResult,
   CoordinatedRunSemanticState,
   CoordinatedStageInspection,
   CoordinatedRunInspection,
@@ -88,9 +91,9 @@ export type CoordinatedAutomationRunHost = {
   startManualRun: (request: CoordinatedManualRunRequest) => Promise<CoordinatedManualRunResult>
   reconcileRun: (request: CoordinatedRunScopeRequest) => Promise<CoordinatedRunReconcileResult>
   inspectRun: (request: CoordinatedRunScopeRequest) => CoordinatedRunInspection
-  stopRun: (request: CoordinatedRunStopRequest) => Promise<CoordinatedRunReconcileResult>
-  retryStage: (request: CoordinatedRunRetryRequest) => Promise<CoordinatedRunReconcileResult>
-  resolveGate: (request: CoordinatedRunGateRequest) => Promise<CoordinatedRunReconcileResult>
+  stopRun: (request: CoordinatedRunStopRequest) => Promise<CoordinatedOperatorActionResult>
+  retryStage: (request: CoordinatedRunRetryRequest) => Promise<CoordinatedOperatorActionResult>
+  resolveGate: (request: CoordinatedRunGateRequest) => Promise<CoordinatedOperatorActionResult>
 }
 
 /** Operator actions bind to the run's frozen orchestration Run, revision, and authority. */
@@ -110,6 +113,7 @@ export type CoordinatedRunRetryRequest = CoordinatedRunOperatorScope & {
 
 export type CoordinatedRunGateRequest = CoordinatedRunOperatorScope & {
   gateId: string
+  gateScope?: CoordinatedGateScope
   decision: 'approve' | 'reject' | 'escalate'
   note?: string
   childDefinitionId?: string

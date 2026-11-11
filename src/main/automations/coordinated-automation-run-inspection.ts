@@ -12,6 +12,8 @@ import {
   nativeDispatchLineageProblem
 } from './coordinated-automation-native-validation'
 import { runIsOperatorSettled } from './coordinated-automation-operator-actions'
+import { isOpenAttempt, lastAttemptDispatchId } from './coordinated-automation-attempt-lineage'
+import { stageReportEvidence } from './coordinated-automation-stage-report-evidence'
 import {
   approvalObservations,
   runHumanResolution,
@@ -119,6 +121,7 @@ function semanticStage(
         kind: 'available',
         status: stage.status,
         attempts: stage.attempts,
+        activeDispatchId: lastAttemptDispatchId(stage),
         acceptedDispatchId: stage.acceptedDispatchId,
         lastError: stage.lastError,
         lineage: stage.lineage
@@ -213,7 +216,12 @@ export function inspectCoordinatedRun(input: {
         ? { kind: 'unavailable', reason: untrusted.reason }
         : stageSessionTarget(db, run, child, taskId, mapping?.dispatchId ?? null),
       retryEligibility: operator.retry,
-      gateResolutionEligibility: operator.gate
+      gateResolutionEligibility: operator.gate,
+      evidence:
+        untrusted ??
+        (progress.kind === 'available'
+          ? stageReportEvidence(db, progress.progress, child.childDefinitionId, taskId)
+          : { kind: progress.kind, reason: progress.reason })
     }
   })
   return {
@@ -226,6 +234,15 @@ export function inspectCoordinatedRun(input: {
     idempotencyKey: run.idempotencyKey ?? null,
     materializationPhase: run.materializationPhase ?? null,
     orchestrationRunId,
+    targetExecutionAuthority: snapshot
+      ? `${snapshot.executionTarget.type}:${snapshot.executionTarget.id}`
+      : null,
+    activeStageIds:
+      progress.kind === 'available' && !mappingProblem
+        ? Object.entries(progress.progress.stages)
+            .filter(([, stage]) => stage.lineage.some(isOpenAttempt))
+            .map(([id]) => id)
+        : [],
     stages,
     progress:
       progress.kind === 'available'
@@ -248,7 +265,12 @@ export function inspectCoordinatedRun(input: {
     operatorStop: trustedProgressOrNull(progress)?.operatorStop ?? null,
     humanResolution: snapshot
       ? runHumanResolution({ snapshot, progress: trustedProgressOrNull(progress) })
-      : { available: false, reason: 'The run has no frozen snapshot.', pendingDecisionKeys: [] }
+      : {
+          available: false,
+          reason: 'The run has no frozen snapshot.',
+          pendingDecisionKeys: [],
+          pendingDecisions: []
+        }
   }
 }
 

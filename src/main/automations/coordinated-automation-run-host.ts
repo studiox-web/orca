@@ -22,6 +22,7 @@ import {
   type CoordinatedRunHostInjection,
   type CoordinatedRunInspection,
   type CoordinatedRunReconcileResult,
+  type CoordinatedOperatorActionResult,
   type CoordinatedRunStopRequest,
   type CoordinatedRunRetryRequest,
   type CoordinatedRunGateRequest
@@ -245,21 +246,21 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
     }
   }
 
-  async stopRun(request: CoordinatedRunStopRequest): Promise<CoordinatedRunReconcileResult> {
+  async stopRun(request: CoordinatedRunStopRequest): Promise<CoordinatedOperatorActionResult> {
     this.#refuseIf(this.#runRefusal(request))
     await this.#admit()
     const outcome = await this.#adapter.stopRun(request)
     return this.#operatorResult(request, outcome)
   }
 
-  async retryStage(request: CoordinatedRunRetryRequest): Promise<CoordinatedRunReconcileResult> {
+  async retryStage(request: CoordinatedRunRetryRequest): Promise<CoordinatedOperatorActionResult> {
     this.#refuseIf(this.#runRefusal(request))
     await this.#admit()
     const outcome = await this.#adapter.retryStage(request)
     return this.#operatorResult(request, outcome)
   }
 
-  async resolveGate(request: CoordinatedRunGateRequest): Promise<CoordinatedRunReconcileResult> {
+  async resolveGate(request: CoordinatedRunGateRequest): Promise<CoordinatedOperatorActionResult> {
     this.#refuseIf(this.#runRefusal(request))
     await this.#admit()
     const outcome = await this.#adapter.resolveGate(request)
@@ -268,12 +269,17 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
 
   #operatorResult(
     request: CoordinatedRunScopeRequest,
-    outcome: { state: CoordinatedRunReconcileResult['state']; reason: string | null }
-  ): CoordinatedRunReconcileResult {
+    outcome: {
+      state: CoordinatedRunReconcileResult['state']
+      reason: string | null
+      disposition: CoordinatedOperatorActionResult['disposition']
+    }
+  ): CoordinatedOperatorActionResult {
     return {
       automationRunId: request.automationRunId,
       state: outcome.state,
       reason: outcome.reason,
+      disposition: outcome.disposition,
       inspection: this.#read(request)
     }
   }

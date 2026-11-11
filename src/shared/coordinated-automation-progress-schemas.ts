@@ -133,6 +133,7 @@ export const CoordinatedRunProgressSchema: z.ZodType<CoordinatedRunProgress> = z
         childDefinitionId: z.string().nullable(),
         dispatchId: z.string().nullable(),
         gateId: z.string().nullable(),
+        gateScope: z.enum(['stage', 'parent', 'escalation']).optional(),
         decision: z.enum(['approve', 'reject', 'escalate']).nullable(),
         detail: z.string()
       })

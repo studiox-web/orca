@@ -68,6 +68,24 @@ export type StageApprovalValidationContext = Readonly<{
 
 export type StageApprovalValidationResult = { valid: true } | { valid: false; error: string }
 
+/**
+ * One id may name a stage requirement and a parent requirement; a well-formed approval of the
+ * other scope belongs to that other requirement. Anything unscoped still reaches the refusals.
+ */
+function approvalsForScope(
+  approvals: readonly CoordinatedHostApproval[],
+  approvalId: string,
+  scope: 'stage' | 'parent'
+): CoordinatedHostApproval[] {
+  // Stage identity on a parent-scoped record (or none on a stage-scoped one) is a mis-scoped
+  // approval, not the other requirement's; it stays in the match so its scope is refused.
+  const belongsToOtherRequirement = (a: CoordinatedHostApproval): boolean =>
+    scope === 'stage'
+      ? a.scope === 'parent' && a.childDefinitionId === undefined && a.dispatchId === undefined
+      : a.scope === 'stage' && typeof a.childDefinitionId === 'string'
+  return approvals.filter((a) => a.approvalId === approvalId && !belongsToOtherRequirement(a))
+}
+
 function validateCommonApprovalIdentity(
   match: CoordinatedHostApproval,
   req: { id: string; role: string; disallowAuthorApproval?: boolean },
@@ -146,7 +164,7 @@ export function validateStageApprovals(
   const usedApprovers = new Set<string>()
 
   for (const req of required) {
-    const byId = approvals.filter((a) => a.approvalId === req.id)
+    const byId = approvalsForScope(approvals, req.id, 'stage')
     if (byId.length === 0) {
       return {
         valid: false,
@@ -216,7 +234,7 @@ export function resolveParentReceiptApprovals(
   const errors: string[] = []
 
   for (const req of requirements) {
-    const byId = approvals.filter((a) => a.approvalId === req.id)
+    const byId = approvalsForScope(approvals, req.id, 'parent')
     if (byId.length === 0) {
       errors.push(
         `Required approval "${req.id}" (role "${req.role}") is missing from host approvals.`

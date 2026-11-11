@@ -6,7 +6,12 @@ import type {
   CoordinatedRunHalt,
   CoordinatedStageStatus
 } from './coordinated-automation-progress-types'
-import type { SemanticCompletionReceipt } from './coordinated-automation-receipt-types'
+import type {
+  SemanticCompletionReceipt,
+  StructuredWorkerBlocker,
+  StructuredWorkerCheck,
+  StructuredWorkerResultOutcome
+} from './coordinated-automation-receipt-types'
 import type { CoordinatedCompletionTrust } from './coordinated-automation-types'
 import type { CoordinatedRunMaterializationPhase } from './coordinated-automation-saga-types'
 
@@ -50,6 +55,40 @@ export type CoordinatedGateResolutionEligibility = {
   reason: string | null
   /** Unmet approval requirement id or human-decision escalation key awaiting a decision. */
   pendingGateId: string | null
+  /** Every pending gate of this stage, in resolution order; `pendingGateId` is the first. */
+  pendingGateIds: readonly string[]
+  /**
+   * The attempt an `approve` of a stage requirement would bind; null means approve is refused
+   * until an attempt exists (reject/escalate need none).
+   */
+  approvableDispatchId: string | null
+}
+
+export type CoordinatedGateScope = 'stage' | 'parent' | 'escalation'
+
+/** One pending operator decision with the scope the host will bind it to. */
+export type CoordinatedPendingDecision = {
+  gateId: string
+  scope: CoordinatedGateScope
+  /** Owning stage for stage gates and stage escalations; null for parent/run scope. */
+  childDefinitionId: string | null
+}
+
+/**
+ * What one stage's latest admitted report said, re-read from the native Task result and shown
+ * only while those bytes still match the digest the coordinator admitted. Never inferred.
+ */
+export type CoordinatedStageReportEvidence = {
+  dispatchId: string
+  reportDigest: string
+  /** How the coordinator disposed of this report; only `accepted` satisfies the stage. */
+  disposition: 'accepted' | 'rejected' | 'stale' | 'duplicate'
+  dispositionReason: string | null
+  outcome: StructuredWorkerResultOutcome
+  summary: string
+  artifacts: { kind: string; uri: string; sha256: string | null }[]
+  checks: StructuredWorkerCheck[]
+  blockers: StructuredWorkerBlocker[]
 }
 
 export type CoordinatedApprovalObservation = {
@@ -77,6 +116,8 @@ export type CoordinatedRunHumanResolution = {
   reason: string | null
   /** Escalation keys and unmet approval ids awaiting an operator decision. */
   pendingDecisionKeys: readonly string[]
+  /** The same pending decisions with their scope; one id may appear once per scope. */
+  pendingDecisions: readonly CoordinatedPendingDecision[]
 }
 
 export type CoordinatedStageInspection = {
@@ -95,6 +136,8 @@ export type CoordinatedStageInspection = {
   semantic: Availability<{
     status: CoordinatedStageStatus
     attempts: number
+    /** Latest attempt the coordinator launched for this stage, admitted or not. */
+    activeDispatchId: string | null
     acceptedDispatchId: string | null
     lastError: string | null
     lineage: CoordinatedAttemptRecord[]
@@ -105,6 +148,8 @@ export type CoordinatedStageInspection = {
   retryEligibility: CoordinatedRetryEligibility
   /** Host-computed pending gates this stage can resolve. */
   gateResolutionEligibility: CoordinatedGateResolutionEligibility
+  /** Latest admitted report evidence; absent before any report, unavailable if unprovable. */
+  evidence: Availability<CoordinatedStageReportEvidence>
 }
 
 export type CoordinatedRunInspection = {
@@ -117,6 +162,10 @@ export type CoordinatedRunInspection = {
   idempotencyKey: string | null
   materializationPhase: CoordinatedRunMaterializationPhase | null
   orchestrationRunId: string | null
+  /** Frozen `<type>:<id>` execution authority operator actions must name; null if unfrozen. */
+  targetExecutionAuthority: string | null
+  /** Stages with an attempt currently open, from trusted progress; empty when unknown. */
+  activeStageIds: readonly string[]
   stages: CoordinatedStageInspection[]
   progress: Availability<{
     generation: number
@@ -145,6 +194,13 @@ export type CoordinatedRunReconcileResult = {
   state: CoordinatedRunSemanticState
   reason: string | null
   inspection: CoordinatedRunInspection
+}
+
+/** `already_recorded`: an identical earlier request took effect; this replay wrote nothing. */
+export type CoordinatedOperatorActionDisposition = 'recorded' | 'already_recorded'
+
+export type CoordinatedOperatorActionResult = CoordinatedRunReconcileResult & {
+  disposition: CoordinatedOperatorActionDisposition
 }
 
 export type CoordinatedManualRunResult = CoordinatedRunReconcileResult & {

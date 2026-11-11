@@ -24,6 +24,12 @@ const CoordinatedRunOperatorBase = CoordinatedRunParent.extend({
   targetExecutionAuthority: requiredString('Missing target execution authority')
 })
 
+/**
+ * Operator actions carry no request id: each is idempotent on its natural key and answers a
+ * replay with `disposition: 'already_recorded'` and no new write — stop on the run, retry on
+ * (stage, retryOfDispatchId), gate resolution on (gate, scope, decision). A different decision
+ * for a resolved gate, or a retry naming anything but the latest attempt, is refused.
+ */
 /** Idempotent operator stop: replays after the durable marker are acknowledged, not re-issued. */
 export const StopCoordinatedRun = CoordinatedRunOperatorBase
 
@@ -37,6 +43,8 @@ export const RetryCoordinatedStage = CoordinatedRunOperatorBase.extend({
 /** Bind an operator decision to the exact run/artifact/evidence scope of one pending gate. */
 export const ResolveCoordinatedGate = CoordinatedRunOperatorBase.extend({
   gateId: requiredString('Missing gate id'),
+  /** Disambiguates an id used by both a stage and a parent requirement; stage-first if omitted. */
+  gateScope: z.enum(['stage', 'parent', 'escalation']).optional(),
   decision: z.enum(['approve', 'reject', 'escalate']),
   note: z.string().min(1).max(2000).optional(),
   childDefinitionId: z.string().min(1).optional(),

@@ -50,29 +50,46 @@ it('operator stop drives the native attempt to proven exit and settles the run a
   expect(terminal).toBeDefined()
 })
 
-it('records a fully scoped operator approval that satisfies stage acceptance on the late report', async () => {
+it('binds one gate id per scope: the stage approval names the exact attempt, the parent names none', async () => {
   const f = await setup()
   const gated = child('writer', {
     stageAcceptance: {
       requiredApprovals: [{ id: 'gate-review', role: 'reviewer', required: true }]
     }
   })
-  const { run, writerTaskId } = await createNativeRun(f, [gated])
+  const { run, writerTaskId } = await createNativeRun(f, [gated], 30, {
+    outcomeContract: {
+      humanStatement: 'One reviewed article is ready.',
+      acceptanceCriteria: [
+        { id: 'draft-ready', description: 'Draft accepted', required: true, kind: 'custom' }
+      ],
+      // The same id is also a parent requirement; each scope needs its own decision.
+      requiredApprovals: [{ id: 'gate-review', role: 'editor' }],
+      allowedFinalStates: ['completed', 'failed', 'blocked', 'outcome_uncertain']
+    }
+  })
   const dispatchId = await dispatchWriter(f, run.id)
   const terminal = f.createdTerminals.at(-1)!
 
+  // The host binds the stage approval to the stage's one launched attempt when none is named.
   const resolved = await f.adapter.resolveGate({
     ...operatorScope(run),
     gateId: 'gate-review',
     decision: 'approve',
     note: 'Reviewed out of band.',
-    childDefinitionId: 'writer',
-    taskId: writerTaskId,
-    dispatchId
+    childDefinitionId: 'writer'
   })
   expect(resolved.state).toBe('outcome_uncertain')
+  expect(resolved.disposition).toBe('recorded')
+  const parent = await f.adapter.resolveGate({
+    ...operatorScope(run),
+    gateId: 'gate-review',
+    gateScope: 'parent',
+    decision: 'approve'
+  })
+  expect(parent.disposition).toBe('recorded')
   const progress = f.adapter.inspectProgress(run.id)!
-  expect(progress.approvals).toHaveLength(1)
+  expect(progress.approvals).toHaveLength(2)
   expect(progress.approvals![0]).toMatchObject({
     scope: 'stage',
     approvalId: 'gate-review',
@@ -81,6 +98,8 @@ it('records a fully scoped operator approval that satisfies stage acceptance on 
     taskId: writerTaskId,
     dispatchId
   })
+  expect(progress.approvals![1]).toMatchObject({ scope: 'parent', approvalId: 'gate-review' })
+  expect(progress.approvals![1].dispatchId).toBeUndefined()
 
   await sendWorkerDone(f, {
     handle: terminal.handle,
@@ -126,26 +145,23 @@ it('refuses gate replays and scope-mismatched decisions before any write', async
       dispatchId
     })
   ).rejects.toThrow(/belongs to stage/)
-  await expect(
-    f.adapter.resolveGate({
-      ...operatorScope(run),
-      gateId: 'gate-review',
-      decision: 'approve',
-      childDefinitionId: 'writer',
-      taskId: writerTaskId,
-      dispatchId
-    })
-  ).resolves.toBeDefined()
-  await expect(
-    f.adapter.resolveGate({
-      ...operatorScope(run),
-      gateId: 'gate-review',
-      decision: 'approve',
-      childDefinitionId: 'writer',
-      taskId: writerTaskId,
-      dispatchId
-    })
-  ).rejects.toThrow(/already been resolved/)
+  const approve = {
+    ...operatorScope(run),
+    gateId: 'gate-review',
+    decision: 'approve' as const,
+    childDefinitionId: 'writer',
+    taskId: writerTaskId,
+    dispatchId
+  }
+  expect((await f.adapter.resolveGate(approve)).disposition).toBe('recorded')
+  // A lost acknowledgement replays to the same answer; a different decision is refused.
+  expect((await f.adapter.resolveGate(approve)).disposition).toBe('already_recorded')
+  await expect(f.adapter.resolveGate({ ...approve, decision: 'reject' })).rejects.toThrow(
+    /already been resolved as "approve"/
+  )
+  await expect(f.adapter.resolveGate({ ...approve, gateScope: 'parent' })).rejects.toThrow(
+    /not a pending approval requirement/
+  )
   const progress = f.adapter.inspectProgress(run.id)!
   expect(progress.approvals).toHaveLength(1)
   expect(progress.operatorDecisions!.filter((d) => d.kind === 'gate_resolution')).toHaveLength(1)

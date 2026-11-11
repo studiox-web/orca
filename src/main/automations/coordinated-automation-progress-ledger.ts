@@ -125,16 +125,18 @@ export function withOperatorDecision(
   return { ...progress, operatorDecisions: [...(progress.operatorDecisions ?? []), decision] }
 }
 
-/** One approval per scope/id; a duplicate records nothing so replays stay idempotent. */
+/** One approval per scope/id; a stage approval of a superseded attempt is replaced, never doubled. */
 export function withRunApproval(
   progress: CoordinatedRunProgress,
   approval: CoordinatedRunApproval
 ): CoordinatedRunProgress {
   const approvals = progress.approvals ?? []
-  if (approvals.some((a) => a.scope === approval.scope && a.approvalId === approval.approvalId)) {
+  const same = (a: CoordinatedRunApproval): boolean =>
+    a.scope === approval.scope && a.approvalId === approval.approvalId
+  if (approvals.some((a) => same(a) && a.dispatchId === approval.dispatchId)) {
     return progress
   }
-  return { ...progress, approvals: [...approvals, approval] }
+  return { ...progress, approvals: [...approvals.filter((a) => !same(a)), approval] }
 }
 
 export function withStage(
