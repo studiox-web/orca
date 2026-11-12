@@ -16,6 +16,9 @@ export function advanceAutomationNextRun(
     throw new Error('Automation not found.')
   }
   const current = state.automations[index]
+  if (current.triggerPolicy === 'manual_only') {
+    throw new Error('Manual-only coordinated definitions have no schedule to advance.')
+  }
   const nextRunAt = nextAutomationOccurrenceAfter(current.rrule, current.dtstart, now)
   const updated = { ...current, nextRunAt, updatedAt: now }
   // Replace the array to invalidate identity-keyed list projections.
@@ -50,5 +53,7 @@ export function getLatestAutomationOccurrence(
   automation: Automation,
   now = Date.now()
 ): number | null {
-  return latestAutomationOccurrenceAtOrBefore(automation.rrule, automation.dtstart, now)
+  return automation.triggerPolicy === 'manual_only'
+    ? null
+    : latestAutomationOccurrenceAtOrBefore(automation.rrule, automation.dtstart, now)
 }

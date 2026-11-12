@@ -3,6 +3,7 @@ import { isCoordinatedAutomation } from '../../../shared/coordinated-automation-
 import { sha256Hex, toCanonicalJson } from '../../../shared/coordinated-automation-canonical-digest'
 
 const COORDINATED_DEFINITION_FIELDS = [
+  'triggerPolicy',
   'definitionRevision',
   'outcomeContract',
   'children',
@@ -78,6 +79,7 @@ export function stripUnchangedSingleKind<T extends AutomationKindWrite>(updates:
 export function coordinatedDefinitionFingerprint(automation: Automation): string {
   return `sha256:${sha256Hex(
     toCanonicalJson({
+      ...(automation.triggerPolicy ? { triggerPolicy: automation.triggerPolicy } : {}),
       outcomeContract: automation.outcomeContract,
       children: automation.children,
       inheritedDefaults: automation.inheritedDefaults,

@@ -30,21 +30,49 @@ import {
   stopActionAvailability
 } from './runtime-coordinated-run-actions'
 import type { RuntimeStore } from './runtime-store-contract'
+import { enqueueCoordinatedWorkerCompletion } from './coordinated-worker-completion-queue'
 
 export class RuntimeCoordinatedRunController {
+  private readonly queuedCompletions = new Set<string>()
   constructor(
     private readonly store: RuntimeStore | null,
     private readonly definitionGateOpen: () => boolean,
     private readonly getHost: () => CoordinatedAutomationRunHost | null
   ) {}
 
-  availability(): CoordinatedRunActionAvailability {
+  notifyWorkerCompletion(
+    mailbox: string,
+    messageType: string | undefined,
+    runtimeId: string
+  ): void {
+    enqueueCoordinatedWorkerCompletion(
+      {
+        queued: this.queuedCompletions,
+        store: this.store,
+        getHost: () => this.getHost(),
+        isAvailable: () => this.availability('native').available,
+        reconcile: (selection) => this.reconcile(selection, runtimeId, 'native')
+      },
+      mailbox,
+      messageType,
+      runtimeId
+    )
+  }
+
+  availability(executionKind?: 'fake' | 'native'): CoordinatedRunActionAvailability {
     const host = this.getHost()
     if (!host || !host.startManualRun || !host.reconcileRun || !host.inspectRun) {
       return {
         available: false,
         state: 'unconfigured',
         reason: 'This host does not support coordinated fake runs.'
+      }
+    }
+    if (executionKind && (host.executionKind ?? 'fake') !== executionKind) {
+      return {
+        available: false,
+        state: 'refused',
+        reason: `This host does not support coordinated ${executionKind} runs.`
       }
     }
     const availability = host.availability
@@ -66,15 +94,20 @@ export class RuntimeCoordinatedRunController {
         reason: 'This host cannot confirm an active coordinated fake run lifecycle.'
       }
     }
-    return { available: true, state }
+    return {
+      available: true,
+      state,
+      ...(host.executionKind === 'native' ? { nativeStart: host.nativeStart } : {})
+    }
   }
 
   async start(
     input: CoordinatedFakeRunStartInput,
-    runtimeId: string
+    runtimeId: string,
+    executionKind: 'fake' | 'native' = 'fake'
   ): Promise<CoordinatedFakeRunStartResponse> {
     const request = CoordinatedFakeRunStart.parse(input)
-    const host = this.requireHost()
+    const host = this.requireHost(executionKind)
     assertCoordinatedRunParent(this.store!, request, runtimeId, 'mutate')
     const result = await host.startManualRun({
       automationId: request.automationId,
@@ -107,11 +140,13 @@ export class RuntimeCoordinatedRunController {
 
   async reconcile(
     input: CoordinatedRunSelectionInput,
-    runtimeId: string
+    runtimeId: string,
+    executionKind: 'fake' | 'native' = 'fake'
   ): Promise<CoordinatedFakeRunReconcileResponse> {
     const request = CoordinatedRunSelection.parse(input)
     const host = this.requireHost()
     assertCoordinatedRunSelection(this.store!, request, runtimeId)
+    this.requireHost(executionKind)
     const result = await host.reconcileRun({
       automationId: request.automationId,
       automationRunId: request.automationRunId,
@@ -189,8 +224,8 @@ export class RuntimeCoordinatedRunController {
     })
   }
 
-  private requireHost(): CoordinatedAutomationRunHost {
-    const availability = this.availability()
+  private requireHost(executionKind?: 'fake' | 'native'): CoordinatedAutomationRunHost {
+    const availability = this.availability(executionKind)
     if (!availability.available) {
       throw new Error(availability.reason)
     }
@@ -242,6 +277,7 @@ export class RuntimeCoordinatedRunController {
     const available = this.availability()
     return structuredClone({
       runtimeId,
+      executionKind: this.requireHost().executionKind ?? 'fake',
       inspection,
       actions: {
         start: this.startAvailability(selection, runtimeId),

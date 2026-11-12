@@ -36,13 +36,14 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
     savedSchedule: automation.rrule,
     missedRunGraceMinutes: String(automation.missedRunGraceMinutes),
     scheduleWarning:
-      schedule || hasCustomSchedule
+      automation.triggerPolicy === 'manual_only' || schedule || hasCustomSchedule
         ? null
         : translate(
             'auto.components.automations.editDraft.unsupportedSchedule',
             'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
           ),
     kind: automation.kind,
+    triggerPolicy: automation.triggerPolicy,
     definitionRevision: automation.definitionRevision,
     outcomeContract: automation.outcomeContract,
     children: automation.children,

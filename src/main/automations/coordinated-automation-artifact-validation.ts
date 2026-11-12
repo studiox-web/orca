@@ -106,6 +106,9 @@ export function validateWorkerArtifacts(
   }
 
   for (const req of requiredArtifacts) {
+    if (artifacts.filter((a) => a.kind === req.kind).length > 1) {
+      return { valid: false, error: `Required artifact kind "${req.kind}" is ambiguous.` }
+    }
     const match = artifacts.find((a) => a.kind === req.kind)
     if (!match) {
       return {
@@ -122,7 +125,8 @@ export function validateWorkerArtifacts(
         error: `Artifact "${match.uri}" contains invalid traversal segments or invalid URI format.`
       }
     }
-    if (req.pathPattern && !matchesPathPattern(match.uri, req.pathPattern)) {
+    const pathPattern = req.pathPattern?.replaceAll('{dispatchId}', context.dispatchId)
+    if (pathPattern && !matchesPathPattern(match.uri, pathPattern)) {
       return {
         valid: false,
         error: `Artifact "${match.uri}" does not match required pathPattern "${req.pathPattern}".`
@@ -141,6 +145,15 @@ export function validateWorkerArtifacts(
       }
     }
 
+    if (req.sameDigestAs) {
+      const peers = artifacts.filter((a) => a.kind === req.sameDigestAs)
+      if (peers.length !== 1 || peers[0].sha256 !== match.sha256) {
+        return {
+          valid: false,
+          error: `Artifact "${match.uri}" must have the same digest as "${req.sameDigestAs}".`
+        }
+      }
+    }
     const cleanUri = match.uri.replace(/^artifact:\/\//, '').replace(/^\/+/, '')
     const resolved = resolveAndVerifyWorkspaceArtifact(
       cleanUri,

@@ -9,6 +9,7 @@ import {
   requireNativeProviderLaunch,
   type PreparedNativeProviderLaunch
 } from './native-provider-execution-admission'
+import { requireCoordinatedNativeSandbox } from './coordinated-native-sandbox/coordinated-native-sandbox-launch'
 
 const createKeys = new Set([
   'preparedNativeProvider',
@@ -64,6 +65,18 @@ export function nativeProviderStartupSettings(
   const { selection } = requireNativeProviderLaunch(candidate)
   if (settings.agentCmdOverrides?.[selection.agent]) {
     throw new Error('native_provider_command_override_unsupported')
+  }
+  if (requireCoordinatedNativeSandbox(candidate)) {
+    return {
+      ...settings,
+      agentPermissionDefault: 'own',
+      agentPermissionOverrides: { ...settings.agentPermissionOverrides, codex: 'own' },
+      agentLaunchChoices: { ...settings.agentLaunchChoices, codex: undefined },
+      agentDefaultArgs: {
+        ...settings.agentDefaultArgs,
+        codex: '-a never --strict-config --no-daemon'
+      }
+    }
   }
   // Frozen null choices mean provider defaults, never the current profile's saved choices.
   return {

@@ -39,6 +39,19 @@ const makeAutomation = (overrides: Partial<Automation> = {}): Automation => ({
 })
 
 describe('editing an automation whose saved schedule predates the input gate', () => {
+  it('keeps a manual-only parent editable without inventing a recurrence', () => {
+    const draft = buildAutomationEditDraft(
+      makeAutomation({
+        kind: 'coordinated',
+        triggerPolicy: 'manual_only',
+        rrule: '',
+        enabled: false
+      })
+    )
+    expect(draft.triggerPolicy).toBe('manual_only')
+    expect(draft.savedSchedule).toBe('')
+    expect(draft.scheduleWarning).toBeNull()
+  })
   it('still refuses the same expression as new input', () => {
     expect(isValidAutomationSchedule(LEGACY_OVERSIZED_STEP)).toBe(false)
     expect(isRunnableAutomationSchedule(LEGACY_OVERSIZED_STEP)).toBe(true)

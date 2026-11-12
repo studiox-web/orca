@@ -76,6 +76,7 @@ export type AutomationDraft = {
   missedRunGraceMinutes: string
   scheduleWarning: string | null
   kind?: AutomationKind
+  triggerPolicy?: 'manual_only'
   definitionRevision?: number
   outcomeContract?: AutomationOutcomeContract
   children?: CoordinatedAutomationChildDefinition[]

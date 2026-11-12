@@ -74,8 +74,9 @@ export const CoordinatedAutomationCreate = z
     setupDecision: SetupDecision,
     reuseSession: OptionalBoolean,
     timezone: OptionalString,
-    rrule: AutomationSchedule,
-    dtstart: requiredNumber('Missing trigger start time'),
+    triggerPolicy: z.literal('manual_only').optional(),
+    rrule: AutomationSchedule.optional(),
+    dtstart: requiredNumber('Missing trigger start time').optional(),
     enabled: OptionalBoolean,
     missedRunGraceMinutes: OptionalPositiveInt,
     destination: Destination,
@@ -97,6 +98,17 @@ export const CoordinatedAutomationCreate = z
     retentionPolicy: CoordinatedAutomationRetentionPolicySchema.optional()
   })
   .superRefine((val, ctx) => {
+    if (
+      val.triggerPolicy === 'manual_only'
+        ? val.rrule !== undefined || val.dtstart !== undefined || val.enabled === true
+        : val.rrule === undefined || val.dtstart === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Manual-only definitions must be disabled with no schedule; scheduled definitions require rrule and dtstart.'
+      })
+    }
     const res = validateCoordinatedAutomationDefinition({
       kind: 'coordinated',
       definitionRevision: 1,

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "synthetic": true,
+  "articleIdentity": "djvibe-shadow-synthetic-001",
+  "selected_embeds": [],
+  "observation_level": "metadata_only",
+  "playback_verification": "not_performed",
+  "cover_status": "not_provided",
+  "fixtureException": "No public-media readiness is claimed. Omit listen/watch promises, image imports and external shortcodes; draft is test-only."
+}

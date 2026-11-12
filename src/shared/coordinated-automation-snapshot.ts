@@ -215,6 +215,7 @@ export function resolveAutomationSnapshot(
   }
 
   const canonicalDigest = computeSnapshotCanonicalDigest({
+    ...(automation.triggerPolicy ? { triggerPolicy: automation.triggerPolicy } : {}),
     automationId: automation.id,
     definitionRevision: automation.definitionRevision,
     outcomeContract,
@@ -226,6 +227,7 @@ export function resolveAutomationSnapshot(
     retentionPolicy
   })
   const snapshot: ResolvedAutomationRunSnapshot = {
+    ...(automation.triggerPolicy ? { triggerPolicy: automation.triggerPolicy } : {}),
     automationId: automation.id,
     definitionRevision: automation.definitionRevision,
     createdAt,
@@ -246,6 +248,7 @@ export function computeSnapshotCanonicalDigest(
   snapshot: Omit<ResolvedAutomationRunSnapshot, 'createdAt' | 'canonicalDigest'>
 ): string {
   const payload = {
+    ...(snapshot.triggerPolicy ? { triggerPolicy: snapshot.triggerPolicy } : {}),
     automationId: snapshot.automationId,
     definitionRevision: snapshot.definitionRevision,
     outcomeContract: snapshot.outcomeContract,

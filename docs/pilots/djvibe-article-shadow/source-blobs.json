@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 1,
+  "baseHead": "46d5882a0559a83a5edecc612473b6a6b92458b3",
+  "status": "dirty_source_not_staged",
+  "entries": [
+    {
+      "path": "docs/pilots/djvibe-article-shadow/ACCEPTANCE.md",
+      "gitBlob": "d77f12b5c3e0d0d79595070640d8dd05bc9f7cfa",
+      "sha256": "0fc6d793e9215a68d5946b13b1d70a519919e38ee78e541c793f1dd8a97fed12",
+      "bytes": 11602
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/ISOLATION.md",
+      "gitBlob": "b2741a61c5fde54b9f37a97420eb5eda5031f5e6",
+      "sha256": "8eee274fa49cd38a6fa5bb1ccf768cb47f9d037e9a079fbc5edc841ac9a11e30",
+      "bytes": 6021
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/README.md",
+      "gitBlob": "19e71268619327b224d0b300da76441c6c857cdf",
+      "sha256": "2e109200a25f74243ac7372e2334327adec266b55a788c9ab7aa08d3bf29f490",
+      "bytes": 6537
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/fixture/archive-context.json",
+      "gitBlob": "e71d51c95957692294ccafadfa3ee7b49158d246",
+      "sha256": "81e63d42984ef95f29e9a634809b742feeab7aa6452eb868fc910e9069b83f94",
+      "bytes": 476
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/fixture/brief.md",
+      "gitBlob": "72a9a39cf6562e84d66f4bad600182415ea1f9cd",
+      "sha256": "90d0fe7d045f92a0e55ffcf149991cfea92d9494977ee9f1e9062978a2a9d4de",
+      "bytes": 1388
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/fixture/media-context.json",
+      "gitBlob": "b79c2ba63e1d1a84be25fc7ef37925ffa52e1c14",
+      "sha256": "f7c89414ecf34f977086d05532c08e2d79d87aa521890e804b6861bb4491e0a2",
+      "bytes": 391
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/fixture/source-packet.json",
+      "gitBlob": "61adb7826c79b0ffe18b178b960d69a067c9d580",
+      "sha256": "3c56e0981a94c36df390644bac8b14dc3fb78d794c75586f44dcc8bb8206487a",
+      "bytes": 1384
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/input-manifest.json",
+      "gitBlob": "ca2e73338dab4dfcac49abaf7450e84d62448483",
+      "sha256": "feded6b06bfe83caa09b471211c35a021a022c71e5f882c860eb9a71c6f7948f",
+      "bytes": 6959
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/pilot-scope.md",
+      "gitBlob": "ff74539167dd2749330339a995f9ea894f1bc88e",
+      "sha256": "58a87407eaeb79ec21f52d7d7a7d84b70f0a4e2887fd9f94386fa2ac9239ebf1",
+      "bytes": 3348
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/prompts/brief-review.md",
+      "gitBlob": "847e78c3a1a0ebbf6e927ca33c1eef6c50517430",
+      "sha256": "1956822877c4590dc28a7f0f56087b1e24045dd10f51b4edd0cbc3d15c953f41",
+      "bytes": 21324
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/prompts/editor-review.md",
+      "gitBlob": "cd36f48e9c4b30557db1fd5e9f761006e27c6812",
+      "sha256": "b70c84c46766acc54679f41c542cbabd11951af03fd423cf6cfc892f03512c16",
+      "bytes": 21399
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/prompts/media-context.md",
+      "gitBlob": "bfa4992413a1e48f718fd8268159e0172f696cea",
+      "sha256": "e16b283077d8fc5e53ec8ac97ecf7708b8fb306373e4181515181e2dd0d57fe2",
+      "bytes": 27586
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/prompts/write-draft.md",
+      "gitBlob": "021fc80844295a5c2954dd2a05e8eeabe644d004",
+      "sha256": "ad5eb14137d8f8bd193124d28d2afc0bb72894232a60567f14ca85fdba13d933",
+      "bytes": 19373
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/SOUL.md",
+      "gitBlob": "93124b4e32d27f7849f05b2650a30771dcd7f000",
+      "sha256": "1ce104e9b03687a83dce26feb038f6dd3cb1ae9284ecb0f637d5b63eeaa24dd7",
+      "bytes": 8594
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/automations/goals/content-editor/GOAL.md",
+      "gitBlob": "f41f9925975a00881559b669283935ba09613353",
+      "sha256": "ac908d8917f7f495240177ebc2f7d72208ecb39239b0d87575f89340acdd9691",
+      "bytes": 17556
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/automations/goals/content-editor/LESSONS.md",
+      "gitBlob": "a9f3bee2633764336b1bd60d6449ff18248dbfc9",
+      "sha256": "087fda95fa646cb204e04767a998c22742dab89b3a9f08dfc087b46ab5042c9d",
+      "bytes": 280
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/automations/goals/content-loop-retrospective/GOAL.md",
+      "gitBlob": "4c49422abfb69cff9926b2e2d0baae85797e4c06",
+      "sha256": "ad401f2de4a0e46c14ec1939fcfb348e21bf1cfa099088a771218fb7bd5428b7",
+      "bytes": 14918
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/automations/goals/content-media/GOAL.md",
+      "gitBlob": "dd2e39ad86db6de485243979b95f85418cb1c9bc",
+      "sha256": "e7a6e5adf4c0ee7859875a80b40c943c3b9eebdb14f6e6549d63d46967db9fe4",
+      "bytes": 23831
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/automations/goals/content-publisher/GOAL.md",
+      "gitBlob": "d032e286ca0b3764105091f7c51aef6f06a53f53",
+      "sha256": "a2cf611f38ed31ef6758f3693a62f5b79f3ac93f725f56b776ddebdec877e9db",
+      "bytes": 9368
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/automations/goals/content-trend-researcher/GOAL.md",
+      "gitBlob": "ecbc49acfbd989a03e46347890fa13c5b7c7cf76",
+      "sha256": "42268cbb12c4e65034ae7fbe07c1243f09ebe1fe43676611f8d08fe3d212630a",
+      "bytes": 13882
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/automations/goals/content-writer/GOAL.md",
+      "gitBlob": "073126de8c9b3c329bb5d5d42f7b26fac6958239",
+      "sha256": "a2799b5c41fc6e65842cc0a0e2e8c91308a96f4a8dd0a88ef3a5374489cee96b",
+      "bytes": 15569
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/automations/goals/content-writer/LESSONS.md",
+      "gitBlob": "1e697602b8f6c95dffb6348e55a1e710d57be07b",
+      "sha256": "c10e5548c30a3ebcec6e520f9f9393585b1904e6ea78e5e9c5d00a5d17c0a42f",
+      "bytes": 311
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/content/README.md",
+      "gitBlob": "7fc701b0c09effef2cc21cd6dbcbb4ccece2b62c",
+      "sha256": "32a7ecb5de808dfeceab89716899d3476f7d78a5b7cdd242f1bf168deae1a1ac",
+      "bytes": 4990
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/content/personas/README.md",
+      "gitBlob": "3b8e9f885cb2ec6d42231af570a2ec7450869606",
+      "sha256": "ea4bd71bcf434013bd424bb6ff751fd25cb6d0a3940c2840f5c2eae51682ce28",
+      "bytes": 2751
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/inputs-v1/reference/content/personas/jae-okonkwo.md",
+      "gitBlob": "eed986be3df0e01c58be924f970767c128583612",
+      "sha256": "191175b2191589c2d452fd5195a71ed3f895588e919fc4587f2d7b7d6e0951c0",
+      "bytes": 3910
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/paired-evaluation.template.json",
+      "gitBlob": "778b06f8d8ccbae9461456838260911a524121d6",
+      "sha256": "1c1b4f36dc4a8fce402539633f6fcc5e4ef6a8c9067e408e0ddbc081a05e1898",
+      "bytes": 2373
+    },
+    {
+      "path": "docs/pilots/djvibe-article-shadow/pilot-manifest.json",
+      "gitBlob": "96eca7b3e73b33e3e627b2d4b2e12419d90a6753",
+      "sha256": "99381f4a4e36e7c30c221b80b45f7b1b10ce10bc228385a64c79b4fe36cd0e96",
+      "bytes": 9397
+    },
+    {
+      "path": "tests/e2e/coordinated-automation-harness/coordinated-article-pilot-acceptance.ts",
+      "gitBlob": "e33f9fae58fc9fa49fa529bbe215032c689cb806",
+      "sha256": "3cea2648cb07837be536a1a185bced10ce141221231af2e9d62a2f29d8c80dfa",
+      "bytes": 5836
+    },
+    {
+      "path": "tests/e2e/coordinated-automation-harness/coordinated-article-pilot-fixture.ts",
+      "gitBlob": "23b4fc3015faedb5344176cfb7dc0a0991cf6db2",
+      "sha256": "a0b7a047372e151333563600f483c56a218b862e7ce01b4dd31baad6e2e7f1dd",
+      "bytes": 5062
+    },
+    {
+      "path": "tests/e2e/coordinated-automation-harness/coordinated-article-pilot-inputs.unit.test.ts",
+      "gitBlob": "6557b65ef3cec22abdf5ac155ad11467bf27fc75",
+      "sha256": "b6f4e43eb7b290c0a2c647883491c3eee4ceadfb95a947c351b53608fd53a452",
+      "bytes": 3559
+    },
+    {
+      "path": "tests/e2e/coordinated-automation-harness/coordinated-article-pilot-package.ts",
+      "gitBlob": "74f51814417ef1196631b6b090f1e72dfebbe40b",
+      "sha256": "cc662132a84d67e5aad6041d90cf256b7b38fa9364ac44d6b846f70f57e4e525",
+      "bytes": 9440
+    },
+    {
+      "path": "tests/e2e/coordinated-automation-harness/coordinated-article-pilot-recovery.unit.test.ts",
+      "gitBlob": "ac402d3c41dcbe52144fe07c3fea9cc8749c8edb",
+      "sha256": "81151c4fdb12c11ee7724bee64abacd1c3164dae77ea20b204bdee63d7da12c8",
+      "bytes": 3014
+    },
+    {
+      "path": "tests/e2e/coordinated-automation-harness/coordinated-article-pilot.tsconfig.json",
+      "gitBlob": "75c7350ad14dbaa1d0e6b7e8ed672731218cfd41",
+      "sha256": "7743e35d6ac281513a0134c6f73996bfddb322d1bf5a3f8e262493a3059a5c11",
+      "bytes": 250
+    },
+    {
+      "path": "tests/e2e/coordinated-automation-harness/coordinated-article-pilot.unit.test.ts",
+      "gitBlob": "1a616a4d5a4dbd7bdf98aa83c14cd725dcf7ac98",
+      "sha256": "3caeed602f2cd4829777e4948c068658d2dee5ea88400d922af3106611307606",
+      "bytes": 9410
+    }
+  ]
+}

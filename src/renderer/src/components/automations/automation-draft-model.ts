@@ -10,6 +10,19 @@ import { extraAgentArgsErrorText } from './automation-extra-agent-args-error-cop
 
 export const AUTOMATION_DEFAULT_TIME = '09:00'
 
+export function automationDraftScheduleChanged(
+  draft: AutomationDraft,
+  original?: AutomationDraft | null
+): boolean {
+  return (
+    draft.triggerPolicy !== 'manual_only' &&
+    (!original ||
+      (['preset', 'time', 'dayOfWeek', 'customSchedule'] as const).some(
+        (key) => draft[key] !== original[key]
+      ))
+  )
+}
+
 export function getDefaultWorktree(worktrees: readonly Worktree[]): Worktree | null {
   return worktrees.find((worktree) => worktree.isMainWorktree) ?? worktrees[0] ?? null
 }

@@ -54,6 +54,21 @@ function remoteRow(): AutomationListRow {
 }
 
 describe('unified live automation adapters', () => {
+  it('shows manual-only definitions without a schedule or a synthetic epoch occurrence', () => {
+    const input = remoteRow()
+    input.automation = {
+      ...input.automation,
+      kind: 'coordinated',
+      triggerPolicy: 'manual_only',
+      rrule: '',
+      dtstart: 0,
+      nextRunAt: 0
+    }
+    const row = adaptLiveAutomationRow(input, 'Project')
+    expect(row.scheduleState).toBe('unscheduled')
+    expect(row.scheduleChildren).toEqual([])
+    expect(row.runSummary?.sourceId).toBe('native-run-20')
+  })
   it('keeps remote authority, captured owner, paused state, and running outcome separate', () => {
     const row = adaptLiveAutomationRow(
       remoteRow(),

@@ -216,6 +216,51 @@ describe('coordinated definition save transaction', () => {
     expectNoSingleWrite()
   })
 
+  it('edits a manual definition without adding a recurrence or enabling it', async () => {
+    const original = makeAutomation({
+      ...sampleCoordinatedArticleAutomation,
+      projectId: REPO_ID,
+      workspaceId: WORKSPACE_ID,
+      triggerPolicy: 'manual_only',
+      rrule: '',
+      dtstart: 0,
+      nextRunAt: 0,
+      enabled: false,
+      surface: 'terminal'
+    })
+    const host = installDefinitionHost([original])
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      mocks.listPanel?.openEditDialog(listedRow(original.id))
+    })
+    expect(mocks.editorDialog?.draft).toMatchObject({ triggerPolicy: 'manual_only' })
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...draftRecord(current),
+        name: 'Manual article'
+      }))
+    })
+    await save()
+    expect(writes()).toHaveLength(1)
+    const updates = writes()[0]?.[2].updates
+    expect(updates).toMatchObject({
+      name: 'Manual article',
+      expectedDefinitionRevision: original.definitionRevision
+    })
+    for (const field of ['rrule', 'dtstart', 'enabled']) {
+      expect(updates).not.toHaveProperty(field)
+    }
+    expect(host.records()[0]).toMatchObject({
+      triggerPolicy: 'manual_only',
+      rrule: '',
+      dtstart: 0,
+      enabled: false
+    })
+    expect(mocks.editorDialog?.open).toBe(false)
+    expectNoSingleWrite()
+  })
+
   it('replays the exact committed request after a lost response and creates only one record', async () => {
     const host = installDefinitionHost()
     host.loseNextCreateResponse()

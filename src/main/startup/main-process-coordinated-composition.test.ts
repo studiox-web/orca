@@ -116,7 +116,7 @@ it('keeps ordinary startup unconfigured and uses only the selected singleton ser
   const injection = composition.coordinatedRuns!({ store, runtime })
   expect(injection.orchestrationDb).toBe(runtime.getOrchestrationDb())
   expect(injection.effects).toEqual({ policy: 'deny' })
-  expect(injection.workerProvider.capability).toBe('fake_no_effects')
+  expect(injection.workerProvider?.capability).toBe('fake_no_effects')
   const service = initializeMainProcessAutomations(injection)
   services.push(service)
   expect(startup.state.automations).toBe(service)

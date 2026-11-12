@@ -48,6 +48,7 @@ function splitDefinition<T extends object>(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every definition key is optional on both input shapes; destructuring only separates them.
   const source = input as T & CoordinatedAutomationDefinitionFields
   const {
+    triggerPolicy: _triggerPolicy,
     kind: _kind,
     definitionRevision: _revision,
     childTombstones: _tombstones,
@@ -155,21 +156,32 @@ export function createCoordinatedAutomation(
       'Coordinated automations stay disabled until coordinated execution is available.'
     )
   }
+  if (
+    input.triggerPolicy === 'manual_only' &&
+    (input.rrule !== undefined || input.dtstart !== undefined)
+  ) {
+    throw new Error('Manual-only coordinated definitions cannot contain a schedule.')
+  }
   const { base, patch } = splitDefinition(input)
-  return createAutomation(
-    operations,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: base is the create input minus coordinated-only keys.
-    { ...(base as AutomationCreateInput), enabled: false },
-    options,
-    (automation) => {
-      const candidate: Automation = { ...automation, ...patch, definitionRevision: 1 }
-      const coordinated = withDefinition(candidate, parseDefinition(candidate))
-      return {
-        ...coordinated,
-        definitionFingerprint: coordinatedDefinitionFingerprint(coordinated)
-      }
+  const createInput: AutomationCreateInput = {
+    ...base,
+    rrule: input.triggerPolicy === 'manual_only' ? '' : input.rrule,
+    dtstart: input.triggerPolicy === 'manual_only' ? 0 : input.dtstart,
+    enabled: false
+  }
+  return createAutomation(operations, createInput, options, (automation) => {
+    const candidate: Automation = {
+      ...automation,
+      ...patch,
+      ...(input.triggerPolicy ? { triggerPolicy: input.triggerPolicy } : {}),
+      definitionRevision: 1
     }
-  )
+    const coordinated = withDefinition(candidate, parseDefinition(candidate))
+    return {
+      ...coordinated,
+      definitionFingerprint: coordinatedDefinitionFingerprint(coordinated)
+    }
+  })
 }
 
 export function updateCoordinatedAutomation(
@@ -180,6 +192,9 @@ export function updateCoordinatedAutomation(
 ): Automation {
   if (updates.kind !== undefined && updates.kind !== 'coordinated') {
     throw new Error('A coordinated automation cannot change kind.')
+  }
+  if (updates.triggerPolicy !== undefined) {
+    throw new Error('A coordinated definition trigger policy is fixed at creation.')
   }
   const { expectedDefinitionRevision, ...rest } = updates
   const { base, patch } = splitDefinition(rest)

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "synthetic": true,
+  "articleIdentity": "djvibe-shadow-synthetic-001",
+  "sources": [
+    {
+      "id": "synthetic-primary-declaration-v1",
+      "kind": "authored_fixture_primary_declaration",
+      "url": null,
+      "authenticity": "Deliberately fabricated test universe; no external factual authority.",
+      "facts": [
+        {
+          "id": "artist",
+          "value": "Loop Lantern is an invented duo consisting of Mira Test and Sol Example."
+        },
+        {
+          "id": "release",
+          "value": "Paper Satellites is the invented duo's two-track fixture release."
+        },
+        {
+          "id": "tracks",
+          "value": "The two invented tracks are Folded Signal and Cardboard Orbit."
+        },
+        {
+          "id": "credits",
+          "value": "Mira Test and Sol Example share the fictional writing and production credits."
+        },
+        {
+          "id": "label",
+          "value": "The fictional label is Sample Room Fixtures."
+        },
+        {
+          "id": "date",
+          "value": "The fixture release date is 2030-04-01; this is not a real announcement."
+        }
+      ]
+    }
+  ],
+  "unverified": [
+    "Audio and listening observations",
+    "Real-world existence or availability",
+    "Any additional biographical facts"
+  ],
+  "copyright": "Original test data prepared for this pilot."
+}

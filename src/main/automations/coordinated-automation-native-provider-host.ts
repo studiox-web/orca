@@ -1,5 +1,10 @@
+import { realpathSync } from 'node:fs'
 import { splitWorktreeId } from '../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  normalizeWorkspaceSessionKeyToWorkspaceId,
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../shared/workspace-scope'
 import {
   resolveLocalLaunchScopeRuntime,
   resolveLocalWorkspaceRuntime
@@ -112,13 +117,39 @@ function workspaceAuthority(
     : { kind: 'local_worktree' }
 }
 
+function workspacePath(store: Store, workspaceId: string): string | undefined {
+  const key = parseWorkspaceKey(workspaceId)
+  return key?.type === 'folder'
+    ? store.getFolderWorkspace(key.folderWorkspaceId)?.folderPath
+    : key?.type === 'worktree'
+      ? splitWorktreeId(key.worktreeId)?.worktreePath
+      : undefined
+}
+
 export function nativeProviderHostFacts(
   host: NativeProviderWorkerHost
 ): CoordinatedNativeProviderHostFacts {
   const identity = assertNativeProviderExecutionAdmission(host.admission, host.runtime, host.store)
   return {
     hostKind: identity.hostKind,
-    workspaceAuthority: (workspaceId) => workspaceAuthority(host.store, workspaceId),
+    workspaceAuthority: (workspaceId) => {
+      const pilot = identity.pilotScope
+      if (pilot) {
+        try {
+          const path = workspacePath(host.store, workspaceId)
+          if (
+            workspaceId !== pilot.workspaceId ||
+            !path ||
+            realpathSync(path) !== pilot.workspacePath
+          ) {
+            return { kind: 'missing' }
+          }
+        } catch {
+          return { kind: 'missing' }
+        }
+      }
+      return workspaceAuthority(host.store, workspaceId)
+    },
     launchSupport(launch) {
       try {
         if (host.store.getSettings().agentCmdOverrides?.[launch.agent]) {
@@ -163,14 +194,13 @@ export function validateNativeProviderWorkspace(
     folderWorkspace: { projectGroupId: string } | null
   }
 ): void {
-  const authority = workspaceAuthority(host.store, plan.workerStart.worktree.slice(3))
-  const key = parseWorkspaceKey(scope.id)
-  const currentPath =
-    key?.type === 'folder'
-      ? host.store.getFolderWorkspace(key.folderWorkspaceId)?.folderPath
-      : key?.type === 'worktree'
-        ? splitWorktreeId(key.worktreeId)?.worktreePath
-        : undefined
+  const authority = nativeProviderHostFacts(host).workspaceAuthority(
+    plan.workerStart.worktree.slice(3)
+  )
+  const currentPath = workspacePath(
+    host.store,
+    scope.folderWorkspace ? scope.id : worktreeWorkspaceKey(scope.id)
+  )
   const resolution = resolveLocalLaunchScopeRuntime(host.store, {
     ...scope,
     repo: host.store.getRepo(scope.repo?.id ?? '') ?? null,
@@ -181,7 +211,7 @@ export function validateNativeProviderWorkspace(
   if (
     authority.kind !== plan.workspaceKind ||
     currentPath !== scope.path ||
-    scope.id !== plan.workerStart.worktree.slice(3) ||
+    scope.id !== normalizeWorkspaceSessionKeyToWorkspaceId(plan.workerStart.worktree.slice(3)) ||
     scope.connectionId ||
     (resolution?.status === 'resolved' && resolution.runtime.kind === 'wsl')
   ) {

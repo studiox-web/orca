@@ -140,7 +140,7 @@ it('stops a provider attempt only through its admitted runtime and proven exit',
   expect(native.spawn).toHaveBeenCalledTimes(1)
 })
 
-it.each(['revoked', 'generation', 'profile', 'owner', 'workspace'])(
+it.each(['revoked', 'generation', 'profile', 'owner', 'owner-transfer', 'workspace'])(
   'refuses physical dispatch when %s changes while provider environment preparation awaits',
   async (change) => {
     const f = await setup({ kind: 'provider' })
@@ -155,6 +155,10 @@ it.each(['revoked', 'generation', 'profile', 'owner', 'workspace'])(
         vi.spyOn(f.store, 'getProfileStorageDirectory').mockReturnValue(f.home)
       } else if (change === 'owner') {
         vi.spyOn(f.store, 'listAutomations').mockReturnValue([])
+      } else if (change === 'owner-transfer') {
+        vi.spyOn(f.store, 'automationOwnerPrecondition').mockReturnValue({
+          selector: { kind: 'ssh', targetId: 'transferred', targetGeneration: 1 }
+        })
       } else {
         const folder = f.store.getFolderWorkspace(f.workspaceId.slice('folder:'.length))!
         vi.spyOn(f.store, 'getFolderWorkspace').mockReturnValue({ ...folder, folderPath: f.home })
@@ -162,7 +166,7 @@ it.each(['revoked', 'generation', 'profile', 'owner', 'workspace'])(
       return env
     })
     const result = f.adapter.reconcileRun(run.id)
-    await (['owner', 'workspace'].includes(change)
+    await (['owner', 'owner-transfer', 'workspace'].includes(change)
       ? expect(result).resolves.toMatchObject({ state: 'outcome_uncertain' })
       : expect(result).rejects.toThrow(/host stopped/i))
     expect(f.buildSpawnEnv).toHaveBeenCalledTimes(1)

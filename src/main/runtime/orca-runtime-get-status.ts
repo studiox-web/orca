@@ -1,6 +1,7 @@
 import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
 import {
   COORDINATED_AUTOMATION_DEFINITIONS_RUNTIME_CAPABILITY,
+  COORDINATED_AUTOMATION_NATIVE_RUNS_RUNTIME_CAPABILITY,
   COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY
 } from '../../shared/automation-runtime-capabilities'
 import { OrcaRuntimeWithPtyController } from './orca-runtime-pty-controller'
@@ -134,7 +135,11 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyControl
     if (!this.servesHeadlessGraph && this.automation.coordinatedDefinitionCapabilities()) {
       capabilities.push(COORDINATED_AUTOMATION_DEFINITIONS_RUNTIME_CAPABILITY)
     }
-    const coordinatedFakeRuns = this.automation.coordinatedRuns.availability()
+    const coordinatedFakeRuns = this.automation.coordinatedRuns.availability('fake')
+    const coordinatedNativeRuns = this.automation.coordinatedRuns.availability('native')
+    if (!this.servesHeadlessGraph && coordinatedNativeRuns.available) {
+      capabilities.push(COORDINATED_AUTOMATION_NATIVE_RUNS_RUNTIME_CAPABILITY)
+    }
     if (!this.servesHeadlessGraph && coordinatedFakeRuns.available) {
       capabilities.push(COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY)
     }
@@ -171,6 +176,7 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyControl
       minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
       capabilities,
       coordinatedFakeRuns,
+      coordinatedNativeRuns,
       ...(degradations.length > 0 ? { degradations } : {}),
       worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_RESULT_TTL_MS },
       ...(windowsProcessStartTimeAvailable ? { windowsProcessStartTimeAvailable } : {}),

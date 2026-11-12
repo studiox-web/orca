@@ -72,6 +72,30 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
     })
   }
 
+  startCoordinatedNativeRun(input: CoordinatedFakeRunStartInput) {
+    return this.automation.withExternalProbePriority(async () => {
+      const result = await this.automation.coordinatedRuns.start(
+        input,
+        this.getRuntimeId(),
+        'native'
+      )
+      this.notifyAutomationsChanged({ reason: 'run', selector: { kind: 'self' } })
+      return result
+    })
+  }
+
+  reconcileCoordinatedNativeRun(input: CoordinatedRunSelectionInput) {
+    return this.automation.withExternalProbePriority(async () => {
+      const result = await this.automation.coordinatedRuns.reconcile(
+        input,
+        this.getRuntimeId(),
+        'native'
+      )
+      this.notifyAutomationsChanged({ reason: 'run', selector: { kind: 'self' } })
+      return result
+    })
+  }
+
   inspectCoordinatedRun(input: CoordinatedRunSelectionInput) {
     return this.automation.withExternalProbePriority(() =>
       this.automation.coordinatedRuns.inspect(input, this.getRuntimeId())

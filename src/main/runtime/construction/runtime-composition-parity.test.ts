@@ -66,6 +66,11 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Side effects are delivered to a desktop window only.'
   },
   {
+    wiring: 'ctor:coordinatedNativeProviderExecution',
+    missingOn: 'orcad',
+    reason: 'Only an explicit isolated desktop composition admits native provider pilot attempts.'
+  },
+  {
     wiring: 'ctor:coordinatedDefinitionWrites',
     missingOn: 'orcad',
     reason: 'Desktop startup accepts isolated test composition; ordinary startup leaves it absent.'

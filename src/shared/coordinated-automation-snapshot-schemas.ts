@@ -73,6 +73,7 @@ export const ResolvedChildSnapshotSchema: z.ZodType<ResolvedChildSnapshot> = z.o
 
 export const ResolvedAutomationRunSnapshotSchema: z.ZodType<ResolvedAutomationRunSnapshot> =
   z.object({
+    triggerPolicy: z.literal('manual_only').optional(),
     automationId: z.string().min(1),
     definitionRevision: z.number().int().positive(),
     createdAt: z.number(),

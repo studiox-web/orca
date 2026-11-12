@@ -140,10 +140,13 @@ export function AutomationListLocalRow({
   const projectLabel =
     automationRepo?.displayName ??
     translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
-  const scheduleLabel = formatUiAutomationSchedule(automation.rrule)
-  const nextRunLabel = automation.enabled
-    ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
-    : translate('auto.components.automations.enablement.paused', 'Paused')
+  const manualOnly = automation.triggerPolicy === 'manual_only'
+  const scheduleLabel = formatUiAutomationSchedule(automation.rrule, automation.triggerPolicy)
+  const nextRunLabel = manualOnly
+    ? ''
+    : automation.enabled
+      ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
+      : translate('auto.components.automations.enablement.paused', 'Paused')
   const isSelected = isSelectedLocal && selectedRowKey === row.key
   const movedToDistro = useAppStore(
     (state) => wslMovedProjectForAutomation(state.wslMovedProjects, automation)?.distro ?? null
@@ -204,7 +207,7 @@ export function AutomationListLocalRow({
         onSelect={() => onEdit(row)}
       />
       <MenuItem
-        disabled={!allows(row, 'toggle')}
+        disabled={manualOnly || !allows(row, 'toggle')}
         icon={automation.enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
         label={
           automation.enabled
@@ -308,7 +311,10 @@ export function AutomationListLocalRow({
                 <Pencil className="size-3.5" />
                 {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
               </DropdownMenuItem>
-              <DropdownMenuItem disabled={!allows(row, 'toggle')} onSelect={() => onToggle(row)}>
+              <DropdownMenuItem
+                disabled={manualOnly || !allows(row, 'toggle')}
+                onSelect={() => onToggle(row)}
+              >
                 {automation.enabled ? (
                   <Pause className="size-3.5" />
                 ) : (

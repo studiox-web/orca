@@ -69,7 +69,7 @@ export class RuntimeAutomationController {
     const parsed = CoordinatedAutomationCreateRequest.parse(input)
     assertCoordinatedDefinitionSelf(parsed.destination, parsed.runContext)
     return this.definitions.create(
-      parsed,
+      { ...parsed, rrule: parsed.rrule ?? '', dtstart: parsed.dtstart ?? 0 },
       (base, options) => {
         this.coordinatedDefinitions.assertAvailable()
         assertCoordinatedDefinitionLocalTarget(options.resolvedRepo)
@@ -80,7 +80,16 @@ export class RuntimeAutomationController {
           this.assertCoordinatedOwner(replay.id, { selector: { kind: 'self' } })
         }
         return this.store!.createCoordinatedAutomation!(
-          { ...parsed, ...base, enabled: false },
+          parsed.triggerPolicy === 'manual_only'
+            ? {
+                ...parsed,
+                ...base,
+                triggerPolicy: 'manual_only',
+                rrule: undefined,
+                dtstart: undefined,
+                enabled: false
+              }
+            : { ...parsed, ...base, triggerPolicy: undefined, enabled: false },
           options
         )
       },

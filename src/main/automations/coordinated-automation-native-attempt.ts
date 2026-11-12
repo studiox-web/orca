@@ -256,6 +256,12 @@ export function nativeAttemptHostScopeProblem(
   if (canonicalProfilePath(store.getProfileStorageDirectory()) !== binding.profile) {
     return 'Native attempt profile no longer matches the Store profile.'
   }
+  if (
+    binding.kind === NATIVE_PROVIDER_ATTEMPT &&
+    store.automationOwnerPrecondition(run.automationId)?.selector.kind !== 'self'
+  ) {
+    return 'Native attempt owner no longer matches local custody.'
+  }
   return runScopeRefusal(store, {
     automationId: run.automationId,
     automationRunId: run.id,

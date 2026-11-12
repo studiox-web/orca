@@ -1,3 +1,7 @@
+import type { CoordinatedNativeStartDescriptor } from '../../shared/coordinated-automation-run-view'
+import type { CoordinatedNativeProviderWorker } from './coordinated-automation-native-provider-worker'
+import type { ResolvePromptFunction } from '../../shared/coordinated-automation-snapshot'
+import type { COORDINATED_NATIVE_PROVIDER_CAPABILITY } from './coordinated-automation-native-provider-plan'
 import type { AutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
 import type { CoordinatedStageGateCandidate } from '../../shared/coordinated-automation-gate-candidate'
 import type {
@@ -31,19 +35,36 @@ export const COORDINATED_FAKE_RUNS_CAPABILITY = 'coordinated_fake_runs_v1'
  * Explicit, typed host opt-in. Absent by default: the coordinated run host then reports itself
  * unavailable and refuses every call before any write.
  */
-export type CoordinatedRunHostInjection = {
-  capability: typeof COORDINATED_FAKE_RUNS_CAPABILITY
+type CoordinatedRunHostBase = {
   /** Must equal the selected active profile storage directory; the host refuses a foreign profile. */
   profile: { kind: 'isolated_test' | 'developer'; root: string }
   orchestrationDb: OrchestrationDb
-  /** Must declare only the `fake_no_effects` capability; real providers are refused. */
-  workerProvider: CoordinatedWorkerProvider
   clock: Required<CoordinatedClock>
   laneLocks: CoordinatedLaneLockProvider
-  effects: { policy: 'deny' } | { policy: 'fake'; adapter: CoordinatedFakeEffectAdapter }
+  promptResolver?: ResolvePromptFunction
+  workspacePath?: string
   /** Test-only crash/trace hook at coordinator durable-write boundaries. */
   durableBoundary?: CoordinatedBoundaryHook
 }
+
+export type CoordinatedFakeRunHostInjection = CoordinatedRunHostBase & {
+  capability: typeof COORDINATED_FAKE_RUNS_CAPABILITY
+  workerProvider: CoordinatedWorkerProvider
+  nativeProviderWorker?: never
+  effects: { policy: 'deny' } | { policy: 'fake'; adapter: CoordinatedFakeEffectAdapter }
+}
+
+export type CoordinatedNativeRunHostInjection = CoordinatedRunHostBase & {
+  capability: typeof COORDINATED_NATIVE_PROVIDER_CAPABILITY
+  nativeProviderWorker: CoordinatedNativeProviderWorker
+  estimateCostUsd: NonNullable<CoordinatedWorkerProvider['estimateCostUsd']>
+  workerProvider?: never
+  effects: { policy: 'deny' }
+}
+
+export type CoordinatedRunHostInjection =
+  | CoordinatedFakeRunHostInjection
+  | CoordinatedNativeRunHostInjection
 
 /** Facts the host reads from its own environment, never from the caller. */
 export type CoordinatedRunHostEnvironment = {
@@ -88,6 +109,8 @@ export type CoordinatedRunHostAvailability =
  * per-parent lane immediately before its first write.
  */
 export type CoordinatedAutomationRunHost = {
+  readonly executionKind?: 'fake' | 'native'
+  readonly nativeStart?: CoordinatedNativeStartDescriptor
   readonly availability: CoordinatedRunHostAvailability
   startManualRun: (request: CoordinatedManualRunRequest) => Promise<CoordinatedManualRunResult>
   reconcileRun: (request: CoordinatedRunScopeRequest) => Promise<CoordinatedRunReconcileResult>

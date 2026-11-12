@@ -25,6 +25,7 @@ import { planCoordinatedNativeProviderLaunch } from './coordinated-automation-na
 import { CoordinatedAutomationLaunchRefusedError } from './coordinated-automation-materialization'
 import type { CoordinatedRecoveryContext } from './coordinated-automation-recovery-context'
 import { withCoordinatedReportBrief } from './coordinated-automation-report-brief'
+import { withNativePilotReportToolBrief } from './coordinated-automation-native-pilot-brief'
 import { LOCAL_SELF_OWNER, runScopeRefusal } from './coordinated-automation-run-host-gate'
 
 export type CoordinatedNativeProviderWorker = Readonly<{ kind: typeof NATIVE_PROVIDER_ATTEMPT }>
@@ -109,6 +110,9 @@ export async function prepareCoordinatedNativeProviderAttempt(
     readHost(ctx)
     if (input.deadlineAt !== undefined && ctx.clock.now() >= input.deadlineAt) {
       throw new Error('coordinated_native_provider_deadline_elapsed')
+    }
+    if (host.store.automationOwnerPrecondition(input.run.automationId)?.selector.kind !== 'self') {
+      throw new Error('coordinated_native_provider_owner_changed')
     }
     const current = host.store.listAutomationRuns().find((run) => run.id === input.run.id)
     const refusal = runScopeRefusal(host.store, {
@@ -242,7 +246,13 @@ export async function prepareCoordinatedNativeProviderAttempt(
         runtime: host.runtime,
         db: host.db,
         run: host.db.getRun(binding.orchestrationRunId)!,
-        started: withCoordinatedReportBrief(started, input.run, input.child),
+        started: identity.pilotScope
+          ? withNativePilotReportToolBrief(
+              withCoordinatedReportBrief(started, input.run, input.child),
+              input.run,
+              host.db
+            )
+          : withCoordinatedReportBrief(started, input.run, input.child),
         params: {
           task: input.taskId,
           worktree: selector,

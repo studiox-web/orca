@@ -1,5 +1,11 @@
+import {
+  assertCoordinatedNativeSandboxCurrent,
+  type CoordinatedNativeSandboxPolicy
+} from './coordinated-native-sandbox/coordinated-native-sandbox-policy'
+import { bindCoordinatedNativeSandbox } from './coordinated-native-sandbox/coordinated-native-sandbox-launch'
 import type { OrcaRuntimeWithStateFields } from './construction/runtime-construction'
 import { realpathSync } from 'node:fs'
+import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../shared/workspace-scope'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -22,7 +28,18 @@ type Binding = {
   isLocalDesktop: () => boolean
   readInProcessProvider: () => object
 }
+export type NativeProviderPilotScope = Readonly<{
+  homeDirectory: string
+  workspaceId: string
+  workspacePath: string
+  inputRoot: string
+  promptAuthority: string
+  idempotencyKey: string
+  sandboxPolicy: CoordinatedNativeSandboxPolicy
+}>
+
 type Admission = {
+  pilotScope?: NativeProviderPilotScope
   environment: ReturnType<typeof getAppEnvironment>
   userData: string
   revoked: boolean
@@ -33,7 +50,7 @@ type Admission = {
 }
 type Permit = {
   admission: Admission
-  runtime: OrcaRuntimeWithStateFields
+  runtime: OrcaRuntimeService
   runId: string
   taskId: string
   dispatchId: string
@@ -52,6 +69,7 @@ type Permit = {
 }
 
 const admissions = new WeakMap<NativeProviderExecutionAdmission, Admission>()
+const runtimeAdmissions = new WeakMap<OrcaRuntimeWithStateFields, Admission>()
 const permits = new WeakMap<PreparedNativeProviderLaunch, Permit>()
 
 function canonical(path: string): string {
@@ -69,8 +87,17 @@ function within(root: string, path: string): boolean {
 /** Only an isolated, process-local host composition can admit normal-provider execution. */
 export function createNativeProviderExecutionAdmission(input: {
   userDataDirectory: string
+  pilotScope?: NativeProviderPilotScope
 }): NativeProviderExecutionAdmission {
   const admission: Admission = {
+    pilotScope: input.pilotScope
+      ? Object.freeze({
+          ...input.pilotScope,
+          homeDirectory: canonical(input.pilotScope.homeDirectory),
+          workspacePath: canonical(input.pilotScope.workspacePath),
+          inputRoot: canonical(input.pilotScope.inputRoot)
+        })
+      : undefined,
     environment: getAppEnvironment(),
     userData: canonical(input.userDataDirectory),
     revoked: false
@@ -110,9 +137,41 @@ export function bindNativeProviderExecutionAdmission(
   admission.profile = canonical(profile)
   admission.generation = binding.generation()
   assertAdmissionBinding(admission, binding.runtime)
+  runtimeAdmissions.set(binding.runtime, admission)
+}
+
+export function nativePilotRequiresInProcessPty(runtime: OrcaRuntimeWithStateFields): boolean {
+  const admission = runtimeAdmissions.get(runtime)
+  if (!admission?.pilotScope) {
+    return false
+  }
+  assertAdmissionBinding(admission, runtime)
+  return true
 }
 
 function assertAdmissionCurrent(admission: Admission): void {
+  const scope = admission.pilotScope
+  if (scope) {
+    if (
+      !scope.workspaceId ||
+      !scope.promptAuthority ||
+      !scope.idempotencyKey ||
+      scope.idempotencyKey.length > 128 ||
+      canonical(scope.homeDirectory) !== canonical(join(admission.userData, 'home')) ||
+      canonical(admission.environment.getPath('home')) !== canonical(scope.homeDirectory) ||
+      !within(admission.userData, canonical(scope.workspacePath)) ||
+      !within(canonical(scope.workspacePath), canonical(scope.inputRoot))
+    ) {
+      throw new Error('native_provider_pilot_scope_mismatch')
+    }
+    assertCoordinatedNativeSandboxCurrent(scope.sandboxPolicy, {
+      userDataDirectory: admission.userData,
+      profileDirectory: admission.profile,
+      homeDirectory: canonical(scope.homeDirectory),
+      workspaceId: scope.workspaceId,
+      workspacePath: canonical(scope.workspacePath)
+    })
+  }
   if (
     admission.revoked ||
     getAppEnvironment() !== admission.environment ||
@@ -146,6 +205,7 @@ export function assertNativeProviderExecutionAdmission(
   profile: string
   generation: string
   hostKind: 'local_desktop' | 'headless_daemon'
+  pilotScope?: NativeProviderPilotScope
 }> {
   const admission = admissions.get(candidate)
   if (!admission || admission.binding?.store !== store) {
@@ -153,6 +213,7 @@ export function assertNativeProviderExecutionAdmission(
   }
   assertAdmissionBinding(admission, runtime)
   return {
+    pilotScope: admission.pilotScope,
     profile: admission.profile!,
     generation: admission.generation!,
     hostKind: admission.binding!.isLocalDesktop() ? 'local_desktop' : 'headless_daemon'
@@ -175,6 +236,15 @@ export function prepareNativeProviderLaunch(input: {
   }
   assertAdmissionBinding(admission, input.runtime)
   input.assertCurrent()
+  const scope = admission.pilotScope
+  if (
+    scope &&
+    (input.selection.workspaceId !== normalizeWorkspaceSessionKeyToWorkspaceId(scope.workspaceId) ||
+      canonical(input.selection.path) !== canonical(scope.workspacePath) ||
+      input.selection.agent !== 'codex')
+  ) {
+    throw new Error('native_provider_pilot_selection_mismatch')
+  }
   const permit: PreparedNativeProviderLaunch = Object.freeze({
     capability: 'coordinated_native_provider_attempt',
     toJSON() {
@@ -188,6 +258,9 @@ export function prepareNativeProviderLaunch(input: {
     consumed: false,
     phase: 'prepared'
   })
+  if (scope) {
+    bindCoordinatedNativeSandbox(permit, scope.sandboxPolicy)
+  }
   return permit
 }
 

@@ -53,8 +53,11 @@ export async function initializeReadyRuntimeServices(
   await loadWorktreeRemovalRecordsForStore(store)
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
-  const composition = compose?.({ store, headless: state.isServeMode })
-  const runtime = initializeMainProcessRuntime(composition?.coordinatedDefinitionWrites)
+  const composition = await compose?.({ store, headless: state.isServeMode })
+  const runtime = initializeMainProcessRuntime(
+    composition?.coordinatedDefinitionWrites,
+    composition?.coordinatedNativeProviderExecution
+  )
   initializeMainProcessAutomations(composition?.coordinatedRuns?.({ store, runtime }))
   configureRuntimeServices(runtime)
   installFirstWorkRenameHookSubscription()

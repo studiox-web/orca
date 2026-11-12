@@ -4,6 +4,8 @@ import {
 } from '../../runtime/native-stub-launch-options'
 import { assertNativeProviderPhysicalSpawn } from '../../runtime/native-provider-launch-options'
 import { markNativeProviderDispatched } from '../../runtime/native-provider-execution-admission'
+import { assertCoordinatedNativeSandboxPhysicalSpawn } from '../../runtime/coordinated-native-sandbox/coordinated-native-sandbox-launch'
+import { prepareCoordinatedNativeSandboxSpawn } from '../../runtime/coordinated-native-sandbox/coordinated-native-sandbox-attempt'
 import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
@@ -108,7 +110,7 @@ export async function spawnLocalPty(
           getOptions,
           plan
         })
-    const finalEnv = envResult instanceof Promise ? await envResult : envResult
+    let finalEnv = envResult instanceof Promise ? await envResult : envResult
     throwIfCanceled()
     if (!args.preparedNativeStub) {
       enforceLocalPtySpawnEnvironmentOverrides(args, finalEnv)
@@ -122,7 +124,21 @@ export async function spawnLocalPty(
           env: finalEnv
         })
 
-    const fallbackHistory = historyResult?.historyDir ? historyResult : undefined
+    const nativeSandbox = args.preparedNativeProvider
+      ? await prepareCoordinatedNativeSandboxSpawn(args.preparedNativeProvider, finalEnv)
+      : undefined
+    if (nativeSandbox) {
+      plan.shellPath = nativeSandbox.shellPath
+      plan.shellArgs = [...nativeSandbox.shellArgs]
+      plan.effectiveCwd = nativeSandbox.cwd
+      plan.startupCommandDeliveredInShellArgs = true
+      plan.windowsFallbackAttempts = []
+      plan.getFallbackShellReadyConfig = undefined
+      plan.primaryPreLaunchEnv = {}
+      plan.shellReadyLaunch = null
+      finalEnv = { ...nativeSandbox.env }
+    }
+    const fallbackHistory = !nativeSandbox && historyResult?.historyDir ? historyResult : undefined
     const [spawn] = args.preparedNativeStub
       ? [await loadNativeStubRuntimeSpawn(args.preparedNativeStub)]
       : await Promise.all([loadLocalPtyRuntimeSpawn(), prepareMacosTccLoginShell()])
@@ -141,6 +157,18 @@ export async function spawnLocalPty(
       }
       if (args.preparedNativeProvider) {
         assertNativeProviderPhysicalSpawn(args)
+        assertCoordinatedNativeSandboxPhysicalSpawn(args.preparedNativeProvider, {
+          shellPath: plan.shellPath,
+          shellArgs: plan.shellArgs,
+          cwd: plan.effectiveCwd,
+          env: finalEnv,
+          hasFallback:
+            plan.windowsFallbackAttempts.length > 0 ||
+            plan.getFallbackShellReadyConfig !== undefined ||
+            Object.keys(plan.primaryPreLaunchEnv).length > 0 ||
+            plan.shellReadyLaunch !== null ||
+            !plan.startupCommandDeliveredInShellArgs
+        })
       }
       const pendingSpawn = spawn({
         shellPath: plan.shellPath,

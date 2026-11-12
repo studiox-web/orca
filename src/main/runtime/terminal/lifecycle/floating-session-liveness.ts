@@ -186,6 +186,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     if (messageType === 'heartbeat') {
       return
     }
+    this.automation.coordinatedRuns.notifyWorkerCompletion(handle, messageType, this.getRuntimeId())
     if (!handle.startsWith('dispatch:')) {
       this.mailPointerRepointScheduler.schedule(handle)
     } else {

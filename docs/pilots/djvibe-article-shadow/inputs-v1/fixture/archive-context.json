@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "synthetic": true,
+  "articleIdentity": "djvibe-shadow-synthetic-001",
+  "scope": "synthetic_fixture_only",
+  "entries": [
+    {
+      "id": "synthetic-unrelated-001",
+      "title": "Invented workshop on imaginary drum machines",
+      "subjects": [
+        "Unrelated Fixture"
+      ]
+    }
+  ],
+  "duplicateResult": "No matching identity in this one-entry synthetic archive; no live DJVibe dedupe was performed.",
+  "readyBacklogClaimed": false
+}

@@ -284,7 +284,13 @@ export async function submitCoordinatedRunOperatorAction(
         )
       )
     }
-    const view = validateCoordinatedRunView(response.view, params, params.definitionRevision)
+    const view = validateCoordinatedRunView(
+      response.view,
+      params,
+      params.definitionRevision,
+      undefined,
+      current.executionKind ?? 'fake'
+    )
     if (
       view.inspection.targetExecutionAuthority !== authority ||
       view.inspection.orchestrationRunId !== params.orchestrationRunId

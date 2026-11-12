@@ -1,6 +1,9 @@
 import { realpathSync } from 'node:fs'
 import { isAbsolute, join, relative, sep } from 'node:path'
-import type { MainProcessRuntimeCompositionFactory } from '../../../src/main/startup/main-process-runtime-composition'
+import type {
+  MainProcessRuntimeCompositionFactory,
+  MainProcessRuntimeComposition
+} from '../../../src/main/startup/main-process-runtime-composition'
 import { createDefaultFakeNoEffectsWorkerProvider } from '../../../src/main/automations/coordinated-automation-task-execution'
 import { COORDINATED_FAKE_RUNS_CAPABILITY } from '../../../src/main/automations/coordinated-automation-run-host-types'
 import { normalizeRuntimePathForComparison } from '../../../src/shared/cross-platform-path'
@@ -24,13 +27,16 @@ export function createIsolatedCoordinatedAppComposition(input: {
   userDataDirectory: string
   homeDirectory: string
   environment: IsolatedAppEnvironment
-}): MainProcessRuntimeCompositionFactory {
+}) {
   const userData = canonical(input.userDataDirectory)
   const home = canonical(input.homeDirectory)
   if (home !== canonical(join(userData, 'home'))) {
     throw new Error('The isolated HOME must belong to this disposable userData directory.')
   }
-  return ({ store, headless }) => {
+  return ({
+    store,
+    headless
+  }: Parameters<MainProcessRuntimeCompositionFactory>[0]): MainProcessRuntimeComposition => {
     const environment = input.environment
     if (
       environment.isPackaged() ||

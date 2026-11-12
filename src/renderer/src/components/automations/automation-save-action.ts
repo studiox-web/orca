@@ -10,6 +10,7 @@ import { isValidAutomationSchedule } from '../../../../shared/automation-schedul
 import { translate } from '@/i18n/i18n'
 import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
 import {
+  automationDraftScheduleChanged,
   draftExtraAgentArgsNeedFreshSession,
   getDraftExtraAgentArgsError,
   parseDraftTime
@@ -55,12 +56,10 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
     }
     const { draftAtOpen } = local
     const targetEdited = editingAutomationId === null || local.targetEdited
-    const scheduleEdited =
-      editingAutomationId === null ||
-      !draftAtOpen ||
-      (['preset', 'time', 'dayOfWeek', 'customSchedule'] as const).some(
-        (key) => draft[key] !== draftAtOpen[key]
-      )
+    const scheduleEdited = automationDraftScheduleChanged(
+      draft,
+      editingAutomationId === null ? null : draftAtOpen
+    )
     const extrasEdited =
       editingAutomationId === null ||
       !draftAtOpen ||

@@ -467,7 +467,7 @@
     },
     {
       "path": "src/shared/automation-runtime-capabilities.ts",
-      "digest": "162a818043c6ccecec60681653928831d0fd8333ca0cba0d65943c5d4b7f7b30"
+      "digest": "277c485b9bae88bb02cc6ca2e92726a40e3368b5ecc22c888046cf34a09525a8"
     },
     {
       "path": "src/shared/browser-runtime-capabilities.ts",

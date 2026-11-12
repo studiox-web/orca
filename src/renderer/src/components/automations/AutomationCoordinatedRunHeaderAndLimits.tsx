@@ -35,7 +35,10 @@ export function AutomationCoordinatedRunHeaderAndLimits({
   const semanticMeta = parentSemanticMetadata()[projection.semanticOutcomeState]
   const SemanticIcon = semanticMeta.icon
   const budgets = projection.budgetsAndCeilings
-  const scheduleLabel = formatUiAutomationSchedule(projection.scheduleState.rrule)
+  const scheduleLabel = formatUiAutomationSchedule(
+    projection.scheduleState.rrule,
+    projection.scheduleState.triggerPolicy
+  )
   const pendingQuestions = projection.stages
     .filter((stage) => stage.pendingQuestion !== null)
     .map((stage) => `${stage.name}: ${stage.pendingQuestion?.preview}`)

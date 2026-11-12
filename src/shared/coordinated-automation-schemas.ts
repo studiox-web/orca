@@ -114,6 +114,7 @@ export const CoordinatedAutomationInheritedDefaultsSchema: z.ZodType<Coordinated
 export const StageArtifactRequirementSchema: z.ZodType<StageArtifactRequirement> = z.object({
   kind: z.string().trim().min(1, 'Artifact kind cannot be empty').max(100),
   pathPattern: z.string().max(1024).optional(),
+  sameDigestAs: z.string().trim().min(1).max(100).optional(),
   description: z.string().max(2000).optional(),
   required: z.boolean().optional()
 })

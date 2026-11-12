@@ -1,0 +1,13 @@
+{
+  "extends": "../../../config/tsconfig.e2e.json",
+  "compilerOptions": { "types": ["node", "electron-vite/node"] },
+  "include": [
+    "./coordinated-article-pilot*.ts",
+    "./coordinated-native-article*.ts",
+    "./electron.native-article.config.ts",
+    "./playwright.native-article.config.ts",
+    "../helpers/runtime-types.ts",
+    "../../../src/renderer/src/env.d.ts",
+    "../../../src/types/**/*"
+  ]
+}

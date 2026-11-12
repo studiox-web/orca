@@ -111,6 +111,18 @@ afterEach(async () => {
 })
 
 describe('selected host run observation', () => {
+  it('identifies actual native workers without the no-live-agents test claim', async () => {
+    vi.mocked(inspectCoordinatedRun).mockResolvedValue({
+      ...coordinatedHostViewFixture(),
+      executionKind: 'native'
+    })
+    await render()
+    expect(container.textContent).toContain('Manual native worker runs')
+    expect(container.textContent).toContain('Uses real agents')
+    expect(container.textContent).not.toContain('No live agents')
+    expect(button('Start manual run')).toBeDefined()
+    expect(container.querySelector('select')?.labels?.[0].textContent).toContain('Selected run')
+  })
   it('renders real availability distinctions, exact attempts and receipt without invented spend or sessions', async () => {
     await render()
     expect(container.textContent).toContain('Frozen revision: 2')
@@ -184,7 +196,7 @@ describe('selected host run observation', () => {
     expect(readCoordinatedRunHost).not.toHaveBeenCalled()
     const startButton = () =>
       [...container.querySelectorAll('button')].find(
-        (button) => button.textContent === 'Start no-effect test run'
+        (button) => button.textContent === 'Start manual run'
       )!
     expect(startButton().disabled).toBe(true)
     props = { ...props, enabled: true }

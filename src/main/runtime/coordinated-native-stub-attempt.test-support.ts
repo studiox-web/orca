@@ -45,7 +45,10 @@ import { ORCHESTRATION_SEND_METHODS } from './rpc/methods/orchestration/messagin
 import { CoordinatedAutomationAdapter } from '../automations/coordinated-automation-adapter'
 import { createCoordinatedNativeStubWorker } from '../automations/coordinated-automation-native-stub-worker'
 import { createCoordinatedNativeProviderWorker } from '../automations/coordinated-automation-native-provider-worker'
-import { createNativeProviderExecutionAdmission } from './native-provider-execution-admission'
+import {
+  createNativeProviderExecutionAdmission,
+  type PreparedNativeProviderLaunch
+} from './native-provider-execution-admission'
 import { coordinatedTestState } from '../persistence/scheduling-automations/coordinated-automation-persistence.test-support'
 
 const originalProvider = getLocalPtyProvider()
@@ -160,6 +163,7 @@ export async function setupNativeStubAttempt(options?: {
   homeDir?: string
   workspaceDir?: string
   kind?: 'stub' | 'provider'
+  isActive?: () => boolean
 }) {
   fixtureKind = options?.kind ?? 'stub'
   root = options?.rootDir ?? mkdtempSync(join(tmpdir(), 'orca-coordinated-native-'))
@@ -248,10 +252,14 @@ export async function setupNativeStubAttempt(options?: {
   Object.defineProperty(runtime, 'getAvailableAuthoritativeWindow', { value: () => null })
   const db = runtime.getOrchestrationDb()
   const createdTerminals: RuntimeTerminalCreate[] = []
+  const providerPermits: PreparedNativeProviderLaunch[] = []
   const createTerminal = runtime.createTerminal.bind(runtime)
   vi.spyOn(runtime, 'createTerminal').mockImplementation(async (selector, options) => {
     const created = await createTerminal(selector, options)
     createdTerminals.push(created)
+    if (options?.preparedNativeProvider) {
+      providerPermits.push(options.preparedNativeProvider)
+    }
     return created
   })
   disposers.push(
@@ -272,7 +280,8 @@ export async function setupNativeStubAttempt(options?: {
     store,
     orchestrationDb: db,
     nativeStubWorker,
-    nativeProviderWorker
+    nativeProviderWorker,
+    isActive: options?.isActive
   })
   const dispatcher = new RpcDispatcher({
     runtime,
@@ -287,6 +296,7 @@ export async function setupNativeStubAttempt(options?: {
     adapter,
     dispatcher,
     createdTerminals,
+    providerPermits,
     nativeStubWorker,
     nativeProviderWorker,
     workspaceId,

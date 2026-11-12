@@ -1,3 +1,5 @@
+import { validateCoordinatedRunView } from './coordinated-run-view-validation'
+export { validateCoordinatedRunView } from './coordinated-run-view-validation'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -14,7 +16,11 @@ import type {
   CoordinatedFakeRunStartInput,
   CoordinatedRunSelectionInput
 } from '../../../../shared/rpc-contract/coordinated-automation-run-params'
-import { COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY } from '../../../../shared/automation-runtime-capabilities'
+import {
+  coordinatedRunHostKind,
+  coordinatedRunHostAvailability,
+  type CoordinatedRunExecutionKind
+} from './coordinated-run-host-kind'
 import type { CoordinatedRunOperatorAction } from './coordinated-run-operator-client'
 import type { CoordinatedRunBinding } from './coordinated-run-binding'
 export { coordinatedRunBindingKey, type CoordinatedRunBinding } from './coordinated-run-binding'
@@ -24,7 +30,9 @@ import { REQUEST_TIMEOUT_MS } from './automation-capability-probe'
 
 export type CoordinatedRunRequest = {
   start?: CoordinatedFakeRunStartInput
+  startExecutionKind?: CoordinatedRunExecutionKind
   reconcile?: CoordinatedRunSelectionInput
+  reconcileExecutionKind?: CoordinatedRunExecutionKind
   /** An operator request that reached the host without a confirmed answer. */
   unconfirmedOperator?: { action: CoordinatedRunOperatorAction; label: string; detail: string }
 }
@@ -45,8 +53,8 @@ export async function readCoordinatedRunHost(
   if (binding.owner.authority.kind !== 'desktop' || isWebClientLocation()) {
     throw new Error(
       translate(
-        'auto.components.automations.coordinated.run.api.client.cb4164304f',
-        'This API requires an authenticated local caller. Remote and paired mobile test-run operations are unavailable.'
+        'auto.components.automations.coordinatedRuns.localCallerRequired',
+        'This API requires an authenticated local caller. Remote and paired mobile run operations are unavailable.'
       )
     )
   }
@@ -56,81 +64,23 @@ export async function readCoordinatedRunHost(
   ) {
     throw new Error(
       translate(
-        'auto.components.automations.coordinated.run.api.client.9fabb81157',
-        'No-effect test runs require the owning host’s local Self target. SSH execution is unavailable.'
+        'auto.components.automations.coordinatedRuns.localSelfRequired',
+        'Coordinated runs require the owning host’s local Self target. SSH execution is unavailable.'
       )
     )
   }
   const status = await callHost<RuntimeStatus>(binding.owner, 'status.get')
-  if (!status.capabilities?.includes(COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY)) {
+  const availability = coordinatedRunHostAvailability(status)
+  if (!availability?.available) {
     throw new Error(
-      translate(
-        'auto.components.automations.coordinated.run.api.client.71f647cc0d',
-        'This host does not support isolated no-effect test runs.'
-      )
-    )
-  }
-  if (!status.coordinatedFakeRuns?.available) {
-    throw new Error(
-      status.coordinatedFakeRuns?.reason ??
+      availability?.reason ??
         translate(
-          'auto.components.automations.coordinated.run.api.client.9afe3611ef',
-          'The host has not provided current test-run availability.'
+          'auto.components.automations.coordinatedRuns.availabilityMissing',
+          'The host has not provided current coordinated-run availability.'
         )
     )
   }
   return status
-}
-
-export function validateCoordinatedRunView(
-  view: CoordinatedRunView,
-  selection: CoordinatedRunSelectionInput,
-  expectedRevision?: number,
-  expectedKey?: string
-): CoordinatedRunView {
-  const inspection = view.inspection
-  if (
-    view.runtimeId !== selection.runtimeId ||
-    inspection.automationId !== selection.automationId ||
-    inspection.automationRunId !== selection.automationRunId ||
-    (expectedRevision !== undefined && inspection.definitionRevision !== expectedRevision) ||
-    (expectedKey !== undefined && inspection.idempotencyKey !== expectedKey)
-  ) {
-    throw new Error(
-      translate(
-        'auto.components.automations.coordinated.run.api.client.7fd2b3d028',
-        'The host returned a different runtime, parent, run, revision, or request identity. Refresh to inspect the exact run.'
-      )
-    )
-  }
-  if (inspection.receipt.kind === 'available') {
-    const receipt = inspection.receipt.receipt
-    const identity = receipt.identityChain
-    if (
-      identity.automationId !== inspection.automationId ||
-      identity.automationRunId !== inspection.automationRunId ||
-      identity.orchestrationRunId !== inspection.orchestrationRunId ||
-      identity.definitionRevision !== inspection.definitionRevision ||
-      receipt.frozenConfigDigest !== inspection.canonicalDigest ||
-      identity.taskMappings.some(
-        (mapping) =>
-          !inspection.stages.some(
-            (stage) =>
-              stage.childDefinitionId === mapping.childDefinitionId &&
-              stage.taskId === mapping.taskId &&
-              stage.mappedDispatchId === mapping.dispatchId
-          )
-      )
-    ) {
-      throw new Error(
-        translate(
-          'auto.components.automations.coordinated.run.api.client.76cc2a16b8',
-          'The receipt identity does not match the selected host run. Evidence is unavailable.'
-        )
-      )
-    }
-  }
-  return view
 }
 
 function selectionFor(
@@ -150,14 +100,15 @@ async function inspectAt(
   binding: CoordinatedRunBinding,
   selection: CoordinatedRunSelectionInput,
   revision?: number,
-  key?: string
+  key?: string,
+  executionKind?: CoordinatedRunExecutionKind
 ): Promise<CoordinatedRunView> {
   const { view } = await callHost<{ view: CoordinatedRunView }>(
     binding.owner,
     'automation.inspectCoordinatedRun',
     selection
   )
-  return validateCoordinatedRunView(view, selection, revision, key)
+  return validateCoordinatedRunView(view, selection, revision, key, executionKind)
 }
 
 export async function inspectCoordinatedRun(
@@ -166,7 +117,13 @@ export async function inspectCoordinatedRun(
   revision?: number
 ): Promise<CoordinatedRunView> {
   const status = await readCoordinatedRunHost(binding)
-  return inspectAt(binding, selectionFor(binding, status.runtimeId, runId), revision)
+  return inspectAt(
+    binding,
+    selectionFor(binding, status.runtimeId, runId),
+    revision,
+    undefined,
+    coordinatedRunHostKind(status)
+  )
 }
 
 export async function startCoordinatedTestRun(
@@ -174,7 +131,16 @@ export async function startCoordinatedTestRun(
   request: CoordinatedRunRequest
 ): Promise<CoordinatedRunView> {
   const status = await readCoordinatedRunHost(binding)
+  const executionKind = coordinatedRunHostKind(status)
   if (request.start) {
+    if ((request.startExecutionKind ?? 'fake') !== executionKind) {
+      throw new Error(
+        translate(
+          'auto.components.automations.coordinatedRuns.startModeChanged',
+          'The worker execution mode changed. Inspect the original start before retrying; its identity is retained.'
+        )
+      )
+    }
     const submitted = request.start
     const runs = await listAutomationRunsForOwner(binding.owner, submitted.automationId)
     const matches = runs.filter(
@@ -195,7 +161,8 @@ export async function startCoordinatedTestRun(
         binding,
         selectionFor(binding, status.runtimeId, matches[0].id),
         submitted.expectedDefinitionRevision,
-        submitted.idempotencyKey
+        submitted.idempotencyKey,
+        executionKind
       )
       delete request.start
       return view
@@ -212,30 +179,55 @@ export async function startCoordinatedTestRun(
     if (binding.automation.enabled || !binding.automation.definitionRevision) {
       throw new Error(
         translate(
-          'auto.components.automations.coordinated.run.api.client.f5bb7106c5',
-          'Save a disabled coordinated definition with a confirmed revision before starting a test run.'
+          'auto.components.automations.coordinatedRuns.confirmedDefinitionRequired',
+          'Save a disabled coordinated definition with a confirmed revision before starting a manual run.'
         )
       )
     }
+    const nativeStart = status.coordinatedNativeRuns?.available
+      ? status.coordinatedNativeRuns.nativeStart
+      : undefined
+    if (
+      executionKind === 'native' &&
+      (binding.automation.triggerPolicy !== 'manual_only' ||
+        !nativeStart?.idempotencyKey.trim() ||
+        nativeStart.workspaceId !== binding.automation.workspaceId ||
+        !nativeStart.definitions.some(
+          (definition) =>
+            definition.automationId === binding.automation.id &&
+            definition.expectedDefinitionRevision === binding.automation.definitionRevision
+        ))
+    ) {
+      throw new Error(
+        translate(
+          'auto.components.automations.coordinatedRuns.nativeStartUnavailable',
+          'The host has not admitted this manual definition revision and workspace for a native run.'
+        )
+      )
+    }
+    request.startExecutionKind = executionKind
     request.start = {
       runtimeId: status.runtimeId,
       automationId: binding.automation.id,
       expectedOwner: { selector: { kind: 'self' } },
       expectedDefinitionRevision: binding.automation.definitionRevision,
-      idempotencyKey: createBrowserUuid()
+      idempotencyKey: executionKind === 'native' ? nativeStart!.idempotencyKey : createBrowserUuid()
     }
   }
   const submitted = request.start
   const response = await callHost<CoordinatedFakeRunStartResponse>(
     binding.owner,
-    'automation.startCoordinatedFakeRun',
+    executionKind === 'native'
+      ? 'automation.startCoordinatedNativeRun'
+      : 'automation.startCoordinatedFakeRun',
     submitted
   )
   const view = validateCoordinatedRunView(
     response.view,
     selectionFor(binding, submitted.runtimeId, response.view.inspection.automationRunId),
     submitted.expectedDefinitionRevision,
-    submitted.idempotencyKey
+    submitted.idempotencyKey,
+    executionKind
   )
   delete request.start
   return view
@@ -248,14 +240,16 @@ export async function reconcileCoordinatedTestRun(
   revision?: number
 ): Promise<CoordinatedRunView> {
   const current = await inspectCoordinatedRun(binding, runId, revision)
-  if (current.inspection.receipt.kind === 'available') {
-    delete request.reconcile
-    return current
-  }
-  if (!current.actions.reconcile.available) {
-    throw new Error(current.actions.reconcile.reason)
-  }
+  const executionKind = current.executionKind ?? 'fake'
   const selection = selectionFor(binding, current.runtimeId, runId)
+  if (request.reconcile && (request.reconcileExecutionKind ?? 'fake') !== executionKind) {
+    throw new Error(
+      translate(
+        'auto.components.automations.coordinatedRuns.reconcileModeChanged',
+        'The worker execution mode changed. The original reconciliation identity is retained.'
+      )
+    )
+  }
   if (request.reconcile && JSON.stringify(request.reconcile) !== JSON.stringify(selection)) {
     throw new Error(
       translate(
@@ -264,13 +258,29 @@ export async function reconcileCoordinatedTestRun(
       )
     )
   }
+  if (current.inspection.receipt.kind === 'available') {
+    delete request.reconcile
+    return current
+  }
+  if (!current.actions.reconcile.available) {
+    throw new Error(current.actions.reconcile.reason)
+  }
   request.reconcile ??= selection
+  request.reconcileExecutionKind = executionKind
   const response = await callHost<CoordinatedFakeRunReconcileResponse>(
     binding.owner,
-    'automation.reconcileCoordinatedFakeRun',
+    executionKind === 'native'
+      ? 'automation.reconcileCoordinatedNativeRun'
+      : 'automation.reconcileCoordinatedFakeRun',
     request.reconcile
   )
-  const view = validateCoordinatedRunView(response.view, request.reconcile, revision)
+  const view = validateCoordinatedRunView(
+    response.view,
+    request.reconcile,
+    revision,
+    undefined,
+    executionKind
+  )
   delete request.reconcile
   return view
 }

@@ -79,6 +79,9 @@ export function createCoordinatedAutomationRun(
   if (!isCoordinatedAutomation(stored)) {
     throw new Error('Coordinated runs can only be created for coordinated automations.')
   }
+  if (stored.triggerPolicy === 'manual_only' && trigger !== 'manual') {
+    throw new Error('Manual-only coordinated definitions refuse scheduled runs.')
+  }
   assertAutomationOwnerFence({
     automation: stored,
     expectedOwner: input.expectedOwner,

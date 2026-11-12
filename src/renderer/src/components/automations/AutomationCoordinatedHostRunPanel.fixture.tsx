@@ -9,7 +9,10 @@ import {
   sampleActiveCoordinatedRun,
   sampleCoordinatedArticleAutomation
 } from './coordinated-automation-run-fixture-data'
-import { COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY as FAKE } from '../../../../shared/automation-runtime-capabilities'
+import {
+  COORDINATED_AUTOMATION_FAKE_RUNS_RUNTIME_CAPABILITY as FAKE,
+  COORDINATED_AUTOMATION_NATIVE_RUNS_RUNTIME_CAPABILITY as NATIVE
+} from '../../../../shared/automation-runtime-capabilities'
 
 const settledView = coordinatedHostViewFixture()
 const run = { ...sampleActiveCoordinatedRun, id: settledView.inspection.automationRunId }
@@ -30,8 +33,10 @@ function installReadOnlyHost(view: typeof settledView): void {
         ok: true,
         result: {
           runtimeId: view.runtimeId,
-          capabilities: [FAKE],
-          coordinatedFakeRuns: { available: true }
+          capabilities: [view.executionKind === 'native' ? NATIVE : FAKE],
+          ...(view.executionKind === 'native'
+            ? { coordinatedNativeRuns: { available: true } }
+            : { coordinatedFakeRuns: { available: true } })
         }
       }
     }
@@ -73,6 +78,18 @@ export const host_receipt = defineFixture({
 export const host_receipt_mobile = defineFixture({
   width: 375,
   setup: () => installReadOnlyHost(readOnlyView),
+  render: () => renderPanel()
+})
+export const native_controls = defineFixture({
+  width: 1280,
+  setup: () =>
+    installReadOnlyHost({ ...coordinatedHostActiveViewFixture(), executionKind: 'native' }),
+  render: () => renderPanel()
+})
+export const native_controls_mobile = defineFixture({
+  width: 375,
+  setup: () =>
+    installReadOnlyHost({ ...coordinatedHostActiveViewFixture(), executionKind: 'native' }),
   render: () => renderPanel()
 })
 // Why: controls render from host-reported availability; this fixture host still refuses every operation.

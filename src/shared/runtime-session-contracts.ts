@@ -79,6 +79,7 @@ export type RuntimeStatus = {
   minCompatibleRuntimeClientVersion?: number
   capabilities?: RuntimeCapability[]
   coordinatedFakeRuns?: CoordinatedRunActionAvailability
+  coordinatedNativeRuns?: CoordinatedRunActionAvailability
   /** Optional policy for clients that negotiated worktree.create-idempotency.v1. */
   worktreeCreateIdempotency?: {
     dedupeTtlMs: number

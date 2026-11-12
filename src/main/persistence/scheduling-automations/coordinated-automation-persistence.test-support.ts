@@ -71,8 +71,8 @@ export function child(
 }
 
 export function coordinatedCreateInput(
-  overrides: Partial<CoordinatedAutomationCreateInput> = {}
-): CoordinatedAutomationCreateInput {
+  overrides: Partial<Extract<CoordinatedAutomationCreateInput, { rrule: string }>> = {}
+): Extract<CoordinatedAutomationCreateInput, { rrule: string }> {
   return {
     kind: 'coordinated',
     name: 'Outcome',

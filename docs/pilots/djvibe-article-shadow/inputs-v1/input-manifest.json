@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 1,
+  "fixtureId": "djvibe-shadow-synthetic-001",
+  "synthetic": true,
+  "sourceRootNotice": "Reference source paths are provenance only. Never mount or execute the source project.",
+  "entries": [
+    {
+      "path": "reference/automations/goals/content-trend-researcher/GOAL.md",
+      "sha256": "42268cbb12c4e65034ae7fbe07c1243f09ebe1fe43676611f8d08fe3d212630a",
+      "bytes": 13882,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "automations/goals/content-trend-researcher/GOAL.md"
+      }
+    },
+    {
+      "path": "reference/automations/goals/content-writer/GOAL.md",
+      "sha256": "a2799b5c41fc6e65842cc0a0e2e8c91308a96f4a8dd0a88ef3a5374489cee96b",
+      "bytes": 15569,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "automations/goals/content-writer/GOAL.md"
+      }
+    },
+    {
+      "path": "reference/automations/goals/content-editor/GOAL.md",
+      "sha256": "ac908d8917f7f495240177ebc2f7d72208ecb39239b0d87575f89340acdd9691",
+      "bytes": 17556,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "automations/goals/content-editor/GOAL.md"
+      }
+    },
+    {
+      "path": "reference/automations/goals/content-media/GOAL.md",
+      "sha256": "e7a6e5adf4c0ee7859875a80b40c943c3b9eebdb14f6e6549d63d46967db9fe4",
+      "bytes": 23831,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "automations/goals/content-media/GOAL.md"
+      }
+    },
+    {
+      "path": "reference/automations/goals/content-publisher/GOAL.md",
+      "sha256": "a2cf611f38ed31ef6758f3693a62f5b79f3ac93f725f56b776ddebdec877e9db",
+      "bytes": 9368,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "automations/goals/content-publisher/GOAL.md"
+      }
+    },
+    {
+      "path": "reference/automations/goals/content-loop-retrospective/GOAL.md",
+      "sha256": "ad401f2de4a0e46c14ec1939fcfb348e21bf1cfa099088a771218fb7bd5428b7",
+      "bytes": 14918,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "automations/goals/content-loop-retrospective/GOAL.md"
+      }
+    },
+    {
+      "path": "reference/SOUL.md",
+      "sha256": "1ce104e9b03687a83dce26feb038f6dd3cb1ae9284ecb0f637d5b63eeaa24dd7",
+      "bytes": 8594,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "SOUL.md"
+      }
+    },
+    {
+      "path": "reference/content/README.md",
+      "sha256": "32a7ecb5de808dfeceab89716899d3476f7d78a5b7cdd242f1bf168deae1a1ac",
+      "bytes": 4990,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "content/README.md"
+      }
+    },
+    {
+      "path": "reference/content/personas/jae-okonkwo.md",
+      "sha256": "191175b2191589c2d452fd5195a71ed3f895588e919fc4587f2d7b7d6e0951c0",
+      "bytes": 3910,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "content/personas/jae-okonkwo.md"
+      }
+    },
+    {
+      "path": "reference/content/personas/README.md",
+      "sha256": "ea4bd71bcf434013bd424bb6ff751fd25cb6d0a3940c2840f5c2eae51682ce28",
+      "bytes": 2751,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "content/personas/README.md"
+      }
+    },
+    {
+      "path": "reference/automations/goals/content-writer/LESSONS.md",
+      "sha256": "c10e5548c30a3ebcec6e520f9f9393585b1904e6ea78e5e9c5d00a5d17c0a42f",
+      "bytes": 311,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "automations/goals/content-writer/LESSONS.md"
+      }
+    },
+    {
+      "path": "reference/automations/goals/content-editor/LESSONS.md",
+      "sha256": "087fda95fa646cb204e04767a998c22742dab89b3a9f08dfc087b46ab5042c9d",
+      "bytes": 280,
+      "provenance": {
+        "kind": "unchanged_read_only_snapshot",
+        "sourcePath": "automations/goals/content-editor/LESSONS.md"
+      }
+    },
+    {
+      "path": "fixture/brief.md",
+      "sha256": "90d0fe7d045f92a0e55ffcf149991cfea92d9494977ee9f1e9062978a2a9d4de",
+      "bytes": 1388,
+      "provenance": {
+        "kind": "authored_synthetic_fixture",
+        "realWorldClaim": false
+      }
+    },
+    {
+      "path": "fixture/source-packet.json",
+      "sha256": "3c56e0981a94c36df390644bac8b14dc3fb78d794c75586f44dcc8bb8206487a",
+      "bytes": 1384,
+      "provenance": {
+        "kind": "authored_synthetic_fixture",
+        "realWorldClaim": false
+      }
+    },
+    {
+      "path": "fixture/media-context.json",
+      "sha256": "f7c89414ecf34f977086d05532c08e2d79d87aa521890e804b6861bb4491e0a2",
+      "bytes": 391,
+      "provenance": {
+        "kind": "authored_synthetic_fixture",
+        "realWorldClaim": false
+      }
+    },
+    {
+      "path": "fixture/archive-context.json",
+      "sha256": "81e63d42984ef95f29e9a634809b742feeab7aa6452eb868fc910e9069b83f94",
+      "bytes": 476,
+      "provenance": {
+        "kind": "authored_synthetic_fixture",
+        "realWorldClaim": false
+      }
+    },
+    {
+      "path": "pilot-scope.md",
+      "sha256": "58a87407eaeb79ec21f52d7d7a7d84b70f0a4e2887fd9f94386fa2ac9239ebf1",
+      "bytes": 3348,
+      "provenance": {
+        "kind": "additional_pilot_scope",
+        "originalGoalTextChanged": false
+      }
+    },
+    {
+      "path": "prompts/brief-review.md",
+      "sha256": "1956822877c4590dc28a7f0f56087b1e24045dd10f51b4edd0cbc3d15c953f41",
+      "bytes": 21324,
+      "provenance": {
+        "kind": "scoped_prompt_composition",
+        "originalGoalTextChanged": false
+      }
+    },
+    {
+      "path": "prompts/media-context.md",
+      "sha256": "e16b283077d8fc5e53ec8ac97ecf7708b8fb306373e4181515181e2dd0d57fe2",
+      "bytes": 27586,
+      "provenance": {
+        "kind": "scoped_prompt_composition",
+        "originalGoalTextChanged": false
+      }
+    },
+    {
+      "path": "prompts/write-draft.md",
+      "sha256": "ad5eb14137d8f8bd193124d28d2afc0bb72894232a60567f14ca85fdba13d933",
+      "bytes": 19373,
+      "provenance": {
+        "kind": "scoped_prompt_composition",
+        "originalGoalTextChanged": false
+      }
+    },
+    {
+      "path": "prompts/editor-review.md",
+      "sha256": "b70c84c46766acc54679f41c542cbabd11951af03fd423cf6cfc892f03512c16",
+      "bytes": 21399,
+      "provenance": {
+        "kind": "scoped_prompt_composition",
+        "originalGoalTextChanged": false
+      }
+    }
+  ],
+  "excluded": [
+    "credentials",
+    "database",
+    "backups",
+    "live backlog",
+    "owner feedback",
+    "operational scripts",
+    "goal STATUS and logs"
+  ],
+  "modelOverride": {
+    "provider": "codex",
+    "model": null,
+    "reasoningEffort": null,
+    "status": "coordinator_must_pin_before_execution",
+    "comparisonRule": "Same explicit per-stage model and effort in both arms; original GOAL frontmatter remains unchanged."
+  }
+}

@@ -976,3 +976,285 @@ existing combined harness as `coordinated-run-gate-flow-rpc.unit.test.ts`, with 
 relative imports adjusted. All 17 cases, Node typechecking and the E2E typecheck
 ratchet passed there (exit 0). This changes test placement, not app behavior or its
 accepted source. The full gate is rerun after this final correction before push.
+
+### First article pilot setup preflight, November 11
+
+After Graham rebuilt and started XOS, he requested an article-writing loop test.
+Read-only runtime status confirms `1.4.257+xos.46d5882a055` is ready, but it does
+not advertise coordinated definition creation or fake-run capabilities. The
+definition and native-provider gates still require isolated host composition;
+the previous fake-worker app acceptance did not make real article workers
+available in the installed app. No create or run was attempted.
+
+The [prepared pilot package](../pilots/djvibe-article-shadow/README.md) pins six
+tuned Goal prompts and six supporting sources without modifying them. It proposes
+one manual, isolated article-writing test, with distinct writer/editor workers,
+at most two revision rounds and a draft ready for human review. Its manifest is
+explicitly non-runnable preparation data, not a supported import payload. The
+existing manual wrapper cannot be used as a shadow runner: it also transfers
+production feedback and processes pending rewrites. Runtime connection, enforced
+isolation, exact input/workspace binding and physical real-worker acceptance
+remain required before the first article run. All live state remains unchanged.
+
+### Native article pilot development checkpoint, November 11
+
+**Status: source preparation is tested; the real article pilot has not started.**
+Graham authorized finishing the runtime connection and trying one manual,
+draft-only article. This supersedes the earlier design-only phase without
+authorizing publishing, schedules, production content, backup changes or an
+installed-app replacement. Work remains in this checkout on top of `46d5882a055`.
+
+The native [Orca orchestration skill](../../../../../../.agents/skills/orchestration/SKILL.md)
+was used for the existing run `run_514fd105ba6b`; the assignments preserved the
+original transcript evidence and boundaries in their specifications. The delivery
+order remains reusable parent/child support, native connection, one repackaged
+pilot, physical acceptance, then paired evaluation. Fixture success is not physical
+acceptance.
+
+| Assignment                                                                     | Completed source evidence                                                                                                                                                                                                                                                                                                                                      | Remaining acceptance                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native host, Task `task_6a1291f11b22`, Dispatch `ctx_da464d97e1e7`             | Manual-only schema, persistence and immutable snapshots; exact native start descriptor; shared inspect/stop/retry/gate actions; pinned prompts; child-scoped `ready_for_review` receipt. Worker reports 88 host/manual/receipt tests and 31 controlled-PTY attempt/recovery tests, Node typecheck and scoped lint/format, all exit 0.                          | Reported failed/incomplete for real pilot readiness: no verified sandbox/report path or policy issuer. Ordinary startup remains unadmitted.                                                                                                                                                                             |
+| Pilot package, Task `task_3a36d3dd04fd`, Dispatch `ctx_cdcd792f4de2`           | [Versioned package and report](../pilots/djvibe-article-shadow/IMPLEMENTATION-REPORT.md): 21 pinned inputs including six unchanged tuned Goals, native manual-only payload builder, exact-digest gate preview, 14 passing fixture tests plus focused typecheck/lint/format, exit 0.                                                                            | Manifest remains `runnable: false`. Real writer/editor execution, terminal/artifact navigation and paired evaluation are unmeasured.                                                                                                                                                                                    |
+| Sandbox/report boundary, Task `task_ef032db0f8ee`, Dispatch `ctx_cc8541881071` | Restricted report endpoint delegates to existing native settlement; final spawn fence checks resolved argv, environment and scope.                                                                                                                                                                                                                             | Direct sandboxed Unix-socket reporting is denied. A clean provider/account launch and enforceable policy issuer remain incomplete; scoped launches refuse. Final scoped quality corrections passed; three endpoint/input-integrity tests passed with exit 0. The task remains failed/incomplete for physical readiness. |
+| Coordinator renderer                                                           | Manual-only labels and editing preserve the absent schedule. Native and simulated endpoints/copy are distinct; uncertain requests retain their execution kind and original identity. Six focused files passed 66 tests, and frontend typecheck passed, exit 0. Headless 1280px and 375px native-mode presentation fixtures passed and were visually inspected. | These are component fixtures, not a launched native provider, installed app or clickable live worker proof.                                                                                                                                                                                                             |
+
+Source pointers: [manual definition persistence](../../src/main/persistence/scheduling-automations/coordinated-automation-definition-operations.ts),
+[isolated app composition](../../src/main/startup/main-process-native-pilot-composition.ts),
+[native execution admission](../../src/main/runtime/native-provider-execution-admission.ts),
+[report boundary](../../src/main/runtime/coordinated-native-sandbox/coordinated-native-report-endpoint.ts),
+[final spawn policy](../../src/main/runtime/coordinated-native-sandbox/coordinated-native-sandbox-policy.ts),
+and [renderer run client](../../src/renderer/src/components/automations/coordinated-run-api-client.ts).
+No second public result-ingestion API or coordinator-fabricated success report
+replaces native settlement. Technical worker completion still needs semantic
+stage and parent acceptance.
+
+The latest denied operation was a model-free Codex `command/exec` probe attempting
+to create an `AF_UNIX` socket for the synthetic report target
+`/tmp/orca-rpt-3_0837q2/r.sock`. Socket creation returned
+`PermissionError: [Errno 1] Operation not permitted`, exit 1, before connection;
+the receiving server got no data. Initialization had completed, the owned server
+then exited 0 and the temporary root was removed. Outcome: **denied**, not pending
+or uncertain. The direct socket route is stopped. Evidence is retained in
+`.cache/report-control-vua3nynh/command-result.json`. No broader socket/network
+permission, production credentials, model call or live report was used to get
+around the refusal.
+
+One runtime quality follow-up, Task `task_5c7d6fe637a0` / Dispatch
+`ctx_42ab06db2c6b`, could not start because `agent_readiness` returned
+`Agent startup blocked: agent-update-prompt`. Orca confirmed the Task never ran.
+Its exact unused terminal was released once through `worker-release`, which
+confirmed `state=released`, `processAction=closed_agent_terminal`. It was not
+retried or reassigned. The coordinator removed the one persistence cast directly
+using a typed creation input; the three manual-only persistence tests and Node
+typecheck then passed, exit 0. The follow-up remains a failed worker attempt in
+history rather than a fabricated worker completion.
+
+The first combined changed-code quality pass found nine issues (seven type casts,
+one duplicate import and one Buffer/string operation). Renderer code had zero
+findings. The persistence issue is corrected; the sandbox owner corrected the
+remaining eight and returned a final failed/incomplete packet. The coordinator then
+verified all ten sandbox file hashes, all 34 package hashes, and 46 of 47 runtime
+hashes; the sole runtime difference is the coordinator-tested persistence
+correction described above. Combined `pnpm tc`, changed-code quality against
+`HEAD` (86 changed source files, zero findings), localization catalog/runtime and
+protected-copy verification, extraction and coverage passed with exit 0. Final
+logs are `.cache/article-pilot-typecheck-final.log`,
+`.cache/article-pilot-quality-final.log`, and `.cache/article-pilot-localization-*`.
+Full `check:changed`, independent review, physical provider/app acceptance and
+release delivery are not yet claimed. Worker
+counts above overlap with coordinator checks and must not be summed as unique
+coverage. This dirty-source packet has not been committed, pushed, merged or
+installed.
+
+Next acceptance requires a supported, reviewed provider/report design that keeps
+per-role filesystem restrictions, production/tool-network denial, clean configuration,
+exact attempt identity and bounded cost/time limits. A source-only policy object
+without an issuer cannot satisfy it. Do not retry the denied direct socket action
+without materially new relevant authorization and proof it did not execute.
+Once the integration is demonstrably supported, perform the physical steps in
+[ACCEPTANCE.md](../pilots/djvibe-article-shadow/ACCEPTANCE.md), then the same-input
+baseline comparison. No real article target or throughput is inferred from this
+synthetic fixture package. Existing schedules, publishing, backups and content
+remain unchanged.
+
+### Report connection follow-up, November 11
+
+Graham requested finishing the remaining native connection and then merging.
+The merge remains authorized but has not happened: physical acceptance and the
+final release gate remain required. The primary XOS checkout is still
+`46d5882a055`, with its pre-existing `AGENTS.md` edit preserved.
+
+A native worker follow-up through the existing
+[Orca orchestration skill](/home/djvibe/.agents/skills/orchestration/SKILL.md)
+created Task `task_67d4f84b348d`, Dispatch `ctx_92ec5f595087`.
+It failed before task execution at `agent_readiness` with
+`Agent startup blocked: agent-update-prompt`. Exact terminal
+`term_6e3191ca2a94e109b60be9b18d607bb5` was released through `worker-release`;
+the receipt confirmed `released` / `closed_agent_terminal`. No provider update,
+substitution, repeated startup or task-success claim was made.
+
+The coordinator extracted the original private report endpoint's native handling
+into a reusable scoped session and implemented a strict report-tool adapter.
+Only the authored `worker_done` report can pass; identity and authentication are
+host-bound, bytes and concurrency are bounded, and no automatic retry occurs on
+an uncertain response. Native settlement, compatibility verification, revocation
+and durable receipt replay remain authoritative. This is source preparation;
+there is no physical MCP helper, configured tool, launch-policy issuer or live
+provider connection yet.
+
+The concrete proposed permission change is
+[REPORT-CHANNEL.md](../pilots/djvibe-article-shadow/REPORT-CHANNEL.md).
+A private MCP stdio helper would live outside the denied command-socket sandbox.
+The original “Do not work around the restriction” boundary therefore requires an
+explicit decision before that helper is connected. The direct denied operation
+remains stopped. The decision request is pending; it does not grant publication,
+schedule, production-content, backup or general tool-network access.
+
+Final source verification used Node `24.22.2`, pnpm `12.14.0` and background mode:
+
+- `pnpm test src/main/runtime/coordinated-native-sandbox/coordinated-native-report-tool.test.ts src/main/runtime/coordinated-native-sandbox/coordinated-native-report-endpoint.test.ts --maxWorkers=2`: 6 tests passed, exit 0. Native fixture delivery/replay uses a controlled PTY and temporary Store/DB, not a model call.
+- `pnpm tc`: all configured projects passed, exit 0.
+- `pnpm check:code-quality:changed HEAD`: zero new findings across 89 changed source files, exit 0, against `46d5882a055`.
+
+Logs are `.cache/article-pilot-report-tool-tests-final.log`,
+`.cache/article-pilot-report-tool-typecheck-final.log` and
+`.cache/article-pilot-report-tool-quality.log`. The ignored, owned pilot package
+files were marked intent-to-add so a future review/commit includes the frozen
+inputs required by its tests; their original bytes and worker packet hashes were
+not changed. Full `check:changed`, independent review, real provider and hidden
+app acceptance still remain. No commit, merge, push, install or live operation
+occurred during this follow-up.
+
+### Testing authorization and physical integration, November 11
+
+Graham's latest instruction is: “ok please remove my previous boundary that was
+put in place that prevented you from testing or doing your work . i think im
+makeing things harder for yo with that.” It supersedes the pending permission
+question above and authorizes the private report-only MCP connection and isolated
+testing. The earlier authorized XOS merge/push remains the delivery target after
+verification and independent review. Publication, existing schedules, production
+content, backups, installed-app replacement and new worktrees are not part of it.
+
+The coordinator implemented a process-local sandbox-policy issuer, exact final
+spawn/config pins, a bounded stdio MCP helper exposing only worker_done, and a
+clean per-attempt Codex home with private authentication. Command tools retain
+network denial, frozen inputs and cross-role artifact protection. The report
+helper forwards authored native envelopes unchanged; it does not synthesize
+success or bypass native Task/Dispatch settlement. Runtime binary hashing now
+occurs at policy creation, with subsequent immutable file-stat checks; this avoids
+rehashing the 306 MB binary on every status read while refusing changed files.
+
+The trusted developer entry and opt-in hidden Playwright test are
+`tests/e2e/coordinated-automation-harness/coordinated-native-article-entry.ts` and
+`coordinated-native-article.spec.ts`. They create a disabled manual-only parent in
+a disposable profile, use real Codex workers (`gpt-6.1-sol`, medium), and stop at
+the human editorial gate. The normal packaged host still refuses activation.
+The original tuned Goal snapshots remain byte-identical.
+
+Physical testing found and corrected workspace-key normalization, incorrect
+project-group FolderWorkspace selection, daemon replacement of the admitted
+in-process provider, repeated binary hashing and an over-restrictive Codex feature
+flag that disabled the permitted tool host. The current fixture uses a non-Git
+Repo workspace; the newer project-group FolderWorkspace route remains a gap.
+An interrupted pre-fix Dispatch with no assigned process retains its audit and is
+not treated as settled or replayed. Hidden test apps were disposed after each
+finished attempt; the everyday app was neither restarted nor replaced.
+
+One real brief-review worker wrote its artifact and received a successful native
+worker_done receipt. Inspection then exposed a missing automatic continuation:
+technical settlement did not wake the semantic coordinator. The runtime now
+consumes the existing post-commit worker_done notification, selects the exact
+parent run, rechecks active host/definition authority and enters the existing
+serialized parent lane. A focused test passes dependent dispatch, duplicate mail,
+revoked admission and final native receipt with controlled PTYs. This avoids
+adding a second task scheduler or using harness polling to advance stages.
+
+Evidence so far: 72 focused tests across nine suites; the new completion-wakeup
+regression; all three typecheck projects, followed by a backend recheck and the
+pilot harness TypeScript project; each completed with exit 0. The Node report
+helper's physical handshake/restricted dispatch passed, as did ten harmless probes
+of the installed Codex command sandbox. Full real four-role acceptance is still
+running; these results must not be promoted into an article completion claim.
+Current logs are `.cache/article-pilot-native-app-test.log`,
+`.cache/article-pilot-completion-nudge-test.log`,
+`.cache/article-pilot-native-focused.log`, `.cache/article-pilot-final-typecheck.log`,
+`.cache/article-pilot-nudge-typecheck.log` and `.cache/article-pilot-harness-typecheck.log`.
+
+The tested command policy permits scratch files inside isolated outputs while
+mounting other roles' declared artifacts and prior revisions read-only. It is not
+an exact-file-only write sandbox or an outer sandbox around provider code. The
+private report MCP is an explicitly authorized separate control plane. Estimated
+accounting charges $1 per attempt against $6; actual spend is unmeasured. The
+paired manual baseline, full failure-injection comparison, other execution hosts,
+packaged activation and live migration remain future acceptance stages. See
+[the current pilot package](../pilots/djvibe-article-shadow/README.md) for these limits.
+
+No changes in this follow-up have yet been committed, merged, pushed or installed.
+Final combined checks, physical evidence and independent review still precede delivery.
+
+### Real-worker contract findings
+
+The next physical run executed all four roles automatically. The editor approved
+the synthetic content, but native semantic validation rejected its upstream draft
+`producerAttempt` as foreign to the current reporting attempt. The correction is
+explicit reporting guidance: omit that optional current-producer assertion for an
+upstream reference and retain writer/reviewer identity in the digest-bound review
+JSON. No report was rewritten and no identity check weakened. Required artifact
+kinds are now included in the frozen task report instructions. The acceptance
+checker also recognizes DJVibe frontmatter before checking title/body labels; a
+fixture verifies that metadata-only labels still fail. These changes preserve the
+21 pinned input entries and all six tuned Goal texts.
+
+### Release review corrections and real-provider evidence
+
+The first successful real native run, `9b8ccc52-0107-4d49-81be-4968adc1303c`,
+passed its hidden app smoke in 4 minutes 18 seconds. Four separate Codex workers
+returned their own authenticated reports; automatic parent reconciliation advanced
+to the independent editor's human gate. The first live worker opened in its
+native Task tab. No human approval or final completion receipt was submitted.
+
+The independent review (`task_402ff2b0c401` / `ctx_bd5144e22d1e`) returned BLOCK
+with three source defects. The endpoint now rechecks its consumed launch permit
+at every report boundary, so revoked admission/policy, stopped host and changed
+owner cannot submit new native mutations. Old receipts remain inspectable without
+restoring write authority. The retained profile now validates and reuses its exact
+descriptor/workspace and preserves lock owners. A physical startup test exposed
+the live Store's asynchronous flush requirement; trusted composition is now
+awaited before runtime activation. Finally, the writer's exact Dispatch revision
+is required, digest-equal to the draft, and rechecked before human acceptance.
+This extends existing artifact requirements instead of introducing another runner.
+
+Observed checks: 84 tests in 12 affected suites passed; the persistence/composition
+follow-up passed 17 tests in three suites; Node/CLI/web and the article harness
+typechecks passed. The revised real-provider/restart test and independent review
+follow-up are in progress. Frozen input bytes remain unchanged. The expanded
+sidebar made the first narrow-width screenshot unreadable; it is not counted as
+mobile acceptance. The revised viewport check explicitly collapses the sidebar.
+
+All work remains isolated from existing schedules, publishing, production content
+and independent backups. XOS merge/push is authorized after checks and review;
+no deployment or installed-profile pilot activation is part of this packet.
+
+### Final native smoke and source review result
+
+The corrected real-provider test passed with exit 0 in approximately 4.3 minutes:
+run `44688502-8f80-431e-b4ca-9fe8ff4af1cb` reached the independent editor's human
+approval hold, then survived closing and reopening the same isolated app profile.
+Descriptor bytes, parent run, all Task/Dispatch identities and held report digest
+were unchanged. The first worker's native terminal opened with live output.
+All windows stayed hidden. Root checked exported artifact digests and identical
+writer draft/revision bytes. No human approval or final receipt was manufactured.
+The owned profile had no remaining processes and was removed after evidence export.
+
+Independent follow-up `task_d55f085fa404` / `ctx_fc1ed8a714c7` cleared the original
+three source blockers and found no remaining source blocker for this bounded
+Linux/local/developer pilot. Its shipping condition is successful final physical
+verification (now observed) and the final repository gate after the last edit.
+The narrow desktop viewport's report is readable with the sidebar collapsed;
+long-title header overlap remains deferred. This is not mobile-device acceptance.
+Paired manual comparison, measured spend, forced-crash recovery, physical final
+approval, packaged activation and live migration remain separate future work.
+
+The source and test evidence are ready for the authorized XOS delivery once the
+final `check:changed` gate completes. Existing automations, schedules, content,
+publishing and independent backups have not changed.

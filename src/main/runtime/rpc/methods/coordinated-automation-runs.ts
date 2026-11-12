@@ -10,6 +10,24 @@ import { assertLocalCoordinatedCaller } from './coordinated-automations'
 
 export const COORDINATED_AUTOMATION_RUN_METHODS = [
   defineMethod({
+    name: 'automation.startCoordinatedNativeRun',
+    permission: 'workspace',
+    params: CoordinatedFakeRunStart,
+    handler: (params, context) => {
+      assertLocalCoordinatedCaller(context)
+      return context.runtime.startCoordinatedNativeRun(params)
+    }
+  }),
+  defineMethod({
+    name: 'automation.reconcileCoordinatedNativeRun',
+    permission: 'workspace',
+    params: CoordinatedRunSelection,
+    handler: (params, context) => {
+      assertLocalCoordinatedCaller(context)
+      return context.runtime.reconcileCoordinatedNativeRun(params)
+    }
+  }),
+  defineMethod({
     name: 'automation.startCoordinatedFakeRun',
     permission: 'workspace',
     params: CoordinatedFakeRunStart,

@@ -1,3 +1,11 @@
+import type { StageAcceptanceContract } from './coordinated-automation-stage-acceptance'
+export type {
+  StageArtifactRequirement,
+  StageCheckRequirement,
+  StageEffectRequirement,
+  StageApprovalRequirement,
+  StageAcceptanceContract
+} from './coordinated-automation-stage-acceptance'
 import type { AutomationExecutionTargetType, AutomationWorkspaceMode } from './automations-types'
 import type { SetupDecision } from './worktree/create-types'
 import type { TuiAgent } from './tui-agent'
@@ -31,6 +39,7 @@ export function isSingleAutomation(automation: { kind?: AutomationKind }): boole
 }
 
 export type CoordinatedAutomationDefinitionFields = {
+  triggerPolicy?: 'manual_only'
   kind?: AutomationKind
   definitionRevision?: number
   outcomeContract?: AutomationOutcomeContract
@@ -142,44 +151,6 @@ export type CoordinatedAutomationInheritedDefaults = {
   timeoutSeconds?: number
   maxRetries?: number
   maxReviewIterations?: number
-}
-
-export type StageArtifactRequirement = {
-  kind: string
-  pathPattern?: string
-  description?: string
-  required?: boolean
-}
-
-export type StageCheckRequirement = {
-  id: string
-  namespace?: string
-  description?: string
-  required?: boolean
-}
-
-export type StageEffectRequirement = {
-  kind: string
-  namespace?: string
-  allowedStatuses: ('applied' | 'verified')[]
-  description?: string
-  required?: boolean
-}
-
-export type StageApprovalRequirement = {
-  id: string
-  role: string
-  disallowAuthorApproval?: boolean
-  description?: string
-  required?: boolean
-}
-
-export type StageAcceptanceContract = {
-  criteria?: { id: string; description: string; required?: boolean }[]
-  requiredArtifacts?: StageArtifactRequirement[]
-  requiredChecks?: StageCheckRequirement[]
-  requiredEffects?: StageEffectRequirement[]
-  requiredApprovals?: StageApprovalRequirement[]
 }
 
 export type ChildDependencyCondition = 'accepted' | 'completed'
@@ -327,6 +298,7 @@ export type ResolvedChildSnapshot = {
 }
 
 export type ResolvedAutomationRunSnapshot = {
+  triggerPolicy?: 'manual_only'
   automationId: string
   definitionRevision: number
   createdAt: number

@@ -80,6 +80,27 @@ describe('coordinated fake run wire requests', () => {
 })
 
 describe('coordinated fake run capability and authority refusal', () => {
+  it('refuses real execution through a fake host before creating any occurrence', async () => {
+    const { runtime, env, rpc, startRequest, service } = await setup()
+    const before = env.store.listAutomationRuns()
+    const start = vi.spyOn(service.coordinatedRuns, 'startManualRun')
+    expect(runtime.getStatus().coordinatedNativeRuns?.available).toBe(false)
+    expect(await rpc('automation.startCoordinatedNativeRun', startRequest)).toMatchObject({
+      ok: false
+    })
+    expect(start).not.toHaveBeenCalled()
+    expect(env.store.listAutomationRuns()).toEqual(before)
+    const fake = await runtime.startCoordinatedFakeRun(startRequest)
+    await expect(
+      runtime.reconcileCoordinatedNativeRun({
+        runtimeId: startRequest.runtimeId,
+        automationId: startRequest.automationId,
+        expectedOwner: startRequest.expectedOwner,
+        automationRunId: fake.view.inspection.automationRunId
+      })
+    ).rejects.toThrow(/native runs/)
+  })
+
   it.each([
     { label: 'absent service host', host: false },
     { label: 'definition gate closed', definitionGate: false },

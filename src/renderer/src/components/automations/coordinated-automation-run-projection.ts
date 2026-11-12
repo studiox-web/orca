@@ -53,6 +53,7 @@ export type ProjectedCoordinatedRun = {
   replanReason: string | null
   lifecycleState: 'enabled' | 'paused'
   scheduleState: {
+    triggerPolicy?: 'manual_only'
     rrule: string
     nextRunAt: number
     enabled: boolean
@@ -269,6 +270,7 @@ export function projectCoordinatedAutomationRun(input: {
     replanReason: run.replanReason ?? null,
     lifecycleState: automation.enabled ? 'enabled' : 'paused',
     scheduleState: {
+      triggerPolicy: automation.triggerPolicy,
       rrule: automation.rrule,
       nextRunAt: automation.nextRunAt,
       enabled: automation.enabled,

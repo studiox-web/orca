@@ -1,3 +1,4 @@
+import type { NativeProviderExecutionAdmission } from '../runtime/native-provider-execution-admission'
 import type { CoordinatedDefinitionWriteHost } from '../runtime/coordinated-definition-write-gate'
 import {
   applySessionSearchSettingsChange,
@@ -61,7 +62,8 @@ export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
 }
 
 export function initializeMainProcessRuntime(
-  coordinatedDefinitionWrites?: CoordinatedDefinitionWriteHost
+  coordinatedDefinitionWrites?: CoordinatedDefinitionWriteHost,
+  coordinatedNativeProviderExecution?: NativeProviderExecutionAdmission
 ): OrcaRuntimeService {
   const store = state.store
   const stats = state.stats
@@ -94,6 +96,7 @@ export function initializeMainProcessRuntime(
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   const runtime = new OrcaRuntimeService(store, stats, {
     coordinatedDefinitionWrites,
+    coordinatedNativeProviderExecution,
     getSetupTerminalTitle: () => translateMain('worktree.setupTerminalTitle', 'Setup'),
     ...agentHookRuntimeDeps(agentHookServer, observedPaneIdentities, () =>
       state.store?.getSettings()

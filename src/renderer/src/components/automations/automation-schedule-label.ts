@@ -55,6 +55,12 @@ export function formatUiAutomationScheduleDescriptor(
 }
 
 /** Convenience wrapper for callers that hold the raw cron/RRULE expression. */
-export function formatUiAutomationSchedule(scheduleExpression: string): string {
+export function formatUiAutomationSchedule(
+  scheduleExpression: string,
+  triggerPolicy?: 'manual_only'
+): string {
+  if (triggerPolicy === 'manual_only') {
+    return translate('auto.components.automations.schedule.manualOnly', 'Manual only')
+  }
   return formatUiAutomationScheduleDescriptor(describeAutomationSchedule(scheduleExpression))
 }

@@ -6,6 +6,7 @@ import { track } from '../telemetry/client'
 import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
 import { getDaemonProvider, listLiveDaemonPtyIds } from '../daemon/daemon-provider-state'
 import { initDaemonPtyProvider } from '../daemon/daemon-provider-init'
+import { nativePilotRequiresInProcessPty } from '../runtime/native-provider-execution-admission'
 import { restartLocalTerminalsAfterElevation } from '../windows/windows-administrator-restart'
 import { resolveTerminalSpawnAdmissionMode } from '../daemon/terminal-spawn-gate'
 import {
@@ -134,6 +135,9 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
   const startupServices = startFirstWindowStartupServices({
     // Desktop/serve must adopt the persistent provider before terminals or renderers exist.
     startDaemonPtyProvider: async (signal) => {
+      if (state.runtime && nativePilotRequiresInProcessPty(state.runtime)) {
+        return
+      }
       logStartupMilestone('startup-service-start', { service: 'daemon-pty-provider' })
       // Only GUI macOS daemons follow login-session death; serve must survive SSH disconnect.
       await initDaemonPtyProvider(signal, {

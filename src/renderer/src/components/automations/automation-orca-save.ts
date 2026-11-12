@@ -21,7 +21,7 @@ import {
   dispatchAutomationReread,
   type AutomationDispatchResult
 } from './automation-row-action-dispatch'
-import { buildDraftPrecheck } from './automation-draft-model'
+import { automationDraftScheduleChanged, buildDraftPrecheck } from './automation-draft-model'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
 import {
@@ -94,7 +94,7 @@ export async function saveOrcaAutomation(
   const edited = (key: keyof typeof draft): boolean =>
     !draftAtOpen || draft[key] !== draftAtOpen[key]
   const targetEdited = !currentAutomation || local.targetEdited
-  const scheduleEdited = (['preset', 'time', 'dayOfWeek', 'customSchedule'] as const).some(edited)
+  const scheduleEdited = automationDraftScheduleChanged(draft, draftAtOpen)
   const timezone = currentAutomation?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
   const rrule =
     draft.preset === 'custom'

@@ -93,72 +93,162 @@ describe('Coordinated Parent Completion Receipt and Trust Persistence', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('persists completionReceipt and completionTrust on parent completion and survives disk reload intact', async () => {
-    const store = createStore()
-    const automation = store.createCoordinatedAutomation(
-      coordinatedCreateInput({
-        children: [child('worker_1', { name: 'Worker 1' })],
-        outcomeContract: {
-          humanStatement: 'Reviewed article is ready.',
-          acceptanceCriteria: [
-            {
-              id: 'article-reviewed',
-              description: 'Article reviewed',
-              required: true,
-              kind: 'custom'
-            }
+  it.each(['completed', 'ready_for_review'] as const)(
+    'persists %s receipt and trust across reload',
+    async (finalState) => {
+      const store = createStore()
+      const automation = store.createCoordinatedAutomation(
+        coordinatedCreateInput({
+          children: [child('worker_1', { name: 'Worker 1' })],
+          outcomeContract: {
+            humanStatement: 'Reviewed article is ready.',
+            acceptanceCriteria: [
+              {
+                id: 'article-reviewed',
+                description: 'Article reviewed',
+                required: true,
+                kind: 'custom'
+              }
+            ],
+            requiredApprovals: [],
+            allowedFinalStates: [finalState, 'failed', 'blocked', 'outcome_uncertain']
+          },
+          publicationPolicy: {
+            allowExternalMutation: false,
+            allowedFinalStates: [finalState, 'failed', 'blocked', 'outcome_uncertain'],
+            requireHumanDecisionForProduction: true
+          }
+        })
+      )
+      const { run } = store.createCoordinatedAutomationRun({
+        automationId: automation.id,
+        scheduledFor: 8000
+      })
+
+      const workerProvider: CoordinatedWorkerProvider = {
+        capability: 'fake_no_effects',
+        run: async (id) =>
+          makeWorkerResult(id, store, {
+            outcome: 'succeeded',
+            checks: [
+              {
+                id: 'article-reviewed',
+                outcome: 'passed',
+                evidence: ['Article reviewed and verified']
+              }
+            ]
+          })
+      }
+
+      const adapter = new CoordinatedAutomationAdapter({
+        store,
+        orchestrationDb: db,
+        progressStore: createMemoryCoordinatedRunProgressStore(),
+        workerProvider
+      })
+
+      const completedRun = await adapter.runUntilSettled(run!.id)
+      expect(completedRun.status).toBe('completed')
+      expect(completedRun.error).toBeNull()
+      expect(completedRun.completionReceipt).toBeDefined()
+      expect(completedRun.completionTrust).toBeDefined()
+      expect(completedRun.completionTrust?.authorIdentity).toBe('host_service')
+      expect(completedRun.completionReceipt?.finalState).toBe(finalState)
+      expect(completedRun.coordinatedQuarantine).toBeUndefined()
+
+      // Now reload the store from disk to prove survival
+      await closeTestStores()
+      const reloadedStore = createStore()
+      const reloadedRun = reloadedStore.listAutomationRuns().find((r) => r.id === run!.id)!
+
+      expect(reloadedRun.status).toBe('completed')
+      expect(reloadedRun.completionReceipt).toEqual(completedRun.completionReceipt)
+      expect(reloadedRun.completionTrust).toEqual(completedRun.completionTrust)
+      expect(reloadedRun.coordinatedQuarantine).toBeUndefined()
+    }
+  )
+
+  it.each([false, true])(
+    'uses only the target child and namespace for parent evidence (review present: %s)',
+    async (reviewPresent) => {
+      const store = createStore()
+      const automation = store.createCoordinatedAutomation(
+        coordinatedCreateInput({
+          children: [
+            child('writer'),
+            child('editor', { dependencies: [{ childId: 'writer', condition: 'accepted' }] })
           ],
-          requiredApprovals: [],
-          allowedFinalStates: ['completed', 'failed', 'blocked', 'outcome_uncertain']
+          outcomeContract: {
+            humanStatement: 'Independent editor verified the exact draft.',
+            acceptanceCriteria: [
+              {
+                id: 'draft-digest',
+                targetChildId: 'editor',
+                namespace: 'pilot',
+                kind: 'check',
+                required: true,
+                description: 'Exact reviewed draft'
+              }
+            ],
+            requiredApprovals: [],
+            allowedFinalStates: ['completed', 'failed', 'blocked', 'outcome_uncertain']
+          }
+        })
+      )
+      const { run } = store.createCoordinatedAutomationRun({
+        automationId: automation.id,
+        scheduledFor: 1
+      })
+      const adapter = new CoordinatedAutomationAdapter({
+        store,
+        orchestrationDb: db,
+        progressStore: createMemoryCoordinatedRunProgressStore(),
+        workerProvider: {
+          capability: 'fake_no_effects',
+          run: async (identity) =>
+            makeWorkerResult(identity, store, {
+              checks:
+                identity.childDefinitionId === 'writer'
+                  ? [
+                      {
+                        id: 'draft-digest',
+                        namespace: 'pilot',
+                        outcome: 'passed',
+                        evidence: ['writer-self-assertion']
+                      }
+                    ]
+                  : [
+                      {
+                        id: 'draft-digest',
+                        namespace: 'foreign',
+                        outcome: 'passed',
+                        evidence: ['wrong-namespace']
+                      },
+                      ...(reviewPresent
+                        ? [
+                            {
+                              id: 'draft-digest',
+                              namespace: 'pilot',
+                              outcome: 'passed' as const,
+                              evidence: ['independent-editor']
+                            }
+                          ]
+                        : [])
+                    ]
+            })
         }
       })
-    )
-    const { run } = store.createCoordinatedAutomationRun({
-      automationId: automation.id,
-      scheduledFor: 8000
-    })
-
-    const workerProvider: CoordinatedWorkerProvider = {
-      capability: 'fake_no_effects',
-      run: async (id) =>
-        makeWorkerResult(id, store, {
-          outcome: 'succeeded',
-          checks: [
-            {
-              id: 'article-reviewed',
-              outcome: 'passed',
-              evidence: ['Article reviewed and verified']
-            }
-          ]
-        })
+      const result = await adapter.runUntilSettled(run!.id)
+      if (reviewPresent) {
+        expect(result.completionReceipt?.acceptanceResults[0].evidence).toEqual([
+          'independent-editor'
+        ])
+      } else {
+        expect(result.completionReceipt).toBeNull()
+        expect(result.status).not.toBe('completed')
+      }
     }
-
-    const adapter = new CoordinatedAutomationAdapter({
-      store,
-      orchestrationDb: db,
-      progressStore: createMemoryCoordinatedRunProgressStore(),
-      workerProvider
-    })
-
-    const completedRun = await adapter.runUntilSettled(run!.id)
-    expect(completedRun.status).toBe('completed')
-    expect(completedRun.error).toBeNull()
-    expect(completedRun.completionReceipt).toBeDefined()
-    expect(completedRun.completionTrust).toBeDefined()
-    expect(completedRun.completionTrust?.authorIdentity).toBe('host_service')
-    expect(completedRun.completionReceipt?.finalState).toBe('completed')
-    expect(completedRun.coordinatedQuarantine).toBeUndefined()
-
-    // Now reload the store from disk to prove survival
-    await closeTestStores()
-    const reloadedStore = createStore()
-    const reloadedRun = reloadedStore.listAutomationRuns().find((r) => r.id === run!.id)!
-
-    expect(reloadedRun.status).toBe('completed')
-    expect(reloadedRun.completionReceipt).toEqual(completedRun.completionReceipt)
-    expect(reloadedRun.completionTrust).toEqual(completedRun.completionTrust)
-    expect(reloadedRun.coordinatedQuarantine).toBeUndefined()
-  })
+  )
 
   it('fails closed and refuses settlement as completed without trusted receipt and trust', () => {
     const store = createStore()

@@ -29,7 +29,12 @@ export function coordinatedReportContractFor(
     resolvedConfigDigest: snapshot.canonicalDigest,
     requiredCheckIds: [
       ...new Set([
-        ...required(snapshot.outcomeContract.acceptanceCriteria),
+        ...required(
+          snapshot.outcomeContract.acceptanceCriteria.filter(
+            (criterion) =>
+              !criterion.targetChildId || criterion.targetChildId === child.childDefinitionId
+          )
+        ),
         ...required(child.stageAcceptance?.criteria),
         ...required(child.stageAcceptance?.requiredChecks)
       ])
@@ -48,7 +53,12 @@ export function withCoordinatedReportBrief(
     ...started,
     task: {
       ...started.task,
-      spec: `${started.task.spec}\n\n${formatCoordinatedReportContract(contract)}`
+      spec: [
+        started.task.spec,
+        formatCoordinatedReportContract(contract),
+        'Artifact requirements from the frozen stage configuration follow. Copy each required kind exactly; pathPattern constrains its URI, with {dispatchId} replaced by this exact Dispatch ID. sameDigestAs requires identical bytes to the named artifact kind. Include the actual content digest. These requirements are instructions, not additional structuredResult fields.',
+        `Stage artifact requirements: ${JSON.stringify(child.stageAcceptance?.requiredArtifacts ?? [])}`
+      ].join('\n\n')
     }
   }
 }

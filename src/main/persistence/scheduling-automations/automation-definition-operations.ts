@@ -136,7 +136,10 @@ export function createAutomation(
     rrule: input.rrule,
     dtstart: input.dtstart,
     enabled: input.enabled ?? true,
-    nextRunAt: nextAutomationOccurrenceAfter(input.rrule, input.dtstart, now),
+    nextRunAt:
+      decorate && input.rrule === ''
+        ? 0
+        : nextAutomationOccurrenceAfter(input.rrule, input.dtstart, now),
     missedRunPolicy: 'run_once_within_grace',
     missedRunGraceMinutes: input.missedRunGraceMinutes ?? 720,
     createdAt: now,
@@ -163,6 +166,12 @@ export function updateAutomation(
     throw new Error('Automation not found.')
   }
   const current = operations.state.automations[index]
+  if (
+    current.triggerPolicy === 'manual_only' &&
+    (updates.rrule !== undefined || updates.dtstart !== undefined || updates.enabled === true)
+  ) {
+    throw new Error('Manual-only coordinated definitions cannot be scheduled or enabled.')
+  }
   const projectionContext = automationProjectionContext(
     operations.state,
     operations.storageAuthority,

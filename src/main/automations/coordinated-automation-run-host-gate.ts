@@ -1,3 +1,6 @@
+import { assertNativeProviderExecutionAdmission } from '../runtime/native-provider-execution-admission'
+import { COORDINATED_NATIVE_PROVIDER_CAPABILITY } from './coordinated-automation-native-provider-plan'
+import { resolveActiveNativeProviderHost } from './coordinated-automation-native-provider-worker'
 import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { AutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
@@ -27,22 +30,25 @@ export function coordinatedRunHostRefusal(input: {
 }): string | null {
   const { injection, environment } = input
   if (!injection) {
-    return 'Coordinated fake runs are not configured for this host.'
+    return 'Coordinated runs are not configured for this host.'
   }
   if (input.headless) {
-    return 'Coordinated fake runs are refused on headless and remote hosts.'
+    return 'Coordinated runs are refused on headless and remote hosts.'
   }
-  if (injection.capability !== COORDINATED_FAKE_RUNS_CAPABILITY) {
-    return `Unknown coordinated run capability "${String(injection.capability)}".`
+  if (
+    injection.capability !== COORDINATED_FAKE_RUNS_CAPABILITY &&
+    injection.capability !== COORDINATED_NATIVE_PROVIDER_CAPABILITY
+  ) {
+    return 'Unknown coordinated run capability.'
   }
   if (!environment) {
     return 'The host environment is unavailable, so local desktop authority cannot be confirmed.'
   }
   if (environment.isPackaged()) {
-    return 'Coordinated fake runs are refused in packaged builds.'
+    return 'Coordinated runs are refused in packaged builds.'
   }
   if (injection.profile.kind !== 'isolated_test' && injection.profile.kind !== 'developer') {
-    return 'Coordinated fake runs need an isolated test or developer profile.'
+    return 'Coordinated runs need an isolated test or developer profile.'
   }
   const selectedProfile = environment.activeProfileDirectory()
   if (!selectedProfile) {
@@ -52,12 +58,42 @@ export function coordinatedRunHostRefusal(input: {
   if (!root || root !== canonicalPath(selectedProfile)) {
     return 'The injected profile root is not this host’s active profile.'
   }
+  if (injection.capability === COORDINATED_NATIVE_PROVIDER_CAPABILITY) {
+    try {
+      const host = resolveActiveNativeProviderHost(injection.nativeProviderWorker)
+      const identity = assertNativeProviderExecutionAdmission(
+        host.admission,
+        host.runtime,
+        host.store
+      )
+      if (
+        !identity.pilotScope ||
+        canonicalPath(identity.pilotScope.workspacePath) !==
+          canonicalPath(injection.workspacePath ?? '')
+      ) {
+        return 'The native run host requires the admitted isolated workspace scope.'
+      }
+      if (
+        host.db !== injection.orchestrationDb ||
+        canonicalPath(host.store.getProfileStorageDirectory()) !== root ||
+        injection.effects.policy !== 'deny' ||
+        injection.workerProvider
+      ) {
+        return 'The native run host does not match the admitted database, profile or effect policy.'
+      }
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error)
+    }
+  }
   const provider = injection.workerProvider
   const capabilities = [
-    ...(provider.capability ? [provider.capability] : []),
-    ...(provider.capabilities ?? [])
+    ...(provider?.capability ? [provider.capability] : []),
+    ...(provider?.capabilities ?? [])
   ]
-  if (capabilities.length === 0 || capabilities.some((c) => c !== 'fake_no_effects')) {
+  if (
+    injection.capability === COORDINATED_FAKE_RUNS_CAPABILITY &&
+    (capabilities.length === 0 || capabilities.some((c) => c !== 'fake_no_effects'))
+  ) {
     return 'Only the fake_no_effects worker provider is accepted.'
   }
   if (typeof injection.clock.setTimer !== 'function') {
@@ -156,10 +192,10 @@ export function manualStartRefusal(
     return `Coordinated automation "${request.automationId}" was not found.`
   }
   if (automation.enabled) {
-    return 'Manual fake runs are limited to disabled coordinated definitions.'
+    return 'Manual coordinated runs are limited to disabled coordinated definitions.'
   }
   if (automation.executionTargetType !== 'local') {
-    return 'Manual fake runs are limited to local desktop execution targets.'
+    return 'Manual coordinated runs are limited to local desktop execution targets.'
   }
   if (!sameOwner(store.automationOwnerPrecondition(request.automationId), request.expectedOwner)) {
     return 'The automation owner changed.'

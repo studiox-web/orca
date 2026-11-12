@@ -4,13 +4,20 @@ import type {
   CoordinatedRunSemanticState
 } from './coordinated-automation-run-inspection'
 
+export type CoordinatedNativeStartDescriptor = {
+  idempotencyKey: string
+  workspaceId: string
+  definitions: { automationId: string; expectedDefinitionRevision: number }[]
+}
+
 export type CoordinatedRunActionAvailability =
-  | { available: true; state?: string }
+  | { available: true; state?: string; nativeStart?: CoordinatedNativeStartDescriptor }
   | { available: false; state?: string; reason: string }
 
 type UnavailableEvidence = { kind: 'unavailable'; reason: string }
 
 export type CoordinatedRunView = {
+  executionKind?: 'fake' | 'native'
   runtimeId: string
   inspection: CoordinatedRunInspection
   actions: {

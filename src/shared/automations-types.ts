@@ -215,8 +215,16 @@ export type AutomationCreateInput = {
   missedRunGraceMinutes?: number
 }
 
-export type CoordinatedAutomationCreateInput = AutomationCreateInput &
-  CoordinatedAutomationDefinitionFields
+export type CoordinatedAutomationCreateInput = Omit<AutomationCreateInput, 'rrule' | 'dtstart'> &
+  CoordinatedAutomationDefinitionFields &
+  (
+    | { triggerPolicy: 'manual_only'; rrule?: never; dtstart?: never }
+    | {
+        triggerPolicy?: never
+        rrule: string
+        dtstart: number
+      }
+  )
 
 export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPatch } & Partial<
   Pick<

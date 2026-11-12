@@ -100,20 +100,38 @@ export function evaluateParentOutcomeAcceptance(input: {
     }
   }
 
-  const allChecks: { id: string; outcome: string; evidence?: string[] }[] = input.acceptedReports
-    ? input.acceptedReports.flatMap((report) => report.checks)
+  const allChecks: {
+    childDefinitionId: string
+    id: string
+    namespace?: string
+    outcome: string
+    evidence?: string[]
+  }[] = input.acceptedReports
+    ? input.acceptedReports.flatMap((report) =>
+        report.checks.map((check) => ({ ...check, childDefinitionId: report.childDefinitionId }))
+      )
     : tasks.flatMap((task) => {
         const decoded = decodeWorkerReportResult(task.result)
         if (decoded.kind !== 'structured') {
           return []
         }
         const parsed = StructuredWorkerResultSchema.safeParse(decoded.report)
-        return parsed.success ? parsed.data.checks : []
+        return parsed.success
+          ? parsed.data.checks.map((check) => ({
+              ...check,
+              childDefinitionId: parsed.data.childDefinitionId
+            }))
+          : []
       })
 
   const acceptanceResults: SemanticReceiptAcceptanceResult[] = []
   for (const criterion of snapshot.outcomeContract.acceptanceCriteria) {
-    const matchingCheck = allChecks.find((c) => c.id === criterion.id)
+    const matchingCheck = allChecks.find(
+      (c) =>
+        c.id === criterion.id &&
+        (!criterion.targetChildId || c.childDefinitionId === criterion.targetChildId) &&
+        (!criterion.namespace || c.namespace === criterion.namespace)
+    )
     if (matchingCheck) {
       if (matchingCheck.outcome === 'passed') {
         acceptanceResults.push({
@@ -189,6 +207,15 @@ export function evaluateParentOutcomeAcceptance(input: {
     ...(input.productionDecision ? { productionDecision: input.productionDecision } : {})
   }
 
+  const finalState = (['ready_for_review', 'completed'] as const).find(
+    (state) =>
+      snapshot.outcomeContract.allowedFinalStates.includes(state) &&
+      snapshot.publicationPolicy.allowedFinalStates.includes(state)
+  )
+  if (!finalState) {
+    return { accepted: false, errors: ['No supported non-publication success state is allowed.'] }
+  }
+
   const receipt: SemanticCompletionReceipt = {
     schemaVersion: 1,
     identityChain: {
@@ -202,7 +229,7 @@ export function evaluateParentOutcomeAcceptance(input: {
       taskMappings: (run.childMappings ?? []).map((m) => ({ ...m }))
     },
     frozenConfigDigest: snapshot.canonicalDigest,
-    finalState: 'completed',
+    finalState,
     completedAt: Date.now(),
     acceptanceResults,
     approvals: approvalResolution.approvals,

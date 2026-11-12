@@ -22,12 +22,14 @@ import {
 import { openCoordinatedStageSession } from './coordinated-stage-session-open'
 import { useCoordinatedRunApi } from './use-coordinated-run-api'
 import { translate } from '@/i18n/i18n'
+import { coordinatedHostRunLabels } from './coordinated-host-run-labels'
 
 export function AutomationCoordinatedHostRunPanel(
   props: Parameters<typeof useCoordinatedRunApi>[0]
 ): React.JSX.Element {
   const state = useCoordinatedRunApi(props)
   const { view, selectedRunId } = state
+  const labels = coordinatedHostRunLabels(state.executionKind)
   const pinned = Boolean(props.pinnedRun)
   const runIds = pinned
     ? []
@@ -67,8 +69,8 @@ export function AutomationCoordinatedHostRunPanel(
     : null
   const startReason = props.automation.enabled
     ? translate(
-        'auto.components.automations.AutomationCoordinatedHostRunPanel.0c06d1eda0',
-        'Test runs require a disabled definition.'
+        'auto.components.automations.coordinatedRuns.disabledRequired',
+        'Manual runs require a disabled definition.'
       )
     : view && !view.actions.start.available
       ? view.actions.start.reason
@@ -83,10 +85,7 @@ export function AutomationCoordinatedHostRunPanel(
               'auto.components.automations.AutomationCoordinatedHostRunPanel.9123661199',
               'Host run controls'
             )
-          : translate(
-              'auto.components.automations.AutomationCoordinatedHostRunPanel.ef7556bba0',
-              'Coordinated test runs'
-            )
+          : labels.section
       }
       className="space-y-3 rounded-lg border border-border p-4 min-w-0"
     >
@@ -96,10 +95,7 @@ export function AutomationCoordinatedHostRunPanel(
               'auto.components.automations.AutomationCoordinatedHostRunPanel.52df24d43f',
               'Host-observed run and controls'
             )
-          : translate(
-              'auto.components.automations.AutomationCoordinatedHostRunPanel.2028e358fc',
-              'No-effect test runs'
-            )}
+          : labels.title}
       </h3>
       <p className="text-xs text-muted-foreground">
         {pinned
@@ -108,10 +104,7 @@ export function AutomationCoordinatedHostRunPanel(
               'Bound to run {{value0}}. Evidence and controls come from the owning host for this exact run and its frozen definition revision.',
               { value0: selectedRunId }
             )
-          : translate(
-              'auto.components.automations.AutomationCoordinatedHostRunPanel.895a30868b',
-              'Manual isolated workers only. No live agents, publishing, or schedules. Each run keeps its saved definition revision.'
-            )}
+          : labels.description}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {pinned ? null : (
@@ -121,15 +114,7 @@ export function AutomationCoordinatedHostRunPanel(
             disabled={!state.ready || state.busy || Boolean(startReason)}
             onClick={() => void state.start()}
           >
-            {state.pendingStart
-              ? translate(
-                  'auto.components.automations.AutomationCoordinatedHostRunPanel.14ece0f19f',
-                  'Recover original test start'
-                )
-              : translate(
-                  'auto.components.automations.AutomationCoordinatedHostRunPanel.fbf7305e30',
-                  'Start no-effect test run'
-                )}
+            {state.pendingStart ? labels.recoverStart : labels.start}
           </Button>
         )}
         <Button size="sm" variant="outline" disabled={state.busy} onClick={state.refresh}>
@@ -138,10 +123,7 @@ export function AutomationCoordinatedHostRunPanel(
                 'auto.components.automations.AutomationCoordinatedHostRunPanel.afd872db2e',
                 'Refresh run'
               )
-            : translate(
-                'auto.components.automations.AutomationCoordinatedHostRunPanel.6d450f055c',
-                'Refresh test runs'
-              )}
+            : labels.refresh}
         </Button>
         <Button
           size="sm"
@@ -154,10 +136,7 @@ export function AutomationCoordinatedHostRunPanel(
                 'auto.components.automations.AutomationCoordinatedHostRunPanel.87b95d5c5b',
                 'Reconcile run'
               )
-            : translate(
-                'auto.components.automations.AutomationCoordinatedHostRunPanel.d1c62536a6',
-                'Reconcile selected test run'
-              )}
+            : labels.reconcile}
         </Button>
       </div>
       {startReason && !pinned ? (
@@ -179,10 +158,7 @@ export function AutomationCoordinatedHostRunPanel(
       ) : null}
       {runIds.length ? (
         <label className="flex min-w-0 flex-col gap-1 text-xs">
-          {translate(
-            'auto.components.automations.AutomationCoordinatedHostRunPanel.3807d1b0b4',
-            'Selected test run'
-          )}
+          {labels.selection}
           <select
             className="w-full min-w-0 rounded-md border border-input bg-background p-2 text-xs"
             value={selectedRunId ?? ''}

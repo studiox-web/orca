@@ -159,20 +159,28 @@ export function AutomationEditorSettingsSidebar({
             'Schedule'
           )}
         >
-          <AutomationSchedulePicker
-            draft={draft}
-            validateAdvancedSchedule={isValidAutomationSchedule}
-            onDraftChange={onDraftChange}
-          />
+          {draft.triggerPolicy === 'manual_only' ? (
+            <p className="text-xs text-muted-foreground">
+              {translate('auto.components.automations.schedule.manualOnly', 'Manual only')}
+            </p>
+          ) : (
+            <AutomationSchedulePicker
+              draft={draft}
+              validateAdvancedSchedule={isValidAutomationSchedule}
+              onDraftChange={onDraftChange}
+            />
+          )}
         </Field>
-        <div className="mb-4">
-          <AutomationMissedRunGraceField
-            disabled={false}
-            draft={draft}
-            pickerTriggerClassName={pickerTriggerClassName}
-            onDraftChange={onDraftChange}
-          />
-        </div>
+        {draft.triggerPolicy !== 'manual_only' ? (
+          <div className="mb-4">
+            <AutomationMissedRunGraceField
+              disabled={false}
+              draft={draft}
+              pickerTriggerClassName={pickerTriggerClassName}
+              onDraftChange={onDraftChange}
+            />
+          </div>
+        ) : null}
         <div className="mb-4">
           <div className="flex flex-col gap-5">
             <AutomationPrecheckFields

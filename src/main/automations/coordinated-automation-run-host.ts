@@ -1,11 +1,20 @@
-import { join } from 'node:path'
+import {
+  NATIVE_PROVIDER_ATTEMPT,
+  isCoordinatedNativeAttempt,
+  readCoordinatedNativeBinding
+} from './coordinated-automation-native-attempt'
+import { COORDINATED_NATIVE_PROVIDER_CAPABILITY } from './coordinated-automation-native-provider-plan'
+import {
+  nativePilotStartDescriptor,
+  nativePilotStartRefusal,
+  nativePilotRunRefusal
+} from './coordinated-automation-native-pilot-scope'
+import { createCoordinatedRunHostExecution } from './coordinated-automation-run-host-execution'
+export { COORDINATED_PROGRESS_DIRECTORY } from './coordinated-automation-run-host-execution'
 import { isFinalAutomationRunStatus, type AutomationRun } from '../../shared/automations-types'
 import type { Store } from '../persistence/loading-store/store'
-import { CoordinatedAutomationAdapter } from './coordinated-automation-adapter'
-import {
-  createFileCoordinatedRunProgressStore,
-  type CoordinatedRunProgressStore
-} from './coordinated-automation-progress-store'
+import type { CoordinatedAutomationAdapter } from './coordinated-automation-adapter'
+import type { CoordinatedRunProgressStore } from './coordinated-automation-progress-store'
 import {
   manualRequestShapeRefusal,
   manualStartRefusal,
@@ -28,50 +37,26 @@ import {
   type CoordinatedRunGateRequest
 } from './coordinated-automation-run-host-types'
 
-export const COORDINATED_PROGRESS_DIRECTORY = 'coordinated-automation-progress'
-
 /** Lane the host shares with ordinary automation dispatch for the same parent. */
 export type CoordinatedRunHostLane = <T>(
   automationId: string,
   operation: () => Promise<T>
 ) => Promise<T>
 
-type Phase = 'idle' | 'recovering' | 'ready' | 'stopped'
-
 /**
- * Notifies only after the durable write returned; a throwing listener is logged and never
- * undoes, retries, or replays the committed transition.
- */
-function publishingProgressStore(
-  store: CoordinatedRunProgressStore,
-  committed: () => void
-): CoordinatedRunProgressStore {
-  return {
-    read: (automationRunId) => store.read(automationRunId),
-    write: (next, expectedSequence) => {
-      store.write(next, expectedSequence)
-      try {
-        committed()
-      } catch (error) {
-        console.warn('[automations] coordinated progress listener failed:', error)
-      }
-    }
-  }
-}
-
-/**
- * Host-owned manual fake runs for disabled coordinated definitions. Retained runs are
+ * Host-owned manual runs for disabled coordinated definitions. Retained runs are
  * reconciled at startup before any manual admission; stop fences every further write; the
  * profile/authority gate is re-evaluated live on every call.
  */
 export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationRunHost {
+  readonly executionKind: 'fake' | 'native'
   readonly #store: Store
   readonly #injection: CoordinatedRunHostInjection
   readonly #gate: () => string | null
   readonly #lane: CoordinatedRunHostLane
   readonly #adapter: CoordinatedAutomationAdapter
   readonly #progressStore: CoordinatedRunProgressStore
-  #phase: Phase = 'idle'
+  #phase: 'idle' | 'recovering' | 'ready' | 'stopped' = 'idle'
   #recovery: Promise<void> = Promise.resolve()
 
   constructor(input: {
@@ -83,33 +68,29 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
     /** Fires after each successful durable progress write while the host is not stopped. */
     onProgressCommitted?: () => void
   }) {
+    this.executionKind = input.injection.nativeProviderWorker ? 'native' : 'fake'
     this.#store = input.store
     this.#injection = input.injection
     this.#gate = input.gate
     this.#lane = input.lane
-    this.#progressStore = publishingProgressStore(
-      createFileCoordinatedRunProgressStore(
-        join(input.injection.profile.root, COORDINATED_PROGRESS_DIRECTORY)
-      ),
-      () => {
+    const execution = createCoordinatedRunHostExecution({
+      ...input,
+      isActive: () => this.#phase !== 'stopped' && this.#gate() === null,
+      onProgressCommitted: () => {
         if (this.#phase !== 'stopped') {
           input.onProgressCommitted?.()
         }
       }
-    )
-    const effects = input.injection.effects
-    this.#adapter = new CoordinatedAutomationAdapter({
-      store: input.store,
-      orchestrationDb: input.injection.orchestrationDb,
-      workerProvider: input.injection.workerProvider,
-      runInParentLane: input.lane,
-      progressStore: this.#progressStore,
-      clock: input.injection.clock,
-      laneLocks: input.injection.laneLocks,
-      durableBoundary: input.injection.durableBoundary,
-      ...(effects.policy === 'fake' ? { effectAdapter: effects.adapter } : {}),
-      isActive: () => this.#phase !== 'stopped' && this.#gate() === null
     })
+    this.#adapter = execution.adapter
+    this.#progressStore = execution.progressStore
+  }
+
+  get nativeStart() {
+    return this.availability.available &&
+      this.#injection.capability === COORDINATED_NATIVE_PROVIDER_CAPABILITY
+      ? nativePilotStartDescriptor(this.#store, this.#injection)
+      : undefined
   }
 
   get availability(): CoordinatedRunHostAvailability {
@@ -197,6 +178,9 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
     // One lane entry covers the rechecks, Store creation, materialization, and reconciliation.
     return this.#lane(automationId, async () => {
       this.#refuseIf(this.#gateRefusal() ?? manualStartRefusal(this.#store, request))
+      if (this.#injection.capability === COORDINATED_NATIVE_PROVIDER_CAPABILITY) {
+        this.#refuseIf(nativePilotStartRefusal(this.#store, this.#injection, request))
+      }
       const prior = this.#store
         .listAutomationRuns(automationId)
         .find((run) => run.idempotencyKey === request.idempotencyKey)
@@ -206,7 +190,8 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
         trigger: 'manual',
         idempotencyKey: request.idempotencyKey,
         expectedDefinitionRevision: request.expectedDefinitionRevision,
-        expectedOwner: request.expectedOwner
+        expectedOwner: request.expectedOwner,
+        promptResolver: this.#injection.promptResolver
       })
       // A replay writes nothing; it must still name the occurrence's original frozen revision.
       if (
@@ -307,7 +292,28 @@ export class LocalCoordinatedAutomationRunHost implements CoordinatedAutomationR
   }
 
   #runRefusal(scope: Parameters<typeof runScopeRefusal>[1]): string | null {
-    return this.#gateRefusal() ?? runScopeRefusal(this.#store, scope)
+    const refusal = this.#gateRefusal() ?? runScopeRefusal(this.#store, scope)
+    if (refusal) {
+      return refusal
+    }
+    const run = this.#store.listAutomationRuns().find((r) => r.id === scope.automationRunId)!
+    for (const mapping of run.childMappings ?? []) {
+      const dispatch = this.#injection.orchestrationDb.getDispatchContext(mapping.taskId)
+      if (!dispatch) {
+        continue
+      }
+      const native = isCoordinatedNativeAttempt(this.#injection.orchestrationDb, dispatch.id)
+      const binding = readCoordinatedNativeBinding(this.#injection.orchestrationDb, dispatch.id)
+      if (
+        native !== (this.executionKind === 'native') ||
+        (native && binding?.kind !== NATIVE_PROVIDER_ATTEMPT)
+      ) {
+        return 'The retained run attempt execution kind does not match this host.'
+      }
+    }
+    return this.#injection.capability === COORDINATED_NATIVE_PROVIDER_CAPABILITY
+      ? nativePilotRunRefusal(this.#store, this.#injection, run)
+      : null
   }
 
   async #admit(): Promise<void> {

@@ -15,6 +15,7 @@ import { createRuntimeAutomationService } from '../../../src/main/automations/ru
 import {
   COORDINATED_FAKE_RUNS_CAPABILITY,
   type CoordinatedManualRunRequest,
+  type CoordinatedFakeRunHostInjection,
   type CoordinatedRunHostInjection
 } from '../../../src/main/automations/coordinated-automation-run-host-types'
 import { COORDINATED_PROGRESS_DIRECTORY } from '../../../src/main/automations/coordinated-automation-run-host'
@@ -60,8 +61,8 @@ export function runtimeFixture(): OrcaRuntimeService {
 }
 
 export function injection(
-  overrides: Partial<CoordinatedRunHostInjection> = {}
-): CoordinatedRunHostInjection {
+  overrides: Partial<CoordinatedFakeRunHostInjection> = {}
+): CoordinatedFakeRunHostInjection {
   return {
     capability: COORDINATED_FAKE_RUNS_CAPABILITY,
     profile: { kind: 'isolated_test', root: testState.dir },

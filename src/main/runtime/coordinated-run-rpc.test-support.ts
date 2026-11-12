@@ -5,7 +5,7 @@ import { testState } from '../persistence/persistence-test-harness'
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
 import {
   COORDINATED_FAKE_RUNS_CAPABILITY,
-  type CoordinatedRunHostInjection
+  type CoordinatedFakeRunHostInjection
 } from '../automations/coordinated-automation-run-host-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
@@ -25,7 +25,7 @@ export async function createCoordinatedRunRpcFixture(
     definitionGate?: boolean
     host?: boolean
     start?: boolean
-    injection?: Partial<CoordinatedRunHostInjection>
+    injection?: Partial<CoordinatedFakeRunHostInjection>
     fakeEffects?: boolean
     /** Definition for the fixture's parent; the default two-stage pipeline when omitted. */
     definition?: Parameters<typeof coordinatedCreateInput>[0]
@@ -54,7 +54,7 @@ export async function createCoordinatedRunRpcFixture(
   vi.spyOn(runtime, 'notifyAutomationsChanged').mockImplementation((payload = {}) => {
     published.push(payload)
   })
-  const injection: CoordinatedRunHostInjection = {
+  const injection: CoordinatedFakeRunHostInjection = {
     capability: COORDINATED_FAKE_RUNS_CAPABILITY,
     profile: { kind: 'isolated_test', root: testState.dir },
     orchestrationDb: env.db,

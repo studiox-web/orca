@@ -18602,7 +18602,6 @@
           "52df24d43f": "Host-observed run and controls",
           "ef7556bba0": "Coordinated test runs",
           "9123661199": "Host run controls",
-          "0c06d1eda0": "Test runs require a disabled definition.",
           "790ed0c96c": "Report under review",
           "e798fe5bac": "Authority unavailable",
           "305cc3649e": "Not recorded",
@@ -19140,15 +19139,9 @@
           "run": {
             "api": {
               "client": {
-                "cb4164304f": "This API requires an authenticated local caller. Remote and paired mobile test-run operations are unavailable.",
-                "9fabb81157": "No-effect test runs require the owning host’s local Self target. SSH execution is unavailable.",
-                "71f647cc0d": "This host does not support isolated no-effect test runs.",
-                "9afe3611ef": "The host has not provided current test-run availability.",
-                "7fd2b3d028": "The host returned a different runtime, parent, run, revision, or request identity. Refresh to inspect the exact run.",
                 "76cc2a16b8": "The receipt identity does not match the selected host run. Evidence is unavailable.",
                 "f0cdbdbb54": "Multiple runs match the original request. Host reconciliation is required; no new run was started.",
                 "6946118510": "The host restarted and the original request was not found. Its identity is retained; a fresh start could duplicate an uncertain run.",
-                "f5bb7106c5": "Save a disabled coordinated definition with a confirmed revision before starting a test run.",
                 "8303fc2be1": "The original reconcile belongs to a different run or runtime. Inspect that run before retrying; its submitted identity is retained."
               }
             },
@@ -19207,6 +19200,30 @@
           "roleApproval": "{{role}} approval",
           "approval": "approval",
           "escalation": "Escalation{{stage}}"
+        },
+        "coordinatedRuns": {
+          "disabledRequired": "Manual runs require a disabled definition.",
+          "section": "Coordinated runs",
+          "nativeTitle": "Manual native worker runs",
+          "nativeDescription": "Uses real agents in the admitted isolated workspace. No scheduled runs or publishing. Each run keeps its saved definition revision.",
+          "unknownDescription": "The owning host must confirm its worker execution mode and availability before a run can start.",
+          "manualStart": "Start manual run",
+          "recoverStart": "Recover original start",
+          "refresh": "Refresh runs",
+          "reconcile": "Reconcile selected run",
+          "selection": "Selected run",
+          "localCallerRequired": "This API requires an authenticated local caller. Remote and paired mobile run operations are unavailable.",
+          "localSelfRequired": "Coordinated runs require the owning host’s local Self target. SSH execution is unavailable.",
+          "availabilityMissing": "The host has not provided current coordinated-run availability.",
+          "startModeChanged": "The worker execution mode changed. Inspect the original start before retrying; its identity is retained.",
+          "confirmedDefinitionRequired": "Save a disabled coordinated definition with a confirmed revision before starting a manual run.",
+          "nativeStartUnavailable": "The host has not admitted this manual definition revision and workspace for a native run.",
+          "reconcileModeChanged": "The worker execution mode changed. The original reconciliation identity is retained.",
+          "hostKindUnavailable": "The host has not identified one supported coordinated worker execution mode.",
+          "responseIdentityChanged": "The host returned a different runtime, parent, run, revision, request identity, or execution mode. Refresh to inspect the exact run."
+        },
+        "schedule": {
+          "manualOnly": "Manual only"
         }
       },
       "agent": {

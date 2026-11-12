@@ -78,22 +78,30 @@ export function adaptLiveAutomationRow(
     host: row.hostLabel || 'This device',
     owner: 'Orca',
     lifecycle: { state: 'present', stage: 'Native definition' },
-    scheduleState: row.automation.enabled ? 'enabled' : 'paused',
-    scheduleChildren: [
-      {
-        key: `native:${hostStableKey(authority)}:${encodeURIComponent(row.automation.id)}`,
-        owner: 'orca',
-        format: 'rrule',
-        expression: row.automation.rrule,
-        timezone: row.automation.timezone,
-        timezoneLabel: row.automation.timezone,
-        enabled: row.automation.enabled,
-        nextRunAt: Number.isFinite(row.automation.nextRunAt)
-          ? new Date(row.automation.nextRunAt).toISOString()
-          : null,
-        sourceRef
-      }
-    ],
+    scheduleState:
+      row.automation.triggerPolicy === 'manual_only'
+        ? 'unscheduled'
+        : row.automation.enabled
+          ? 'enabled'
+          : 'paused',
+    scheduleChildren:
+      row.automation.triggerPolicy === 'manual_only'
+        ? []
+        : [
+            {
+              key: `native:${hostStableKey(authority)}:${encodeURIComponent(row.automation.id)}`,
+              owner: 'orca',
+              format: 'rrule',
+              expression: row.automation.rrule,
+              timezone: row.automation.timezone,
+              timezoneLabel: row.automation.timezone,
+              enabled: row.automation.enabled,
+              nextRunAt: Number.isFinite(row.automation.nextRunAt)
+                ? new Date(row.automation.nextRunAt).toISOString()
+                : null,
+              sourceRef
+            }
+          ],
     runSummary:
       lastRun.at === null
         ? null

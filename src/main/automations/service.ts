@@ -226,7 +226,7 @@ export class AutomationService {
         if (this.stopped || generation !== this.dispatchGeneration) {
           break
         }
-        if (!automation.enabled || automation.nextRunAt > now) {
+        if (automation.triggerPolicy || !automation.enabled || automation.nextRunAt > now) {
           continue
         }
         // A malformed schedule must not prevent later due rows from running.

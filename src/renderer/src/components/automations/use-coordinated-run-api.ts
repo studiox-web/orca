@@ -9,6 +9,10 @@ import type { AutomationHostCatalogEntry } from './automation-host-catalog-types
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
 import { subscribeAutomationHostInvalidation } from './automation-host-invalidation-window-events'
 import {
+  coordinatedRunHostKind,
+  type CoordinatedRunExecutionKind
+} from './coordinated-run-host-kind'
+import {
   coordinatedRunBindingKey,
   inspectCoordinatedRun,
   readCoordinatedRunHost,
@@ -35,6 +39,7 @@ type ReadState = {
   view: CoordinatedRunView | null
   notice: string | null
   ready: boolean
+  executionKind?: CoordinatedRunExecutionKind
 }
 
 export function useCoordinatedRunApi(input: {
@@ -124,12 +129,18 @@ export function useCoordinatedRunApi(input: {
     setRead({ key, view: null, notice: null, ready: false })
     void (
       selectedRunId
-        ? inspectCoordinatedRun(binding, selectedRunId, revision)
-        : readCoordinatedRunHost(binding).then(() => null)
+        ? inspectCoordinatedRun(binding, selectedRunId, revision).then((view) => ({
+            view,
+            executionKind: view.executionKind ?? ('fake' as const)
+          }))
+        : readCoordinatedRunHost(binding).then((status) => ({
+            view: null,
+            executionKind: coordinatedRunHostKind(status)
+          }))
     )
-      .then((view) => {
+      .then(({ view, executionKind }) => {
         if (!cancelled && currentKey.current === key) {
-          setRead({ key, view, notice: null, ready: true })
+          setRead({ key, view, notice: null, ready: true, executionKind })
         }
       })
       .catch((error: unknown) => {
@@ -255,6 +266,7 @@ export function useCoordinatedRunApi(input: {
     }
   }
   return {
+    executionKind: view?.executionKind ?? currentRead?.executionKind,
     selectedRunId,
     view,
     notice,

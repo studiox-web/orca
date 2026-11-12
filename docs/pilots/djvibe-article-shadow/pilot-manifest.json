@@ -1,0 +1,257 @@
+{
+  "packetVersion": 2,
+  "name": "DJVibe article writing \u2014 shadow pilot",
+  "status": "native_developer_pilot_smoke_and_held_gate_restart_verified",
+  "runnable": false,
+  "formatNotice": "Versioned preparation manifest. Use schema-validated buildArticlePilotCreateRequest for the native manual-only wire payload after host isolation is proven; this manifest is not an import payload.",
+  "observedAt": "2026-11-12T00:58:33.941698+00:00",
+  "runtime": {
+    "appVersion": "1.4.257+xos.46d5882a055",
+    "runtimeId": "3db51021-ea1e-4ce2-859d-256d27440e85",
+    "coordinatedDefinitionCapability": false,
+    "coordinatedFakeRunCapability": false
+  },
+  "sourceRoot": "/home/djvibe/projects/djvibe.com",
+  "promptSources": [
+    {
+      "goal": "content-trend-researcher",
+      "path": "automations/goals/content-trend-researcher/GOAL.md",
+      "sha256": "42268cbb12c4e65034ae7fbe07c1243f09ebe1fe43676611f8d08fe3d212630a",
+      "bytes": 13882,
+      "configuredAgent": "[codex]",
+      "configuredModel": "gpt-5.5",
+      "configuredEffort": "high",
+      "lockLane": "content"
+    },
+    {
+      "goal": "content-writer",
+      "path": "automations/goals/content-writer/GOAL.md",
+      "sha256": "a2799b5c41fc6e65842cc0a0e2e8c91308a96f4a8dd0a88ef3a5374489cee96b",
+      "bytes": 15569,
+      "configuredAgent": "[claude]",
+      "configuredModel": "opus",
+      "configuredEffort": "high",
+      "lockLane": "content"
+    },
+    {
+      "goal": "content-editor",
+      "path": "automations/goals/content-editor/GOAL.md",
+      "sha256": "ac908d8917f7f495240177ebc2f7d72208ecb39239b0d87575f89340acdd9691",
+      "bytes": 17556,
+      "configuredAgent": "[claude]",
+      "configuredModel": "sonnet",
+      "configuredEffort": "medium",
+      "lockLane": "content"
+    },
+    {
+      "goal": "content-media",
+      "path": "automations/goals/content-media/GOAL.md",
+      "sha256": "e7a6e5adf4c0ee7859875a80b40c943c3b9eebdb14f6e6549d63d46967db9fe4",
+      "bytes": 23831,
+      "configuredAgent": "[codex]",
+      "configuredModel": "gpt-5.6-luna",
+      "configuredEffort": "medium",
+      "lockLane": "content"
+    },
+    {
+      "goal": "content-publisher",
+      "path": "automations/goals/content-publisher/GOAL.md",
+      "sha256": "a2cf611f38ed31ef6758f3693a62f5b79f3ac93f725f56b776ddebdec877e9db",
+      "bytes": 9368,
+      "configuredAgent": "[codex]",
+      "configuredModel": "gpt-5.5",
+      "configuredEffort": "medium",
+      "lockLane": "content"
+    },
+    {
+      "goal": "content-loop-retrospective",
+      "path": "automations/goals/content-loop-retrospective/GOAL.md",
+      "sha256": "ad401f2de4a0e46c14ec1939fcfb348e21bf1cfa099088a771218fb7bd5428b7",
+      "bytes": 14918,
+      "configuredAgent": "[codex]",
+      "configuredModel": "gpt-5.4-mini",
+      "configuredEffort": "medium",
+      "lockLane": "content"
+    }
+  ],
+  "supportingSources": [
+    {
+      "path": "SOUL.md",
+      "sha256": "1ce104e9b03687a83dce26feb038f6dd3cb1ae9284ecb0f637d5b63eeaa24dd7",
+      "bytes": 8594
+    },
+    {
+      "path": "content/README.md",
+      "sha256": "32a7ecb5de808dfeceab89716899d3476f7d78a5b7cdd242f1bf168deae1a1ac",
+      "bytes": 4990
+    },
+    {
+      "path": "content/ARTICLES_LOG.md",
+      "sha256": "81bd20f92946e63af9618b5d522978f62e4e906e990f3ed13f2112a48ec98aa4",
+      "bytes": 1937
+    },
+    {
+      "path": "automations/bin/run-goal.sh",
+      "sha256": "9da509ed97e73b782d45a6652b5d2a21b4dc018b97f31eb10bd27226043f688a",
+      "bytes": 24082
+    },
+    {
+      "path": "automations/bin/run-goal-cron.sh",
+      "sha256": "320f612f8135e5c4ef84b33c658e297bd9190e19ac9e37e412ed5cc66eb356db",
+      "bytes": 5360
+    },
+    {
+      "path": "automations/bin/run-content-loop.sh",
+      "sha256": "4c3d8ca221204486ea3abacf1de87789c7ca4e76792b1addec3e3c24daa781fa",
+      "bytes": 7947
+    }
+  ],
+  "existingAutomationIds": ["8e037b0c-e604-4f54-8091-3a93fccd59d1"],
+  "proposedControls": {
+    "trigger": "manual_only",
+    "requestedArticleCount": 1,
+    "maxArticlesInFlight": 1,
+    "maxWorkerConcurrency": 1,
+    "maxActiveFixersPerArtifact": 1,
+    "maxReviewIterations": 2,
+    "maxWallClockSeconds": 3600,
+    "maxDispatchStartFailures": 1,
+    "automaticRetryAfterUncertainEffect": false,
+    "providerSpendLimit": "Positive estimated ceiling and host-owned positive estimate callback required before native launch; actual usage/cost unmeasured.",
+    "publication": "denied",
+    "schedule": "absent"
+  },
+  "stages": [
+    {
+      "id": "brief-review",
+      "goal": "content-editor",
+      "scope": "One frozen input; triage and brief readiness only. No homepage curation.",
+      "after": []
+    },
+    {
+      "id": "media-context",
+      "goal": "content-media",
+      "scope": "Check the frozen media-context packet and selected embeds before writing; do not import or attach media.",
+      "after": ["brief-review"]
+    },
+    {
+      "id": "write-draft",
+      "goal": "content-writer",
+      "scope": "One initial draft or the exact requested revision in the isolated output directory.",
+      "after": ["media-context"]
+    },
+    {
+      "id": "editor-review",
+      "goal": "content-editor",
+      "scope": "Independent factual, source, duplicate, credit, voice, compression and embed review. Do not rewrite or self-approve.",
+      "after": ["write-draft"]
+    }
+  ],
+  "revisionPolicy": {
+    "owner": "write-draft",
+    "reviewer": "editor-review",
+    "sameArticleIdentity": true,
+    "maximumAdditionalWriterEditorRounds": 2,
+    "stopOnRepeatedMaterialFinding": true,
+    "approvalBoundToExactArtifactDigest": true
+  },
+  "optionalLaterStages": {
+    "research": "Use frozen input first; preserve researcher prompt for paired upstream evaluation.",
+    "coverMedia": "Deferred until an isolated media adapter exists.",
+    "localPublisher": "Deferred until a disposable local database and existing stage/backup contracts are proven.",
+    "retrospective": "Evidence-only follow-up; not a mandatory article stage.",
+    "productionPublisher": "Excluded."
+  },
+  "input": {
+    "selectedFixture": "djvibe-shadow-synthetic-001",
+    "root": "inputs-v1",
+    "inputManifest": "inputs-v1/input-manifest.json",
+    "inputManifestDigest": "sha256:feded6b06bfe83caa09b471211c35a021a022c71e5f882c860eb9a71c6f7948f",
+    "kind": "deliberately_synthetic",
+    "reason": "Invented fixture only, no current backlog claim or real-world news assertion. Same pinned bytes in both comparison arms."
+  },
+  "requiredIsolation": {
+    "workspaceId": null,
+    "outputRoot": "coordinator-bound ordinary workspace/outputs",
+    "sourceMount": "coordinator-bound ordinary workspace/inputs, read-only, no live project mount",
+    "database": "none in first writing test",
+    "network": "Command network and external search/browser/apps denied; one authorized private report-only MCP control plane; provider model transport/auth separate.",
+    "credentials": "no DJVibe production, SSH, mail or social credentials",
+    "enforcement": "Linux developer entry and physical Codex command-policy probes implemented; complete native article acceptance in progress. See ISOLATION.md for output scratch and provider-process limits."
+  },
+  "requiredArtifacts": [
+    "input-manifest.json",
+    "source-packet.json",
+    "outputs/brief-review.json",
+    "outputs/media-context-review.json",
+    "outputs/draft.md",
+    "outputs/editor-review.json",
+    "outputs/revisions/",
+    "host-export/revision-history.json",
+    "host-export/completion-receipt.json",
+    "host-export/usage.json"
+  ],
+  "completion": "ready_for_review only after independent approval of exact draft digest and all required source/duplication checks; missing evidence is blocked, never ready_to_publish.",
+  "blockedBy": [
+    "Full four-stage native-provider smoke and hidden UI evidence remain under verification.",
+    "Independent review and final changed-code gate must pass before authorized XOS merge/push.",
+    "Packaged activation and project-group FolderWorkspace creation are not proven.",
+    "Paired baseline evaluation and measured usage/cost are not yet available."
+  ],
+  "doNotExecute": [
+    "automations/bin/run-content-loop.sh",
+    "scripts/sync-content-feedback-production.sh",
+    "scripts/run-production-daily.sh",
+    "scripts/publish-content-production.sh",
+    "scripts/publish-homepage-curation-production.sh"
+  ],
+  "liveStateChanges": [],
+  "modelOverride": {
+    "provider": "codex",
+    "models": {
+      "brief-review": "gpt-6.1-sol",
+      "media-context": "gpt-6.1-sol",
+      "write-draft": "gpt-6.1-sol",
+      "editor-review": "gpt-6.1-sol"
+    },
+    "reasoningEfforts": {
+      "brief-review": "medium",
+      "media-context": "medium",
+      "write-draft": "medium",
+      "editor-review": "medium"
+    },
+    "status": "pinned_for_native_smoke_manual_comparison_not_yet_run",
+    "bothComparisonArms": true,
+    "originalPromptModelsChanged": false
+  },
+  "nativePreparation": {
+    "builder": "tests/e2e/coordinated-automation-harness/coordinated-article-pilot-package.ts",
+    "wireTriggerPolicy": "manual_only",
+    "wireScheduleFields": "absent",
+    "enabled": false,
+    "workspaceLayout": {
+      "inputs": "inputs/",
+      "outputs": "outputs/"
+    },
+    "promptAuthority": null,
+    "promptPaths": [
+      "inputs/prompts/brief-review.md",
+      "inputs/prompts/media-context.md",
+      "inputs/prompts/write-draft.md",
+      "inputs/prompts/editor-review.md"
+    ],
+    "approvalPreview": "tests/e2e/coordinated-automation-harness/coordinated-article-pilot-acceptance.ts",
+    "instructions": "ACCEPTANCE.md"
+  },
+  "verification": {
+    "observedAt": "2026-11-12T04:37:27.295954+00:00",
+    "automationRunId": "44688502-8f80-431e-b4ca-9fe8ff4af1cb",
+    "realWorkers": 4,
+    "heldGateRestartVerified": true,
+    "operatorApprovalSubmitted": false,
+    "finalReceiptPresent": false,
+    "independentSourceReview": "cleared",
+    "finalRepositoryGate": "required_before_delivery",
+    "installedProfileActivation": false
+  }
+}

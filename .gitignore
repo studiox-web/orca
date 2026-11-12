@@ -22,6 +22,7 @@ dist/
 dist-electron/
 out/
 out-coordinated/
+out-coordinated-native/
 /build/
 release/
 native/**/.build/

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CoordinatedAutomationCreateInput } from '../../../src/shared/automations-types'
 import type { CoordinatedAutomationChildDefinition } from '../../../src/shared/coordinated-automation-types'
 import { testState } from '../../../src/main/persistence/persistence-test-harness'
 import {
@@ -41,7 +40,7 @@ function review(overrides: Partial<CoordinatedAutomationChildDefinition> = {}) {
   })
 }
 
-function pipeline(overrides: Partial<CoordinatedAutomationCreateInput> = {}) {
+function pipeline(overrides: Parameters<typeof coordinatedCreateInput>[0] = {}) {
   return coordinatedCreateInput({ children: [draft(), review()], ...overrides })
 }
 
